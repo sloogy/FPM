@@ -38,6 +38,8 @@ jobs:
           python tools/sync_version.py --check
           python -m compileall -q .
           python -m pytest -q
+          $env:QT_QPA_PLATFORM = "offscreen"
+          python tools/gui_smoke_test.py
           python tools/i18n_audit.py
           python tools/i18n_quality_audit.py
           python tools/i18n_key_wiring_audit.py

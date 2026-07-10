@@ -105,7 +105,7 @@ def test_glossary_extended_to_twelve_terms():
 def test_generate_button_has_reroll_tooltip():
     src = _src("ui/rotation_widget.py")
     assert '"rotation.generate_tooltip"' in src
-    assert "b.setToolTip(t(tip_key))" in src
+    assert 'self.generate_btn.setToolTip(t("rotation.generate_tooltip"))' in src
 
 
 def test_help_body_texts_survive_t_formatting():

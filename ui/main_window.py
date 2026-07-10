@@ -106,21 +106,19 @@ class MainWindow(QMainWindow):
         self._tour = TourController(self)
         self._tour.start()
 
-    def _open_ink_add_dialog(self):
-        """Tinten-Hinzufügen-Dialog direkt öffnen (für Wizard-CTA)."""
+    def _open_ink_add_dialog(self) -> bool:
+        """Tinten-Hinzufügen-Dialog öffnen und Erfolg an die Tour melden."""
         self._navigate(2)
         widget = self._ensure_widget(2)
         add = getattr(widget, "_add", None)
-        if callable(add):
-            add()
+        return bool(add()) if callable(add) else False
 
-    def _open_pen_add_dialog(self):
-        """Füller-Hinzufügen-Dialog direkt öffnen (für Wizard-CTA)."""
+    def _open_pen_add_dialog(self) -> bool:
+        """Füller-Hinzufügen-Dialog öffnen und Erfolg an die Tour melden."""
         self._navigate(1)
         widget = self._ensure_widget(1)
         add = getattr(widget, "_add", None)
-        if callable(add):
-            add()
+        return bool(add()) if callable(add) else False
 
     def _open_wishlist_add_dialog(self):
         """Wishlist-Hinzufügen-Dialog direkt öffnen (für Tour-CTA)."""
@@ -140,7 +138,7 @@ class MainWindow(QMainWindow):
         toolbar.addAction(t('ui.main_window.add_ink'),   lambda: self._run_page_action(2, "_add"))
         toolbar.addAction(t('ui.main_window.fill'),          lambda: self._run_page_action(1, "_load_ink"))
         toolbar.addAction(t('ui.main_window.cleaned'),          lambda: self._run_page_action(1, "_mark_cleaned"))
-        toolbar.addAction(t('ui.main_window.suggest_rotation'), lambda: self._run_page_action(5, "refresh"))
+        toolbar.addAction(t('ui.main_window.suggest_rotation'), lambda: self._run_page_action(5, "generate_suggestions"))
         toolbar.addSeparator()
 
         self.global_search = QLineEdit()
@@ -257,6 +255,16 @@ class MainWindow(QMainWindow):
             self._navigate(target)
         else:
             self.sidebar.set_current_page(current)
+
+    def set_navigation_mode(self, mode: str) -> str:
+        """Navigationsmodus setzen und Seitenleiste sofort synchronisieren.
+
+        Wird auch von der Tour genutzt, um Expertenmodule vorübergehend zu
+        zeigen. Die Tour stellt den ursprünglichen Modus beim Ende wieder her.
+        """
+        normalized = self.sidebar.set_mode(mode)
+        self._navigation_mode_changed(normalized)
+        return normalized
 
     def _navigate(self, index: int):
         index = fallback_page(index)

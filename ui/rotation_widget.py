@@ -105,19 +105,22 @@ class RotationWidget(QWidget):
         self.slots_spin.setValue(5)
         hdr.addWidget(self.slots_spin)
 
-        for text, color, slot, tip_key in [
-            ("💡 Vorschläge",  "#9b59b6", self._generate, "rotation.generate_tooltip"),
-            ("↻ Aktualisieren","#3498db", self.refresh,   None),
-        ]:
-            b = QPushButton(text)
-            if tip_key:
-                b.setToolTip(t(tip_key))
-            b.setStyleSheet(
-                f"background:{color}; color:white; border:none;"
-                f" padding:7px 14px; border-radius:5px; font-weight:bold;"
-            )
-            b.clicked.connect(slot)
-            hdr.addWidget(b)
+        self.generate_btn = QPushButton(t("rotation.generate_button"))
+        self.generate_btn.setToolTip(t("rotation.generate_tooltip"))
+        self.generate_btn.setStyleSheet(
+            "background:#9b59b6; color:white; border:none;"
+            " padding:7px 14px; border-radius:5px; font-weight:bold;"
+        )
+        self.generate_btn.clicked.connect(self.generate_suggestions)
+        hdr.addWidget(self.generate_btn)
+
+        self.refresh_btn = QPushButton(t("rotation.refresh_button"))
+        self.refresh_btn.setStyleSheet(
+            "background:#3498db; color:white; border:none;"
+            " padding:7px 14px; border-radius:5px; font-weight:bold;"
+        )
+        self.refresh_btn.clicked.connect(self.refresh)
+        hdr.addWidget(self.refresh_btn)
 
         root.addLayout(hdr)
 
@@ -274,6 +277,17 @@ class RotationWidget(QWidget):
     # ------------------------------------------------------------------ #
     # Vorschläge generieren                                               #
     # ------------------------------------------------------------------ #
+    def generate_suggestions(self) -> bool:
+        """Öffentliche Aktion für Toolbar, Tour und normale UI."""
+        return self._generate()
+
+    def apply_first_suggestion(self) -> bool:
+        """Ersten sichtbaren Vorschlag bewusst übernehmen (Tour-Helfer)."""
+        if not self._last_suggestions:
+            if not self._generate():
+                return False
+        return self._apply_suggestion(0)
+
     def _handle_suggestion_double_click(self, index):
         """Doppelklick übernimmt – außer auf Score, dort erklärt er nur."""
         if index.column() == 4:
@@ -328,7 +342,7 @@ class RotationWidget(QWidget):
             self.sug_info.setText(hint)
             self.sug_table.hide()
             self._refresh_cleaning()
-            return
+            return False
 
         # Feder-Hinweis wenn Vorschläge Füller ohne Nib enthalten
         from database.db import get_session as _gs2
@@ -405,6 +419,8 @@ class RotationWidget(QWidget):
             btn.clicked.connect(lambda _checked=False, r=row: self._apply_suggestion(r))
             self.sug_table.setCellWidget(row, 6, btn)
 
+        return True
+
     # ------------------------------------------------------------------ #
     # Kontextmenü für Vorschläge                                          #
     # ------------------------------------------------------------------ #
@@ -415,7 +431,7 @@ class RotationWidget(QWidget):
         self.sug_table.selectRow(row)
         ids = self._ids_for_suggestion_row(row)
         if not ids:
-            return
+            return False
 
         pen_name = (self.sug_table.item(row, 1) or QTableWidgetItem(t('ui.rotation_widget.fuller_30e41efe'))).text()
         ink_name = (self.sug_table.item(row, 2) or QTableWidgetItem(t('ui.rotation_widget.tinte_0d292b04'))).text()
@@ -453,7 +469,7 @@ class RotationWidget(QWidget):
             # Bug 7+8: Bei aktiven Regel-Violations Grund erfragen + OverrideLog schreiben
             dlg = OverrideReasonDialog(rule_warnings, self)
             if dlg.exec() != QDialog.DialogCode.Accepted:
-                return   # Nutzer hat abgebrochen – harte Regel verhindert stille Übernahme
+                return False   # Nutzer hat abgebrochen – harte Regel verhindert stille Übernahme
             override_reason = dlg.reason()
 
         ok, msg = self._engine.apply_suggestion(pen_id, ink_id, override_reason=override_reason)
@@ -463,6 +479,7 @@ class RotationWidget(QWidget):
             QMessageBox.warning(self, t('ui.rotation_widget.rotation_a4ac1446'), msg)
         self.refresh()
         self._generate()
+        return bool(ok)
 
     # ------------------------------------------------------------------ #
     # Leeren-Empfehlungen                                                 #
@@ -642,7 +659,7 @@ class WhyScoreDialog(QDialog):
         hints = suggestion.get("hints", [])
 
         # Score-Balken – normiert auf 0-100 für ProgressBar, echter Wert als Label
-        for comp_key, comp_label, color, positive in self.COMPONENTS:
+        for comp_key, comp_label, color, _positive in self.COMPONENTS:
             val = suggestion.get(comp_key, 0)
             if val == 0:
                 continue

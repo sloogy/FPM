@@ -8,7 +8,6 @@ Exitcode 0 = sauber, Exitcode 1 = Fehler gefunden.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from typing import Any
 

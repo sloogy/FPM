@@ -9,12 +9,12 @@ Du nutzt das, wenn du ein neues Release-ZIP gebaut hast.
 Beispiel (Windows + Linux ZIPs):
 
   python -m updater.generate_manifest \
-    --version 0.2.87 \
-    --release-tag v0.2.87 \
+    --version 0.2.88 \
+    --release-tag v0.2.88 \
     --channel stable \
-    --windows-zip dist/FountainPenManager-v0.2.87-portable-windows.zip \
-    --linux-zip dist/FountainPenManager-v0.2.87-portable-linux.zip \
-    --base-url https://github.com/sloogy/FPM/releases/download/v0.2.87 \
+    --windows-zip dist/FountainPenManager-v0.2.88-portable-windows.zip \
+    --linux-zip dist/FountainPenManager-v0.2.88-portable-linux.zip \
+    --base-url https://github.com/sloogy/FPM/releases/download/v0.2.88 \
     --out latest.json
 
 Danach lädst du die ZIP(s) + latest.json als Release-Assets hoch.
@@ -40,8 +40,8 @@ def _asset_entry(base_url: str, zip_path: Path) -> dict:
 def main() -> int:
     enable_utf8_console()
     p = argparse.ArgumentParser(description="Generate latest.json manifest for FountainPenManager releases")
-    p.add_argument("--version", required=True, help="App version, e.g. 0.2.87")
-    p.add_argument("--release-tag", required=True, help="Git tag, e.g. v0.2.87")
+    p.add_argument("--version", required=True, help="App version, e.g. 0.2.88")
+    p.add_argument("--release-tag", required=True, help="Git tag, e.g. v0.2.88")
     p.add_argument("--channel", default="stable", choices=["stable", "dev"], help="Update channel")
     p.add_argument("--base-url", required=True, help="Base download URL to the release/tag")
     p.add_argument("--windows-zip", help="Path to Windows portable ZIP")

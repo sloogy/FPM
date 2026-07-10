@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QGroupBox, QFormLayout, QLabel, QSpinBox, QComboBox,
     QCheckBox, QPushButton, QMessageBox, QTabWidget,
 )
-from PySide6.QtCore import Qt
 
 from i18n.translator import t
 from logic.role_config import (

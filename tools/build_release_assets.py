@@ -139,6 +139,12 @@ def _copy_bundle_contents(src_dir: Path, dst_dir: Path) -> None:
             shutil.copy2(src, dst)
 
 
+def _copy_user_manual(dst_root: Path) -> None:
+    docs_dir = dst_root / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / "docs" / "BENUTZERHANDBUCH_DE.md", docs_dir / "BENUTZERHANDBUCH_DE.md")
+
+
 def _write_zip(zip_path: Path, src_dir: Path) -> None:
     zip_path.parent.mkdir(parents=True, exist_ok=True)
     if zip_path.exists():
@@ -226,6 +232,7 @@ def _create_portable_windows_zip(out_dir: Path, version: str, windows_exe: Path)
     (work / "data" / "backups").mkdir(parents=True, exist_ok=True)
     (work / "data" / ".keep").touch()
     (work / "data" / "backups" / ".keep").touch()
+    _copy_user_manual(work)
     _write_windows_starter(work / "start-windows.cmd")
     _write_portable_readme(work / "README.txt", version, "windows")
     zip_path = out_dir / f"FountainPenManager-v{version}-portable-windows.zip"
@@ -255,6 +262,7 @@ def _create_portable_linux_zip(out_dir: Path, version: str, linux_binary: Path) 
     (work / "data" / "backups").mkdir(parents=True, exist_ok=True)
     (work / "data" / ".keep").touch()
     (work / "data" / "backups" / ".keep").touch()
+    _copy_user_manual(work)
     _write_linux_starter(work / "start-linux.sh")
     _write_portable_readme(work / "README.txt", version, "linux")
     zip_path = out_dir / f"FountainPenManager-v{version}-portable-linux.zip"

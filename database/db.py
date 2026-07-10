@@ -8,17 +8,20 @@ v0.2.4 – Änderbarer Datenbankpfad:
                  kein Neustart nötig.
 """
 import json
-import shutil
+import logging
+import sqlite3
 from datetime import datetime
 from pathlib import Path
-from sqlalchemy import create_engine, text
+from types import SimpleNamespace
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, Session
 from database.models import Base
 
-SCHEMA_VERSION = "0.2.76"
+SCHEMA_VERSION = "0.2.88"
 
-engine = None
-SessionLocal = None
+logger = logging.getLogger(__name__)
+
+_STATE = SimpleNamespace(engine=None, session_factory=None)
 
 
 # ── Config ──────────────────────────────────────────────────────────────────
@@ -78,6 +81,11 @@ def _save_config(cfg: dict) -> None:
 
 # ── Pfad-API ─────────────────────────────────────────────────────────────────
 
+def get_data_dir() -> Path:
+    """Gibt den aktiven FPM-Datenordner zurück."""
+    return _data_dir()
+
+
 def get_db_path() -> Path:
     """Gibt den aktuell konfigurierten Datenbankpfad zurück."""
     cfg = _load_config()
@@ -103,46 +111,154 @@ def init_db(db_path: Path = None) -> None:
     _connect(db_path)
 
 
+def dispose_db() -> None:
+    """Schließt alle DB-Verbindungen, z.B. vor einer Vollwiederherstellung."""
+    if _STATE.engine is not None:
+        _STATE.engine.dispose()
+    _STATE.engine = None
+    _STATE.session_factory = None
+
+
 def reinit_db(new_path: Path) -> None:
     """
     Schließt die aktuelle Engine, speichert den neuen Pfad und öffnet die DB
-    unter new_path neu.  Alle nachfolgenden get_session()-Aufrufe nutzen
+    unter new_path neu. Alle nachfolgenden get_session()-Aufrufe nutzen
     automatisch die neue Datenbank – kein Neustart nötig.
     """
-    global engine
-    if engine is not None:
-        engine.dispose()      # alle Verbindungen schließen
+    dispose_db()
     set_db_path(new_path)
     _connect(new_path)
 
 
 def _connect(db_path: Path) -> None:
-    """Baut Engine + SessionFactory auf und führt Migration/Seed durch."""
-    global engine, SessionLocal
+    """Baut Engine + SessionFactory auf und führt Migration/Seed durch.
 
+    Migrationen laufen bewusst fail-fast: Ein teilweise migrierter Datenbestand
+    darf nicht unbemerkt weiterverwendet werden. Vor einer echten Migration wird
+    die vorhandene SQLite-Datei über die SQLite-Backup-API gesichert.
+    """
+
+    # Mehrfachaufrufe aus Tests, Pfadwechseln oder Restore dürfen keine alte
+    # Connection-Pool-Instanz offenlassen.
+    dispose_db()
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
+    is_new_database = not db_path.exists() or db_path.stat().st_size == 0
+    needs_migration = (not is_new_database) and _database_needs_migration(db_path)
+    if needs_migration:
+        _backup_before_schema_migration(db_path)
 
-    engine = create_engine(
+    _STATE.engine = create_engine(
         f"sqlite:///{db_path}",
         connect_args={"check_same_thread": False},
         echo=False,
     )
-    Base.metadata.create_all(engine)
-    _backup_before_schema_migration(db_path)
-    SessionLocal = sessionmaker(
-        autocommit=False, autoflush=False,
-        bind=engine, expire_on_commit=False,
-    )
-    _migrate_schema()
-    _migrate_legacy_writing_samples()
-    _migrate_nib_formats()
-    _migrate_legacy_nib_change_events()
-    _migrate_pen_nib_setups()
-    _insert_default_rules()
-    _insert_default_inks()
-    _apply_initial_config_settings()
 
+    @event.listens_for(_STATE.engine, "connect")
+    def _set_sqlite_pragmas(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA busy_timeout=5000")
+        finally:
+            cursor.close()
+
+    Base.metadata.create_all(_STATE.engine)
+    _STATE.session_factory = sessionmaker(
+        autocommit=False, autoflush=False,
+        bind=_STATE.engine, expire_on_commit=False,
+    )
+
+    migrations = (
+        ("schema", _migrate_schema),
+        ("legacy writing samples", _migrate_legacy_writing_samples),
+        ("nib formats", _migrate_nib_formats),
+        ("legacy nib history", _migrate_legacy_nib_change_events),
+        ("pen nib setups", _migrate_pen_nib_setups),
+        ("indexes", _ensure_indexes),
+    )
+    for name, migration in migrations:
+        _run_migration(name, migration)
+
+    _insert_default_rules()
+    _initialize_onboarding_state(is_new_database)
+    _apply_initial_config_settings()
+    _validate_database_integrity()
+
+
+
+def _run_migration(name: str, migration) -> None:
+    try:
+        migration()
+    except Exception as exc:
+        logger.exception("Datenbankmigration '%s' fehlgeschlagen", name)
+        raise RuntimeError(f"Datenbankmigration '{name}' fehlgeschlagen: {exc}") from exc
+
+
+def _database_needs_migration(db_path: Path) -> bool:
+    """Prüft ohne SQLAlchemy-Start, ob ein Vor-Migrationsbackup nötig ist."""
+    try:
+        with sqlite3.connect(db_path) as conn:
+            table = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='app_settings'"
+            ).fetchone()
+            if not table:
+                return True
+            row = conn.execute(
+                "SELECT value FROM app_settings WHERE key='schema_version'"
+            ).fetchone()
+            return row is None or str(row[0] or "") != SCHEMA_VERSION
+    except sqlite3.Error:
+        return True
+
+
+def _initialize_onboarding_state(is_new_database: bool) -> None:
+    """Initialisiert den Erststart ohne Beispiel-Datensätze.
+
+    Neue Datenbanken starten die geführte Anlage. Bestehende Datenbanken ohne
+    historisches Flag werden nicht überraschend erneut durch die Tour geführt.
+    Ein manueller Reset setzt das Flag später wieder auf ``0``.
+    """
+    from database.models import AppSettings
+
+    session = _STATE.session_factory()
+    try:
+        if AppSettings.get(session, "onboarding_completed") is None:
+            AppSettings.set(session, "onboarding_completed", "0" if is_new_database else "1")
+    finally:
+        session.close()
+
+
+def _ensure_indexes() -> None:
+    """Legt häufig benötigte Filter-/Verknüpfungsindizes idempotent an."""
+    statements = (
+        "CREATE INDEX IF NOT EXISTS ix_pens_brand_model ON pens(brand, model)",
+        "CREATE INDEX IF NOT EXISTS ix_inks_brand_name ON inks(brand, name)",
+        "CREATE INDEX IF NOT EXISTS ix_ink_loads_pen_active ON ink_loads(pen_id, cleaned_date)",
+        "CREATE INDEX IF NOT EXISTS ix_ink_loads_ink_date ON ink_loads(ink_id, loaded_date)",
+        "CREATE INDEX IF NOT EXISTS ix_expenses_date_type ON expenses(purchase_date, item_type)",
+        "CREATE INDEX IF NOT EXISTS ix_wishlist_status ON wishlist_items(status)",
+        "CREATE INDEX IF NOT EXISTS ix_writing_samples_date_pen ON writing_samples(written_at, pen_id)",
+        "CREATE INDEX IF NOT EXISTS ix_cleaning_logs_date_pen ON cleaning_logs(cleaned_at, pen_id)",
+    )
+    with _STATE.engine.begin() as conn:
+        for statement in statements:
+            conn.execute(text(statement))
+
+
+def _validate_database_integrity() -> None:
+    """Bricht bei beschädigter DB oder verwaisten Fremdschlüsseln klar ab."""
+    with _STATE.engine.connect() as conn:
+        integrity = conn.execute(text("PRAGMA integrity_check")).scalar()
+        if str(integrity).lower() != "ok":
+            raise RuntimeError(f"SQLite-Integritätsprüfung fehlgeschlagen: {integrity}")
+        violations = conn.execute(text("PRAGMA foreign_key_check")).fetchall()
+        if violations:
+            sample = ", ".join(str(tuple(row)) for row in violations[:5])
+            raise RuntimeError(
+                f"Die Datenbank enthält {len(violations)} ungültige Fremdschlüssel. "
+                f"Beispiele: {sample}"
+            )
 
 
 def _apply_initial_config_settings() -> None:
@@ -157,7 +273,7 @@ def _apply_initial_config_settings() -> None:
     except Exception:
         return
     initial = cfg.get("initial_settings") if isinstance(cfg, dict) else None
-    if not isinstance(initial, dict) or SessionLocal is None:
+    if not isinstance(initial, dict) or _STATE.session_factory is None:
         return
     allowed = {
         "language",
@@ -169,7 +285,7 @@ def _apply_initial_config_settings() -> None:
     }
     from database.models import AppSettings
 
-    session = SessionLocal()
+    session = _STATE.session_factory()
     try:
         for key, value in initial.items():
             if key not in allowed:
@@ -183,9 +299,9 @@ def _apply_initial_config_settings() -> None:
         session.close()
 
 def get_session() -> Session:
-    if SessionLocal is None:
+    if _STATE.session_factory is None:
         raise RuntimeError("Datenbank nicht initialisiert – init_db() zuerst aufrufen.")
-    return SessionLocal()
+    return _STATE.session_factory()
 
 
 # ── Seed-Daten ───────────────────────────────────────────────────────────────
@@ -195,7 +311,7 @@ def _insert_default_rules():
     import json as _json
     from database.models import Rule, AppSettings
 
-    session = SessionLocal()
+    session = _STATE.session_factory()
     try:
         rules = [
             Rule(
@@ -336,11 +452,11 @@ def _insert_default_rules():
         session.close()
 
 
-def _insert_default_inks():
-    """Legt die vom Nutzer analysierten Tinten als Startdaten an, ohne Dubletten zu erzeugen."""
+def insert_example_inks():
+    """Legt optionale Demonstrations-Tinten an. Wird niemals automatisch aufgerufen."""
     from datetime import datetime
     from database.models import Ink
-    session = SessionLocal()
+    session = _STATE.session_factory()
     try:
         rows = [
             dict(brand="Diamine", name="Skull & Roses", color_type="Sheen-Monster", color_family="blue", color_hex="#1D2C73", wetness_level=4, has_sheen=True, sheen_level=5, sheen_color="rot", has_shimmer=False, feathering_level=4, shading_level=3, flow_level=4, saturation_level=5, cleaning_effort=4, max_days_in_pen=14, notes="Extrem sheen-lastig, ideal auf Tomoe River"),
@@ -368,26 +484,23 @@ def _insert_default_inks():
 # ── Schema-Migration ──────────────────────────────────────────────────────────
 
 def _backup_before_schema_migration(db_path: Path) -> None:
-    """Legt vor Schema-Migrationen ein leichtgewichtiges DB-Backup an.
-
-    Wichtig für schnelle Beta-Entwicklung: neue Spalten werden per ALTER TABLE
-    ergänzt. Vor solchen Änderungen wird maximal einmal pro Tag ein Backup der
-    vorhandenen SQLite-Datei erzeugt.
-    """
+    """Sichert den unveränderten Vor-Migrationszustand über SQLite ``backup``."""
     db_path = Path(db_path)
     if not db_path.exists():
         return
-    backup_dir = _data_dir() / "migration_backups"
+    configured_db = get_db_path().expanduser().resolve()
+    backup_root = _data_dir() if configured_db == db_path.expanduser().resolve() else db_path.parent
+    backup_dir = backup_root / "migration_backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d")
-    target = backup_dir / f"{db_path.stem}_before_migration_{stamp}{db_path.suffix}"
-    if target.exists():
-        return
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    target = backup_dir / f"{db_path.stem}_before_{SCHEMA_VERSION}_{stamp}{db_path.suffix}"
     try:
-        shutil.copy2(db_path, target)
-    except Exception:
-        # Migration darf wegen Backup-Problemen nicht abbrechen; App bleibt startbar.
-        pass
+        with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as source:
+            with sqlite3.connect(target) as destination:
+                source.backup(destination)
+    except sqlite3.Error as exc:
+        logger.exception("Vor-Migrationsbackup fehlgeschlagen: %s", target)
+        raise RuntimeError(f"Vor-Migrationsbackup konnte nicht erstellt werden: {exc}") from exc
 
 def _migrate_schema():
     """Fügt neue Spalten hinzu ohne bestehende DB zu löschen."""
@@ -528,7 +641,7 @@ def _migrate_schema():
         ("wishlist_items", "created_at",         "DATETIME"),
         ("wishlist_items", "updated_at",         "DATETIME"),
     ]
-    with engine.begin() as conn:
+    with _STATE.engine.begin() as conn:
         for table, column, coltype in migrations:
             existing = [row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))]
             if column not in existing:
@@ -573,10 +686,10 @@ def _migrate_legacy_writing_samples() -> None:
     scheitern. Die Migration ist idempotent und bewahrt ``nib_desc`` in den
     Notizen, falls noch kein strukturiertes ``nib_id`` existiert.
     """
-    if engine is None:
+    if _STATE.engine is None:
         return
     now = datetime.now().isoformat(sep=" ", timespec="seconds")
-    with engine.begin() as conn:
+    with _STATE.engine.begin() as conn:
         if not _table_exists(conn, "writing_samples"):
             return
         cols = _table_columns(conn, "writing_samples")
@@ -648,10 +761,10 @@ def _migrate_legacy_nib_change_events() -> None:
     ``nib_id`` bleiben unangetastet, weil die Setup-Tabelle eine echte Feder
     benötigt. Die Migration ist idempotent und erzeugt keine Dubletten.
     """
-    if engine is None:
+    if _STATE.engine is None:
         return
     now = datetime.now().isoformat(sep=" ", timespec="seconds")
-    with engine.begin() as conn:
+    with _STATE.engine.begin() as conn:
         if not _table_exists(conn, "nib_change_events") or not _table_exists(conn, "pen_nib_setups"):
             return
         events = conn.execute(text("""
@@ -708,9 +821,9 @@ def _migrate_nib_formats() -> None:
     - Idempotent: läuft bei jedem Start, ändert aber nichts, wenn alles passt.
     """
     from database.models import Nib, NibFormat
-    if SessionLocal is None:
+    if _STATE.session_factory is None:
         return
-    session = SessionLocal()
+    session = _STATE.session_factory()
     try:
         nibs = session.query(Nib).all()
         if not nibs:
@@ -750,6 +863,7 @@ def _migrate_nib_formats() -> None:
             session.commit()
     except Exception:
         session.rollback()
+        raise
     finally:
         session.close()
 
@@ -761,9 +875,9 @@ def _migrate_pen_nib_setups() -> None:
     erzeugt. Das alte Pen.nib_id bleibt als Backward-Compatible Cache erhalten.
     """
     from database.models import Pen, PenNibSetup
-    if SessionLocal is None:
+    if _STATE.session_factory is None:
         return
-    session = SessionLocal()
+    session = _STATE.session_factory()
     try:
         changed = False
         for pen in session.query(Pen).all():
@@ -794,11 +908,9 @@ def _migrate_pen_nib_setups() -> None:
             session.commit()
     except Exception:
         session.rollback()
+        raise
     finally:
         session.close()
-
-
-
 
 
 # ── Reset-Funktionen ─────────────────────────────────────────────────────────
@@ -811,7 +923,7 @@ def reset_inkloads(keep_history: bool = True) -> int:
     """
     from datetime import datetime
     from database.models import InkLoad
-    session = SessionLocal()
+    session = _STATE.session_factory()
     try:
         now = datetime.now()
         if keep_history:
@@ -834,7 +946,7 @@ def reset_ink_levels() -> int:
     Gibt Anzahl betroffener Tinten zurück.
     """
     from database.models import Ink
-    session = SessionLocal()
+    session = _STATE.session_factory()
     try:
         inks = session.query(Ink).all()
         for ink in inks:
@@ -855,7 +967,7 @@ def reset_pen_status() -> int:
     Gibt Anzahl betroffener Füller zurück.
     """
     from database.models import Pen
-    session = SessionLocal()
+    session = _STATE.session_factory()
     try:
         pens = session.query(Pen).all()
         for pen in pens:
@@ -880,7 +992,7 @@ def factory_reset_userdata() -> None:
     NICHT rückgängig machbar – Backup vorher erstellen!
     """
     from database.models import InkLoad, Expense, OverrideLog, Pen, Ink, Nib, NibFormat, PenNibSetup, Paper, WishlistItem, WritingSample
-    session = SessionLocal()
+    session = _STATE.session_factory()
     try:
         session.query(OverrideLog).delete()
         session.query(InkLoad).delete()

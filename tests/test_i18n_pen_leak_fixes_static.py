@@ -52,11 +52,11 @@ def test_new_pen_keys_present_in_all_languages():
 def test_generate_manifest_example_uses_current_version():
     src = _read("updater/generate_manifest.py")
     assert "2.2.9" not in src  # Fremdversion aus BudgetManager darf nicht auftauchen
-    assert "--version 0.2.87" in src
+    assert "--version 0.2.88" in src
 
 
 def test_rotation_widget_uses_hard_rule_suffix_key():
-    """v0.2.87: Der Suffix ' (harte Regel)' existierte als i18n-Key, war aber
+    """v0.2.88: Der Suffix ' (harte Regel)' existierte als i18n-Key, war aber
     nicht verdrahtet – die Codestelle nutzte ein deutsches Literal (EN/FR-Leak)."""
     src = _read("ui/rotation_widget.py")
     assert '" (harte Regel)"' not in src

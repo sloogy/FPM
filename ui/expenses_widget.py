@@ -16,13 +16,20 @@ from datetime import datetime
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit,
-    QDialog, QFormLayout, QComboBox, QDoubleSpinBox, QDateEdit,
+    QDialog, QFormLayout, QComboBox, QDateEdit,
     QTextEdit, QGroupBox, QMessageBox, QMenu, QCheckBox, QSplitter,
     QFrame, QScrollArea, QStackedWidget
 )
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QColor
 
+from ui.locale_widgets import (
+    LocalizedDoubleSpinBox as QDoubleSpinBox,
+    bind_currency_combo,
+    current_currency,
+    populate_currency_combo,
+    set_combo_currency,
+)
 from ui.ui_scale import scale_px
 from ui.common import EmptyStateWidget
 from database.db import get_session
@@ -195,7 +202,7 @@ class ExpensesWidget(QWidget):
             grand_by_cur = defaultdict(float)
 
             for row, exp in enumerate(expenses):
-                currency = exp.currency or "CHF"
+                currency = exp.currency or LocaleService.instance().currency
                 date_str = format_date(exp.purchase_date) if exp.purchase_date else "—"
                 cat_str = _item_type_label(exp.item_type)
                 obj = exp.linked_label if hasattr(exp, "linked_label") else self._linked_label(exp)
@@ -300,10 +307,10 @@ class ExpensesWidget(QWidget):
             row(t("ui.expenses_widget.zahlungsart_b987e44c"), getattr(exp, "payment_method", None))
             row(t("ui.expenses_widget.datum_441afa63"), format_date(exp.purchase_date) if exp.purchase_date else None)
             row(t("ui.expenses_widget.garantie_bis_70e449ef"), format_date(exp.warranty_until) if getattr(exp, "warranty_until", None) else None)
-            row(t("ui.expenses_widget.betrag_4d8517b4"), _money(exp.amount, exp.currency or "CHF"))
-            row(t("ui.expenses_widget.versand_681fd4b2"), _money(exp.shipping, exp.currency or "CHF") if exp.shipping else None)
-            row(t("ui.expenses_widget.zoll_532508a1"), _money(exp.customs, exp.currency or "CHF") if exp.customs else None)
-            row(t("ui.expenses_widget.gesamt_edc5a63c"), _money(exp.total, exp.currency or "CHF"))
+            row(t("ui.expenses_widget.betrag_4d8517b4"), _money(exp.amount, exp.currency or LocaleService.instance().currency))
+            row(t("ui.expenses_widget.versand_681fd4b2"), _money(exp.shipping, exp.currency or LocaleService.instance().currency) if exp.shipping else None)
+            row(t("ui.expenses_widget.zoll_532508a1"), _money(exp.customs, exp.currency or LocaleService.instance().currency) if exp.customs else None)
+            row(t("ui.expenses_widget.gesamt_edc5a63c"), _money(exp.total, exp.currency or LocaleService.instance().currency))
             if exp.notes:
                 note = QLabel(exp.notes); note.setWordWrap(True); note.setStyleSheet("background:#f8fafc;border:1px solid #d5dce6;border-radius:6px;padding:8px;")
                 self._detail_layout.addWidget(note)
@@ -406,11 +413,12 @@ class ExpenseDialog(QDialog):
         self.vendor_edit = QLineEdit(); self.vendor_edit.setPlaceholderText(t('ui.expenses_widget.z_b_landolt_stilo_e_stile_galaxus_bbd279d6'))
         self.order_edit = QLineEdit(); self.order_edit.setPlaceholderText(t('ui.expenses_widget.bestellnr_rechnung_tracking_cb8960b2'))
         self.payment_combo = QComboBox(); self.payment_combo.addItems(_payment_methods())
-        self.currency_combo = QComboBox(); self.currency_combo.addItems(CURRENCIES)
+        self.currency_combo = QComboBox(); populate_currency_combo(self.currency_combo, LocaleService.instance().currency, CURRENCIES)
         self.date_edit = QDateEdit(QDate.currentDate()); self.date_edit.setCalendarPopup(True); self.date_edit.setDisplayFormat(LocaleService.instance().qt_date_format)
-        self.amt_spin = QDoubleSpinBox(); self.amt_spin.setRange(0, 999999); self.amt_spin.setSuffix(t('ui.expenses_widget.betrag_f6f93924')); self.amt_spin.setDecimals(2)
-        self.ship_spin = QDoubleSpinBox(); self.ship_spin.setRange(0, 99999); self.ship_spin.setSuffix(t('ui.expenses_widget.versand_ec453a72')); self.ship_spin.setDecimals(2)
-        self.cust_spin = QDoubleSpinBox(); self.cust_spin.setRange(0, 99999); self.cust_spin.setSuffix(t('ui.expenses_widget.zoll_a2b67bcc')); self.cust_spin.setDecimals(2)
+        self.amt_spin = QDoubleSpinBox(); self.amt_spin.setRange(0, 999999); self.amt_spin.setDecimals(2)
+        self.ship_spin = QDoubleSpinBox(); self.ship_spin.setRange(0, 99999); self.ship_spin.setDecimals(2)
+        self.cust_spin = QDoubleSpinBox(); self.cust_spin.setRange(0, 99999); self.cust_spin.setDecimals(2)
+        bind_currency_combo(self.currency_combo, self.amt_spin, self.ship_spin, self.cust_spin)
         self.has_warranty = QCheckBox(t('ui.expenses_widget.garantie_servicefrist_erfassen_cf290f4e'))
         self.warranty_edit = QDateEdit(QDate.currentDate().addYears(2)); self.warranty_edit.setCalendarPopup(True); self.warranty_edit.setDisplayFormat(LocaleService.instance().qt_date_format); self.warranty_edit.setEnabled(False)
         self.has_warranty.toggled.connect(self.warranty_edit.setEnabled)
@@ -484,8 +492,7 @@ class ExpenseDialog(QDialog):
         if getattr(exp, "payment_method", None):
             i = self.payment_combo.findText(exp.payment_method)
             if i >= 0: self.payment_combo.setCurrentIndex(i)
-        i = self.currency_combo.findText(exp.currency or "CHF")
-        if i >= 0: self.currency_combo.setCurrentIndex(i)
+        set_combo_currency(self.currency_combo, exp.currency)
         if exp.purchase_date: self.date_edit.setDate(QDate(exp.purchase_date.year, exp.purchase_date.month, exp.purchase_date.day))
         self.amt_spin.setValue(exp.amount or 0.0); self.ship_spin.setValue(exp.shipping or 0.0); self.cust_spin.setValue(exp.customs or 0.0)
         if getattr(exp, "warranty_until", None):
@@ -503,7 +510,7 @@ class ExpenseDialog(QDialog):
             "vendor": self.vendor_edit.text().strip() or None,
             "order_number": self.order_edit.text().strip() or None,
             "payment_method": self.payment_combo.currentText() or None,
-            "currency": self.currency_combo.currentText() or "CHF",
+            "currency": current_currency(self.currency_combo),
             "purchase_date": datetime(d.year(), d.month(), d.day()),
             "amount": self.amt_spin.value(),
             "shipping": self.ship_spin.value(),

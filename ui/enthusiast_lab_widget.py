@@ -12,7 +12,7 @@ from PySide6.QtCore import Qt, QDate, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
     QTableWidget, QTableWidgetItem, QHeaderView, QTabWidget, QDialog,
-    QFormLayout, QComboBox, QDateEdit, QDoubleSpinBox, QSpinBox,
+    QFormLayout, QComboBox, QDateEdit, QSpinBox,
     QTextEdit, QMessageBox, QGroupBox, QMenu, QApplication,
 )
 
@@ -27,6 +27,7 @@ from logic.enthusiast_lab_service import (
 )
 from logic.event_bus import AppEventBus
 from ui.theme import BTN_PRIMARY
+from ui.locale_widgets import LocalizedDoubleSpinBox as QDoubleSpinBox
 from ui.ui_scale import scale_px
 
 

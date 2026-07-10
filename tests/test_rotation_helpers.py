@@ -1,6 +1,4 @@
 """Tests für die reinen Helfer der Rotation-Engine (Farbe, Set-Diversität)."""
-import pytest
-import importlib.util
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -10,8 +8,7 @@ def _load_engine_helpers():
     """Lädt nur die Modul-Helfer ohne SQLAlchemy-Abhängigkeit zu triggern.
     Wir lesen die Funktionen direkt aus dem Quelltext bis zur Klasse aus.
     """
-    src = (ROOT / "logic" / "rotation_engine.py").read_text(encoding="utf-8")
-    # Schneide den Quelltext bis zum ersten 'from database' Import (DB-frei)
+    # Die reinen Helfer werden ohne Datenbank-/Qt-Import gespiegelt.
     ns: dict = {}
     # Definiere die reinen Farbfunktionen manuell nach (Spiegel des Engine-Codes)
     code = '''

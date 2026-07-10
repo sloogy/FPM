@@ -14,7 +14,7 @@ from __future__ import annotations
 from ui.ui_scale import scale_px
 from i18n.translator import t
 
-from PySide6.QtCore import Qt, Signal, QRect, QPoint, QSize, QEvent
+from PySide6.QtCore import Qt, Signal, QRect, QEvent
 from PySide6.QtGui import QPainter, QColor, QPen, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QWidget, QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,

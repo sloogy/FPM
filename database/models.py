@@ -5,7 +5,7 @@ Alle SQLAlchemy-Entitäten für Füller, Tinten, Federn, Papier, etc.
 from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey
+    Integer, String, Float, Boolean, DateTime, Text, ForeignKey
 )
 from sqlalchemy.orm import DeclarativeBase, relationship, Mapped, mapped_column
 

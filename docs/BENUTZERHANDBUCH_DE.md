@@ -1,6 +1,6 @@
 # FountainPen Manager – Benutzerhandbuch (Leitfaden)
 
-**Stand: v0.2.87 · Sprache: Deutsch**
+**Stand: v0.2.88 · Sprache: Deutsch**
 
 Dieses Handbuch ist der ausführliche Leitfaden zum FountainPen Manager. Es ergänzt die In-App-Hilfe (das „Wiki“ im Hilfe-Bereich): Das Wiki beantwortet Fragen kurz am Ort des Geschehens – dieses Handbuch erklärt die Funktionen **im Detail**, inklusive der konkreten Zahlen, Formeln und Dateien dahinter. Alle Zahlenangaben sind Werkseinstellungen des angegebenen Versionsstands; vieles davon ist in der App selbst einstellbar.
 
@@ -24,7 +24,7 @@ Dieses Handbuch ist der ausführliche Leitfaden zum FountainPen Manager. Es erg�
 14. [Wishlist](#14-wishlist)
 15. [Statistiken & Schreibproben](#15-statistiken--schreibproben)
 16. [Enthusiasten-Lab](#16-enthusiasten-lab)
-17. [Recherche & Referenzdaten (Hersteller zuerst)](#17-recherche--referenzdaten-hersteller-zuerst)
+17. [Recherche & Referenzdaten](#17-recherche--referenzdaten)
 18. [Einstellungen – alle Seiten](#18-einstellungen--alle-seiten)
 19. [Mehrsprachigkeit](#19-mehrsprachigkeit)
 20. [Updates](#20-updates)
@@ -68,7 +68,17 @@ Ein Backup des Datenverzeichnisses sichert **alles** (siehe Kap. 21).
 
 ### 2.3 Erststart
 
-Beim ersten Start legt die App die Datenbank an, seedet die Standard-Einstellungen, die Standard-Regeln (Kap. 23.2) und einen kleinen Satz Beispiel-Tinten (12 bekannte Tinten mit vollständigen Eigenschaften), damit Rotation und Regeln sofort demonstrierbar sind. Beispiel-Tinten kannst du jederzeit löschen oder archivieren.
+Beim ersten Start legt die App eine **leere Sammlung** mit Standard-Einstellungen und Standard-Regeln (Kap. 23.2) an. Es werden bewusst keine Beispiel-Tinten und keine Beispiel-Füller mehr eingespielt.
+
+Die geführte Einrichtung beginnt mit einer vollständigen **Modulrunde**:
+
+1. Dashboard, Füller, Tinten, Rotation, Hilfe und Einstellungen kennenlernen;
+2. am Schluss der Runde vorübergehend die Expertenmodule öffnen: Federn, Papier, Schreibproben, Wishlist, Ausgaben, Statistik, Regeln und Enthusiasten-Labor;
+3. anschließend gemeinsam die **erste Tinte** anlegen;
+4. den **ersten Füller** und optional einen zweiten Füller anlegen;
+5. einen echten Rotationsvorschlag erzeugen, dessen Score lesen und den Vorschlag bewusst als erste Befüllung übernehmen.
+
+Der ursprüngliche Einfach-/Expertenmodus wird nach der Führung automatisch wiederhergestellt. Wird ein Erfassungsdialog abgebrochen, bleibt die Führung am aktuellen Schritt. Der optionale zweite Füller kann übersprungen werden. Die gesamte Führung lässt sich abbrechen und später über Hilfe oder Einstellungen erneut starten.
 
 ---
 
@@ -76,13 +86,15 @@ Beim ersten Start legt die App die Datenbank an, seedet die Standard-Einstellung
 
 Die empfohlene Reihenfolge, damit alle Systeme sinnvoll arbeiten:
 
-1. **Tinten anlegen** (oder die Beispieltinten nutzen). Wichtig für gute Vorschläge: Farbfamilie, Shimmer/Pigment/Wasserfest-Flags und Reinigungsaufwand ehrlich pflegen.
+1. **Tinte anlegen**. Wichtig für gute Vorschläge: Farbfamilie, Shimmer/Pigment/Wasserfest-Flags und Reinigungsaufwand ehrlich pflegen.
 2. **Federn** optional als eigene Objekte anlegen oder direkt am Füller hinterlegen.
 3. **Füller anlegen**, Feder zuweisen, Füllsystem wählen, ggf. Tags (Grail, Vintage …) setzen.
 4. **Einen Füller befüllen** – ab jetzt laufen Safety Timer und Regelprüfung.
 5. **Rotationsseite öffnen → „💡 Vorschläge“ klicken** und per Klick auf eine Zeile befüllen. Ab hier arbeitet die App *für* dich.
 
-Beim allerersten Start ohne Daten zeigt das Dashboard ein Onboarding-Panel mit genau diesen Schnellaktionen; zusätzlich bietet die Hilfe eine geführte **Tour** an.
+Solange noch eine Tinte **oder** ein Füller fehlt, zeigt das Dashboard ein Onboarding-Panel mit passenden Schnellaktionen. Zusätzlich startet beim ersten Programmstart die geführte Einrichtung. Für den Expertenteil schaltet sie den Modus kontrolliert und nur vorübergehend um; danach wird der vorherige Modus wiederhergestellt.
+
+Die Schnellaktion **„Rotation vorschlagen“** erzeugt direkt neue Vorschläge. Sie öffnet nicht mehr nur die Rotationsseite.
 
 ---
 
@@ -378,11 +390,11 @@ Vier Analyse-Tabs für den Sammlerblick:
 
 ---
 
-## 17. Recherche & Referenzdaten (Hersteller zuerst)
+## 17. Recherche & Referenzdaten
 
 ### 17.1 Grundprinzip
 
-Referenzdaten (Maße, Gewicht, Füllsystem, Kapazität) und Produktbilder werden **zuerst beim Hersteller** gesucht, erst danach im offenen Netz. Die App kennt dafür ~46 Marken mit ihren offiziellen Domains – teils mehrere pro Marke (z. B. Pilot EU **und** US). Das Marken-Matching ist token-basiert mit Längster-Treffer-Logik („Graf von Faber-Castell“ trifft nie den bloßen „Faber-Castell“-Eintrag; „Crossfield“ trifft nicht „Cross“).
+Die Suchreihenfolge ist absichtlich je nach Aufgabe unterschiedlich: Die sichtbare **Maße-Suche startet mit der KI-Suche**, während die sichtbare **Bildersuche beim Hersteller beginnt**. Der automatische Parser für technische Referenzdaten arbeitet weiterhin hersteller-zuerst. Die App kennt dafür ~46 Marken mit ihren offiziellen Domains – teils mehrere pro Marke (z. B. Pilot EU **und** US). Das Marken-Matching ist token-basiert mit Längster-Treffer-Logik („Graf von Faber-Castell“ trifft nie den bloßen „Faber-Castell“-Eintrag; „Crossfield“ trifft nicht „Cross“).
 
 ### 17.2 Ablauf der Maße-Suche (Button „Maße suchen“)
 
@@ -410,9 +422,7 @@ Beide Recherche-Buttons öffnen eine **dreistufige Kaskade** – die Reihenfolge
 
 Die `site:`-Stufen tragen bewusst **nur den Modellnamen** (z. B. `site:faber-castell.com Essetio`): Jedes zusätzliche Pflichtwort und erst recht ein Exact-Phrase-Quoting würde echte Produktseiten aussieben, weil Suchmaschinen alle Begriffe gleichzeitig verlangen. Die Voll-Phrase bleibt den offenen Stufen vorbehalten.
 
-**Was wirklich geöffnet wird:** Die App öffnet die **ersten beiden Stufen** als Browser-Tabs (Maße: KI + Hersteller; Bilder: Hersteller + KI). Die dritte Stufe ist die Rückfallebene – ihre Suchbegriffe stecken in derselben Logik, sie wird aber nicht automatisch geöffnet, um dich nicht mit Tabs zu überschütten.
-
-Ist der KI-Modus für dein Konto/deine Region nicht verfügbar, öffnet Google eine normale Suche mit demselben Prompt – die Stufe bleibt also immer nützlich. Bei unbekannten Marken entfällt die Hersteller-Stufe ersatzlos; dann rückt die nächste Stufe nach.
+Ist der KI-Modus für dein Konto/deine Region nicht verfügbar, öffnet Google eine normale Suche mit demselben Prompt – die Stufe bleibt also immer nützlich. Bei unbekannten Marken entfällt die Hersteller-Stufe ersatzlos.
 
 **Der automatische Lookup** (Kap. 17.2) bleibt davon unberührt hersteller-zuerst: Er liest Seiten mit dem eigenen Parser, dort gibt es keine KI-Übersicht.
 
@@ -445,11 +455,30 @@ Die Recherche ist **kein Scraper**: Sie liest Textangaben konservativ und verwei
 | **🎲 Rotation & Vorschläge** | Zufälligkeit 0–100 % (Kap. 9.6), „Gleiche Tinte in mehreren Füllern erlauben“ (Kap. 7.5); Erklärnoten zu Sicherheit und Reroll; Änderungen wirken sofort |
 | **🔎 Darstellung** | UI-Skalierung (auto/manuell), Einfach-/Expertenmodus, Darstellungsoptionen |
 | **🌍 Währung & Region** | Anzeigewährung (Standard CHF), Zahlen-/Datumsformat (Standard Schweiz, Apostroph-Tausender), Wechselkurse für Fremdwährungskäufe |
-| **💾 Datenbank & Backup** | Pfad des Datenverzeichnisses, Backup-Aktionen |
+| **💾 Datenbank & Backup** | Datenpfad, vollständiges `.fpmbackup` erstellen, validiertes Backup wiederherstellen, Datenordner öffnen und Datenbank optimieren |
 | **📤 Import / Export** | Datenübernahme; CSV-/PDF-Export ist als Ausbau vorgesehen |
 | **⚠ Reset / Gefahrenzone** | Zurücksetzen einzelner Bereiche oder der ganzen Datenbank – mit Sicherheitsabfragen |
 | **⬆ Updates** | Update-Prüfung gegen GitHub Releases (Kap. 20) |
 | **ℹ Über** | Version, Build, Lizenz-/Projektinfos |
+
+### 18.1 Dezimalzeichen und Währungen
+
+Die App verwendet **nicht ungeprüft die Sprache oder das Betriebssystem**, sondern die unter **Währung & Region** gewählte Region:
+
+| Region | Beispiel |
+|---|---|
+| Schweiz | `CHF 1'234.56` |
+| Deutschland / Österreich | `1.234,56 EUR` |
+| Frankreich | `1 234,56 EUR` |
+| Grossbritannien / USA | `GBP 1,234.56` / `USD 1,234.56` |
+
+In editierbaren Zahlenfeldern werden aus Gründen der sicheren Eingabe keine Tausenderzeichen eingefügt. **Komma und Punkt werden beide akzeptiert.** Dadurch bleibt `39,96` ebenso wie `39.96` der Wert 39,96 und kann nicht versehentlich zu `3996` werden. Nach dem Verlassen des Feldes erscheint der Wert im gewählten Regionalformat.
+
+Sprache und Region sind getrennt: Eine deutsche Oberfläche kann weiterhin die Region Schweiz verwenden und zeigt dann `CHF 39.96`. Dezimal- und Tausendertrennzeichen dürfen nicht identisch sein. Als Tausenderzeichen stehen Apostroph, Punkt, Komma, Leerzeichen oder „keines“ zur Verfügung; „keines“ und das französische Leerzeichen bleiben auch nach einem Neustart erhalten.
+
+Die Währungsauswahl bleibt in jeder Sprache identisch: `CHF`, `EUR`, `USD`, `GBP`. Wechselst du die Währung neben einem Betrag, aktualisiert sich der Währungscode im Betragsfeld sofort. Datenbank und CSV-Export speichern Zahlen technisch mit Dezimalpunkt; das ist absichtlich unabhängig von der Darstellung. Beim CSV-Import versteht die App beide Dezimalzeichen sowie gängige Währungssymbole.
+
+**Hinweis zu älteren Daten:** Frühere englische/französische Builds konnten in einzelnen Auswahlfeldern `CHF` falsch als `USD` bzw. `EUR` anzeigen. Neue und erneut gespeicherte Einträge sind behoben. Bereits historisch falsch gespeicherte Währungen können nicht sicher automatisch erraten werden und sollten bei betroffenen Einträgen einmal kontrolliert werden.
 
 ---
 
@@ -467,9 +496,23 @@ Die App prüft **nur auf Klick** (Einstellungen → Updates) gegen die offiziell
 
 ## 21. Datensicherung & Umzug
 
-- **Backup = Datenverzeichnis kopieren** (Kap. 2.2). Das genügt vollständig: Datenbank, Bilder, Cache, Overlay.
-- **Umzug auf einen anderen Rechner:** Datenverzeichnis kopieren und entweder `FPM_DATA_DIR` darauf zeigen lassen oder den Standardpfad verwenden.
-- Empfehlung: vor jedem Update und in regelmäßigen Abständen sichern; SQLite-Datei nur bei geschlossener App kopieren.
+### 21.1 Vollbackup in der App
+
+Unter **Einstellungen → Datenbank & Backup → Vollbackup erstellen** erzeugt die App eine Datei mit der Endung `.fpmbackup`. Sie enthält:
+
+- einen konsistenten SQLite-Snapshot der Datenbank;
+- Füllerbilder, Schreibproben und weitere Medien;
+- Cache- und Referenzdateien;
+- Konfiguration und Hersteller-Overlay;
+- ein Manifest mit Dateigrößen und SHA-256-Prüfsummen.
+
+Vor Abschluss prüft die App das Archiv und die SQLite-Integrität. Vor einer Wiederherstellung wird automatisch ein zusätzliches Rückfall-Backup des aktuellen Zustands erstellt. Danach wird das ausgewählte Archiv nochmals validiert und erst dann eingespielt. Der lokale Datenbankpfad des Zielrechners bleibt erhalten.
+
+### 21.2 Manuelle Sicherung und Umzug
+
+Eine Kopie des gesamten Datenverzeichnisses bleibt eine vollständige manuelle Sicherung. Beende die App vorher, damit die SQLite-Datei nicht während des Kopierens verändert wird.
+
+Für einen Umzug kopierst du entweder das Datenverzeichnis oder stellst ein `.fpmbackup` auf dem neuen Rechner wieder her. Bei portablem Betrieb zeigt `FPM_DATA_DIR` auf den gewünschten Ordner.
 
 ---
 
@@ -528,7 +571,7 @@ Die App prüft **nur auf Klick** (Einstellungen → Updates) gegen die offiziell
 
 ### 23.3 Dateien im Datenverzeichnis
 
-Siehe Kap. 2.2. Merksatz: **Eine Kopie dieses Ordners ist ein vollständiges Backup.**
+Siehe Kap. 21. Merksatz: **Das `.fpmbackup` ist die geprüfte Standardsicherung; eine Kopie des geschlossenen Datenordners bleibt die manuelle Alternative.**
 
 ### 23.4 Score-Kurzreferenz
 

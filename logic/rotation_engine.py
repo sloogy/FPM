@@ -13,7 +13,7 @@ FIX v0.2.3:
 import logging
 import random
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 from database.db import get_session
 from database.models import Pen, Ink, InkLoad, AppSettings
@@ -23,8 +23,7 @@ from logic.event_bus import AppEventBus
 from logic.auto_mode_service import AutoModeService, action_label
 from logic.enthusiast_lab_service import apply_ink_consumption
 from logic.role_config import (load_role_configs, score_ink_for_role,
-                               load_theme_configs, score_ink_for_theme,
-                               categorize_nib_size)
+                               load_theme_configs, score_ink_for_theme)
 from i18n.translator import format_date, t
 
 _log = logging.getLogger(__name__)
@@ -205,10 +204,6 @@ class RotationEngine:
         shimmer = bool(getattr(ink, "has_shimmer", False))
         pigment = bool(getattr(ink, "is_pigment", False))
         fill_system = getattr(pen, "fill_system", "") or ""
-        _nib_setup   = getattr(pen, "active_nib_setup", None)
-        _nib_obj     = getattr(_nib_setup, "nib", None) or getattr(pen, "nib", None)
-        pen_nib_size = (getattr(_nib_obj, "size", "") or "").strip()
-
         score -= max(0, cleaning - 3) * 8
         if cleaning >= 4:
             hints.append(t("rotation.clean_harder"))
@@ -541,7 +536,12 @@ class RotationEngine:
                     if fixed and not fixed.is_empty and not fixed.is_archived:
                         candidate_inks = [fixed] + [i for i in candidate_inks if i.id != fixed.id]
 
-                def _base_pool(respect_avoid: bool) -> list:
+                def _base_pool(
+                    respect_avoid: bool,
+                    *,
+                    candidate_inks=candidate_inks,
+                    pen=pen,
+                ) -> list:
                     pool = []
                     for ink in candidate_inks:
                         # Exakte aktive Tinten nicht erneut vorschlagen. Farb-Doppelungen

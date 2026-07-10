@@ -8,6 +8,8 @@ v0.2.17 – Locale-System:
 - Regionsvoreinstellungen: CH, DE, AT, FR, GB, US.
 """
 import json
+import math
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -32,6 +34,53 @@ DATE_FORMAT_OPTIONS: dict[str, str] = {
 }
 
 # Standard-Wechselkurse (1 CHF = x Fremdwährung)
+SUPPORTED_CURRENCIES: tuple[str, ...] = ("CHF", "EUR", "USD", "GBP")
+CURRENCY_ALIASES: dict[str, str] = {
+    "CHF": "CHF", "SFR": "CHF", "FR": "CHF", "FR.": "CHF",
+    "EUR": "EUR", "€": "EUR",
+    "USD": "USD", "US$": "USD", "$": "USD",
+    "GBP": "GBP", "£": "GBP",
+}
+
+
+def normalize_currency_code(value: object, fallback: str = "CHF") -> str:
+    """Return a supported ISO currency code.
+
+    UI language must never translate an ISO code. Common symbols/legacy labels
+    are accepted for CSV import; unknown values fall back deterministically.
+    """
+    raw = str(value or "").strip().upper()
+    normalized = CURRENCY_ALIASES.get(raw, raw)
+    if normalized in SUPPORTED_CURRENCIES:
+        return normalized
+    fallback_raw = str(fallback or "CHF").strip().upper()
+    fallback_normalized = CURRENCY_ALIASES.get(fallback_raw, fallback_raw)
+    return fallback_normalized if fallback_normalized in SUPPORTED_CURRENCIES else "CHF"
+
+
+def normalize_number_separators(
+    decimal_sep: object,
+    thousands_sep: object,
+) -> tuple[str, str]:
+    """Validate persisted number separators and remove ambiguous combinations.
+
+    The decimal separator is limited to comma or point. Supported grouping
+    separators are apostrophe, comma, point, normal space and no separator.
+    A separator can never be both decimal and grouping separator; corrupted or
+    legacy settings therefore fall back safely instead of producing values such
+    as ``1,234,56``.
+    """
+    decimal = str(decimal_sep) if decimal_sep is not None else "."
+    thousands = str(thousands_sep) if thousands_sep is not None else "'"
+    if decimal not in {".", ","}:
+        decimal = "."
+    if thousands not in {"'", ".", ",", " ", ""}:
+        thousands = "'"
+    if thousands == decimal:
+        thousands = ""
+    return decimal, thousands
+
+
 DEFAULT_EXCHANGE_RATES: dict[str, float] = {
     "CHF": 1.0,
     "EUR": 0.95,
@@ -170,17 +219,20 @@ class LocaleService:
             session = get_session()
             try:
                 tr = Translator.instance()
-                self._decimal_sep = (
-                    AppSettings.get(session, "locale_decimal_sep")
-                    or tr.locale_default("decimal_sep", ".")
+                decimal_raw = AppSettings.get(session, "locale_decimal_sep")
+                if decimal_raw is None:
+                    decimal_raw = tr.locale_default("decimal_sep", ".")
+                thousands_raw = AppSettings.get(session, "locale_thousands_sep")
+                if thousands_raw is None:
+                    thousands_raw = tr.locale_default("thousands_sep", "'")
+                self._decimal_sep, self._thousands_sep = normalize_number_separators(
+                    decimal_raw,
+                    thousands_raw,
                 )
-                self._thousands_sep = (
-                    AppSettings.get(session, "locale_thousands_sep")
-                    or tr.locale_default("thousands_sep", "'")
-                )
-                self._currency = (
+                self._currency = normalize_currency_code(
                     AppSettings.get(session, "default_currency")
-                    or tr.locale_default("currency", "CHF")
+                    or tr.locale_default("currency", "CHF"),
+                    "CHF",
                 )
                 self._currency_position = (
                     AppSettings.get(session, "locale_currency_position")
@@ -194,10 +246,17 @@ class LocaleService:
                     self._date_format = "DD.MM.YYYY"
                 rates_json = AppSettings.get(session, "exchange_rates_json")
                 if rates_json:
-                    self._exchange_rates = {
-                        **DEFAULT_EXCHANGE_RATES,
-                        **json.loads(rates_json),
-                    }
+                    parsed_rates = json.loads(rates_json)
+                    rates = dict(DEFAULT_EXCHANGE_RATES)
+                    for code in SUPPORTED_CURRENCIES:
+                        try:
+                            value = float(parsed_rates.get(code, rates[code]))
+                        except (TypeError, ValueError):
+                            continue
+                        if math.isfinite(value) and value > 0:
+                            rates[code] = value
+                    rates["CHF"] = 1.0
+                    self._exchange_rates = rates
             finally:
                 session.close()
         except Exception:
@@ -222,6 +281,10 @@ class LocaleService:
         return self._exchange_rates
 
     @property
+    def currency_position(self) -> str:
+        return self._currency_position
+
+    @property
     def date_format(self) -> str:
         return self._date_format
 
@@ -237,26 +300,39 @@ class LocaleService:
 
     # ── Formatierung ─────────────────────────────────────────────────────────
 
-    def format_number(self, value: float, decimals: int = 2) -> str:
-        """Zahl regional formatiert (Trennzeichen aus Settings)."""
+    def format_number(self, value: float, decimals: int = 2, *, grouping: bool = True) -> str:
+        """Zahl regional formatiert.
+
+        ``grouping=False`` ist für editierbare Felder gedacht. Dort werden
+        bewusst keine Tausendertrennzeichen eingesetzt, damit Cursorbewegung
+        und Eingabe in Qt-Spinboxen stabil bleiben.
+        """
         try:
-            raw = f"{abs(value):,.{decimals}f}"           # immer Punkt + Komma-Tausender
-            raw = raw.replace(",", "\x00")                 # Tausender temp. ersetzen
-            raw = raw.replace(".", self._decimal_sep)      # Dezimalpunkt setzen
-            raw = raw.replace("\x00", self._thousands_sep) # Tausender setzen
-            return ("-" if value < 0 else "") + raw
-        except Exception:
+            decimals = max(0, int(decimals))
+            if grouping:
+                raw = f"{abs(float(value)):,.{decimals}f}"
+                raw = raw.replace(",", "\x00")
+                raw = raw.replace(".", self._decimal_sep)
+                raw = raw.replace("\x00", self._thousands_sep)
+            else:
+                raw = f"{abs(float(value)):.{decimals}f}".replace(".", self._decimal_sep)
+            return ("-" if float(value) < 0 else "") + raw
+        except (TypeError, ValueError, OverflowError):
             return str(value)
 
-    def format_money(self, amount: Optional[float], currency: Optional[str] = None) -> str:
-        """
-        Betrag als Währungsstring formatieren.
-        currency=None → Standardwährung aus Settings.
-        """
+    def format_money(
+        self,
+        amount: Optional[float],
+        currency: Optional[str] = None,
+        decimals: int = 2,
+    ) -> str:
+        """Betrag als Währungsstring gemäß App-Region formatieren."""
         if amount is None:
             amount = 0.0
-        cur = currency or self._currency
-        num = self.format_number(amount, 2)
+        cur = normalize_currency_code(currency, self._currency)
+        num = self.format_number(amount, decimals)
+        if not cur:
+            return num
         if self._currency_position == "after":
             return f"{num} {cur}"
         return f"{cur} {num}"
@@ -286,26 +362,135 @@ class LocaleService:
         Betrag in die Standardwährung umrechnen.
         Weg: from_currency → CHF → Standardwährung.
         """
-        chf_amount = amount / self._exchange_rates.get(from_currency, 1.0)
-        return chf_amount * self._exchange_rates.get(self._currency, 1.0)
+        source = normalize_currency_code(from_currency, self._currency)
+        target = normalize_currency_code(self._currency, "CHF")
+        numeric = float(amount)
+        if source == target:
+            return numeric
+        source_rate = self._exchange_rates.get(source)
+        target_rate = self._exchange_rates.get(target)
+        if not source_rate or not target_rate:
+            # Unknown/invalid legacy codes are treated as already being in the
+            # app's default currency instead of silently applying a CHF rate.
+            return numeric
+        chf_amount = numeric / source_rate
+        return chf_amount * target_rate
 
-    def parse_number(self, text: str) -> Optional[float]:
+    @staticmethod
+    def parse_localized_number(
+        text: str,
+        decimal_sep: str = ".",
+        thousands_sep: str = "'",
+    ) -> Optional[float]:
+        """Robustes Parsen lokaler Zahlen ohne Faktor-100/1000-Fallen.
+
+        Neben dem eingestellten Dezimalzeichen wird auch das jeweils andere
+        Zeichen akzeptiert. So wird etwa ``39,96`` in einer Punkt-Region nicht
+        fälschlich zu ``3996``. Enthält die Eingabe Punkt *und* Komma, gilt das
+        zuletzt vorkommende Zeichen als Dezimaltrennzeichen. ISO-Währungscodes,
+        Einheiten, Leerzeichen und übliche Tausenderzeichen werden toleriert.
         """
-        Nutzereingabe mit regionalem Trennzeichen parsen.
-        Versteht sowohl Punkt als auch Komma als Dezimalzeichen.
-        """
-        if not text or not text.strip():
+        decimal_sep, thousands_sep = normalize_number_separators(
+            decimal_sep,
+            thousands_sep,
+        )
+        if text is None:
             return None
-        t = text.strip()
-        # Wenn Dezimaltrennzeichen Komma ist: Punkte als Tausender entfernen, Komma → Punkt
-        if self._decimal_sep == ",":
-            t = t.replace(".", "").replace(",", ".")
-        else:
-            t = t.replace(",", "")
+        raw = str(text).strip()
+        if not raw:
+            return None
+
+        raw = raw.replace("−", "-").replace("’", "'").replace("`", "'")
+        negative_parentheses = raw.startswith("(") and raw.endswith(")")
+        if negative_parentheses:
+            raw = raw[1:-1]
+        # Nur bekannte Währungen/Einheiten werden toleriert. Andere Zeichen
+        # machen die Eingabe ungültig; so wird z. B. "1/2" nicht zu "12".
+        raw = re.sub(
+            r"(?i)(?:US\$|SFR\.?|CHF|FR\.?|EUR|USD|GBP|€|£|\$)",
+            " ",
+            raw,
+        )
+        raw = re.sub(r"(?i)\b(?:ml|mm|cm|kg|g|min|sec|s)\b", " ", raw)
+        raw = raw.replace("\u00a0", " ").replace("\u202f", " ").strip()
+        if re.search(r"[^0-9.,'\s+\-]", raw):
+            return None
+        if not raw:
+            return None
+
+        sign = ""
+        if raw[0] in "+-":
+            sign, raw = raw[0], raw[1:]
+        if "+" in raw or "-" in raw:
+            return None
+
+        # Apostroph und Leerraum sind in den unterstützten Regionen nie Dezimalzeichen.
+        raw = raw.replace("'", "").replace(" ", "")
+        if not raw or not any(ch.isdigit() for ch in raw):
+            return None
+
+        dot_count = raw.count(".")
+        comma_count = raw.count(",")
+
+        if dot_count and comma_count:
+            decimal_char = "." if raw.rfind(".") > raw.rfind(",") else ","
+            grouping_char = "," if decimal_char == "." else "."
+            integer_part, decimal_part = raw.rsplit(decimal_char, 1)
+            if not decimal_part.isdigit():
+                return None
+            grouped_parts = integer_part.split(grouping_char)
+            if len(grouped_parts) > 1:
+                if not (
+                    1 <= len(grouped_parts[0]) <= 3
+                    and grouped_parts[0].isdigit()
+                    and all(len(part) == 3 and part.isdigit() for part in grouped_parts[1:])
+                ):
+                    return None
+            elif not integer_part.isdigit():
+                return None
+            raw = "".join(grouped_parts) + "." + decimal_part
+        elif dot_count or comma_count:
+            sep = "." if dot_count else ","
+            count = raw.count(sep)
+            groups = raw.split(sep)
+            trailing_len = len(groups[-1])
+
+            if count > 1:
+                # Mehrfach dasselbe Zeichen ist nur als korrekt gruppierte
+                # Ganzzahl erlaubt. Formen wie 12,34,56 werden abgelehnt statt
+                # still zu 1234.56 umgedeutet zu werden.
+                all_grouped = (
+                    1 <= len(groups[0]) <= 3
+                    and groups[0].isdigit()
+                    and all(len(part) == 3 and part.isdigit() for part in groups[1:])
+                )
+                if not all_grouped:
+                    return None
+                raw = "".join(groups)
+            elif sep == thousands_sep and trailing_len == 3:
+                raw = "".join(groups)
+            elif sep != decimal_sep and trailing_len == 3 and 1 <= len(groups[0]) <= 3:
+                # Fremdes Gruppierungsformat ohne Dezimalteil, z. B. 1,234
+                # in einer Schweizer Region. App-Eingabefelder haben höchstens
+                # zwei Nachkommastellen; drei Ziffern sind daher Gruppierung.
+                raw = "".join(groups)
+            else:
+                # Aktives oder alternatives Dezimalzeichen: 39,96 / 39.96.
+                raw = groups[0] + "." + groups[1]
+
+        if raw.startswith("."):
+            raw = "0" + raw
+        if raw.count(".") > 1 or not re.fullmatch(r"\d+(?:\.\d*)?", raw):
+            return None
         try:
-            return float(t)
+            value = float(("-" if negative_parentheses else sign) + raw)
         except ValueError:
             return None
+        return value
+
+    def parse_number(self, text: str) -> Optional[float]:
+        """Nutzereingabe gemäß den aktiven Regionseinstellungen parsen."""
+        return self.parse_localized_number(text, self._decimal_sep, self._thousands_sep)
 
 
 def locale() -> LocaleService:
@@ -313,14 +498,18 @@ def locale() -> LocaleService:
     return LocaleService.instance()
 
 
-def format_money(amount: Optional[float], currency: Optional[str] = None) -> str:
-    """Shortcut für locale().format_money()."""
-    return LocaleService.instance().format_money(amount, currency)
+def format_money(
+    amount: Optional[float],
+    currency: Optional[str] = None,
+    decimals: int = 2,
+) -> str:
+    """Shortcut für ``LocaleService.format_money``."""
+    return LocaleService.instance().format_money(amount, currency, decimals)
 
 
-def format_number(value: float, decimals: int = 2) -> str:
-    """Shortcut für locale().format_number()."""
-    return LocaleService.instance().format_number(value, decimals)
+def format_number(value: float, decimals: int = 2, *, grouping: bool = True) -> str:
+    """Shortcut für ``LocaleService.format_number``."""
+    return LocaleService.instance().format_number(value, decimals, grouping=grouping)
 
 
 def format_date(value) -> str:

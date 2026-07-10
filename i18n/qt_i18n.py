@@ -1059,7 +1059,7 @@ def install_qt_i18n_hooks() -> None:
 
     if getattr(QMessageBox, "_fpm_i18n_dialog_hooks_installed", False):
         return
-    setattr(QMessageBox, "_fpm_i18n_dialog_hooks_installed", True)
+    QMessageBox._fpm_i18n_dialog_hooks_installed = True
 
     _orig_dialog_exec = QDialog.exec
 

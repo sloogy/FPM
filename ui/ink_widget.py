@@ -8,22 +8,29 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit,
-    QDialog, QFormLayout, QComboBox, QDoubleSpinBox, QDateEdit,
+    QDialog, QFormLayout, QComboBox, QDateEdit,
     QTextEdit, QCheckBox, QGroupBox, QScrollArea, QMessageBox,
-    QSplitter, QFrame, QSpinBox, QSlider, QMenu, QFileDialog,
+    QSplitter, QFrame, QSpinBox, QMenu, QFileDialog,
     QStackedWidget,
 )
 from PySide6.QtCore import Qt, QDate
-from PySide6.QtGui import QColor, QFont, QPainter, QBrush
+from PySide6.QtGui import QColor
 from ui.common import EmptyStateWidget, ImportPreviewDialog
 from logic.event_bus import AppEventBus
 from logic.enthusiast_lab_service import ink_stock_rows
 from logic.ink_reach_service import ink_reach_row
 
+from ui.locale_widgets import (
+    LocalizedDoubleSpinBox as QDoubleSpinBox,
+    bind_currency_combo,
+    current_currency,
+    populate_currency_combo,
+    set_combo_currency,
+)
 from ui.ui_scale import scale_px
 from database.db import get_session
 from database.models import Ink
-from i18n.translator import LocaleService, format_money, format_date, t
+from i18n.translator import LocaleService, format_money, format_date, normalize_currency_code, t
 from logic.color_family_service import normalize_color_family
 from ui.theme import BTN_ACCENT, BTN_MUTED, BTN_PRIMARY, BTN_SECONDARY, BTN_SUCCESS
 
@@ -322,13 +329,13 @@ class InkWidget(QWidget):
                 row(t("ink.labels.reach_avg_fill"), f"{reach.avg_fill_ml:g} ml")
             if reach.cost_per_ml is not None:
                 cur = reach.currency or ""
-                row(t("ink.labels.cost_per_ml"), f"{reach.cost_per_ml:g} {cur}".strip())
+                row(t("ink.labels.cost_per_ml"), f"{format_money(reach.cost_per_ml, cur or LocaleService.instance().currency, 4)} / ml")
             if reach.cost_per_fill is not None:
                 cur = reach.currency or ""
-                row(t("ink.labels.cost_per_fill"), f"{reach.cost_per_fill:g} {cur}".strip())
+                row(t("ink.labels.cost_per_fill"), format_money(reach.cost_per_fill, cur or LocaleService.instance().currency))
             if reach.value_used is not None:
                 cur = reach.currency or ""
-                row(t("ink.labels.value_used"), f"{reach.value_used:g} {cur}".strip())
+                row(t("ink.labels.value_used"), format_money(reach.value_used, cur or LocaleService.instance().currency))
 
             if getattr(ink, "reorder_threshold_ml", None):
                 row(t("ink.labels.reorder_threshold"), f"{ink.reorder_threshold_ml:g} ml", status_color)
@@ -398,19 +405,23 @@ class InkWidget(QWidget):
         elif empty and action == empty: self._mark_empty()
         elif delete and action == delete: self._delete()
 
-    def _add(self):
+    def _add(self) -> bool:
         dlg = InkDialog(self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            session = get_session()
-            try:
-                session.add(Ink(**dlg.get_data()))
-                session.commit()
-                AppEventBus.instance().inks_changed.emit()
-                self.refresh()
-            except Exception as e:
-                QMessageBox.critical(self, t('ui.ink_widget.fehler_d837361b'), str(e))
-            finally:
-                session.close()
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return False
+        session = get_session()
+        try:
+            session.add(Ink(**dlg.get_data()))
+            session.commit()
+            AppEventBus.instance().inks_changed.emit()
+            self.refresh()
+            return True
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, t('ui.ink_widget.fehler_d837361b'), str(e))
+            return False
+        finally:
+            session.close()
 
     def _edit(self):
         ink_id = self._selected_id()
@@ -564,15 +575,12 @@ class InkWidget(QWidget):
         added = updated = skipped = 0
         errors = []
         def to_float(v):
-            try:
-                return float(str(v).replace(",", ".")) if str(v).strip() else None
-            except Exception:
+            if not str(v or '').strip():
                 return None
+            return LocaleService.instance().parse_number(str(v))
         def to_int(v, default=None):
-            try:
-                return int(float(str(v).replace(",", "."))) if str(v).strip() else default
-            except Exception:
-                return default
+            value = to_float(v)
+            return int(value) if value is not None else default
         def to_bool(v):
             return str(v).strip().lower() in ("1", "true", "yes", "ja", "x", "✓")
         def to_date(v):
@@ -637,7 +645,7 @@ class InkWidget(QWidget):
                             color_type=(row.get("color_type") or row.get("Farbtyp") or "").strip() or None,
                             remaining_ml=to_float(row.get("remaining_ml") or row.get("Rest")),
                             purchase_price=to_float(row.get("purchase_price") or row.get("Kaufpreis")),
-                            purchase_currency=(row.get("purchase_currency") or row.get("Kaufpreis-Währung") or LocaleService.instance().currency).strip()[:3].upper() or None,
+                            purchase_currency=normalize_currency_code(row.get("purchase_currency") or row.get("Kaufpreis-Währung"), LocaleService.instance().currency),
                             is_empty=to_bool(row.get("is_empty") or row.get("Leer") or ""),
                             is_archived=to_bool(row.get("is_archived") or row.get("Archiv") or ""),
                             wetness_level=to_int(row.get("wetness_level") or row.get("Nässe"), 3),
@@ -751,8 +759,8 @@ class InkDialog(QDialog):
         g2 = QGroupBox(t('ui.ink_widget.kauf_3ba87130')); f2 = QFormLayout(g2)
         self.date_edit    = QDateEdit(QDate.currentDate()); self.date_edit.setCalendarPopup(True); self.date_edit.setDisplayFormat(LocaleService.instance().qt_date_format)
         default_cur = LocaleService.instance().currency
-        self.price_spin   = QDoubleSpinBox(); self.price_spin.setRange(0,999); self.price_spin.setSuffix(f" {default_cur}"); self.price_spin.setDecimals(2)
-        self.price_currency_combo = QComboBox(); self.price_currency_combo.addItems([t('ui.ink_widget.chf_e79d52f9'), t('ui.ink_widget.eur_3c1feb77'), t('ui.ink_widget.usd_df729bfc'), t('ui.ink_widget.gbp_a19c745e')]); self.price_currency_combo.setCurrentText(default_cur)
+        self.price_spin   = QDoubleSpinBox(); self.price_spin.setRange(0,999); self.price_spin.setDecimals(2)
+        self.price_currency_combo = QComboBox(); populate_currency_combo(self.price_currency_combo, default_cur); bind_currency_combo(self.price_currency_combo, self.price_spin)
         self.bottle_spin  = QDoubleSpinBox(); self.bottle_spin.setRange(0,1000); self.bottle_spin.setSuffix(" ml"); self.bottle_spin.setDecimals(1)
         self.remain_spin  = QDoubleSpinBox(); self.remain_spin.setRange(0,1000); self.remain_spin.setSuffix(" ml"); self.remain_spin.setDecimals(1)
         self.empty_cb = QCheckBox(t('ui.ink_widget.tintenfass_ist_leer_nicht_mehr_vorschlagen_b2225d07'))
@@ -839,7 +847,7 @@ class InkDialog(QDialog):
         if i.purchase_date:
             d = i.purchase_date; self.date_edit.setDate(QDate(d.year, d.month, d.day))
         self.price_spin.setValue(i.purchase_price or 0)
-        self.price_currency_combo.setCurrentText(getattr(i, "purchase_currency", None) or LocaleService.instance().currency)
+        set_combo_currency(self.price_currency_combo, getattr(i, "purchase_currency", None))
         self.bottle_spin.setValue(i.bottle_size_ml or 0)
         self.remain_spin.setValue(i.remaining_ml or 0)
         self.empty_cb.setChecked(bool(getattr(i, "is_empty", False)))
@@ -880,7 +888,7 @@ class InkDialog(QDialog):
             "color_type": self.color_type_edit.text().strip() or None,
             "purchase_date": datetime(d.year(), d.month(), d.day()),
             "purchase_price": self.price_spin.value() or None,
-            "purchase_currency": self.price_currency_combo.currentText(),
+            "purchase_currency": current_currency(self.price_currency_combo),
             "bottle_size_ml": self.bottle_spin.value() or None,
             "remaining_ml":   0 if self.empty_cb.isChecked() else (self.remain_spin.value() or None),
             "is_empty": self.empty_cb.isChecked(),

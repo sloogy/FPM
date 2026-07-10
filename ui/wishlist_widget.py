@@ -6,15 +6,22 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget,
     QTableWidgetItem, QHeaderView, QDialog, QFormLayout, QLineEdit,
-    QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox, QMessageBox,
+    QTextEdit, QComboBox, QSpinBox, QMessageBox,
     QDialogButtonBox, QMenu, QStackedWidget
 )
 
+from ui.locale_widgets import (
+    LocalizedDoubleSpinBox as QDoubleSpinBox,
+    bind_currency_combo,
+    current_currency,
+    populate_currency_combo,
+    set_combo_currency,
+)
 from ui.ui_scale import scale_px
 from ui.common import EmptyStateWidget
 from database.db import get_session
 from database.models import WishlistItem, Expense, Pen, Ink, Nib, NibFormat, Paper
-from i18n.translator import LocaleService, t
+from i18n.translator import LocaleService, format_money, t
 from logic.article_card_service import ensure_article_card
 from logic.event_bus import AppEventBus
 from logic.budget_export_service import sync_default_outbox_from_session
@@ -146,7 +153,7 @@ class WishlistWidget(QWidget):
                 self.table.setItem(r, 3, QTableWidgetItem(str(item.priority or 3)))
                 price = item.actual_price or item.expected_price or item.desired_price
                 cur = item.currency or LocaleService.instance().currency
-                self.table.setItem(r, 4, QTableWidgetItem(f"{price:g} {cur}" if price is not None else "—"))
+                self.table.setItem(r, 4, QTableWidgetItem(format_money(price, cur) if price is not None else "—"))
                 self.table.setItem(r, 5, QTableWidgetItem(item.shop or ""))
                 self.table.setItem(r, 6, QTableWidgetItem(item.article_card_path or "—"))
                 übernommen = f"{item.created_object_type} #{item.created_object_id}" if item.created_object_id else "—"
@@ -536,9 +543,10 @@ class WishlistDialog(QDialog):
         self.desired = QDoubleSpinBox(); self.desired.setRange(0, 1_000_000); self.desired.setDecimals(2)
         self.expected = QDoubleSpinBox(); self.expected.setRange(0, 1_000_000); self.expected.setDecimals(2)
         self.actual = QDoubleSpinBox(); self.actual.setRange(0, 1_000_000); self.actual.setDecimals(2)
-        self.currency = QComboBox(); self.currency.addItems([t('ui.wishlist_widget.chf_b878091d'), t('ui.wishlist_widget.eur_8ed2a6b1'), t('ui.wishlist_widget.usd_8fe3667b'), t('ui.wishlist_widget.gbp_a85f57f3')])
+        self.currency = QComboBox(); populate_currency_combo(self.currency)
         self.shipping = QDoubleSpinBox(); self.shipping.setRange(0, 100_000); self.shipping.setDecimals(2)
         self.customs = QDoubleSpinBox(); self.customs.setRange(0, 100_000); self.customs.setDecimals(2)
+        bind_currency_combo(self.currency, self.desired, self.expected, self.actual, self.shipping, self.customs)
         self.shop = QLineEdit(); self.url = QLineEdit()
         self.reason = QTextEdit(); self.reason.setMaximumHeight(80)
         self.notes = QTextEdit(); self.notes.setMaximumHeight(100)
@@ -562,8 +570,7 @@ class WishlistDialog(QDialog):
         self.priority.setValue(i.priority or 3)
         for widget, value in [(self.desired, i.desired_price), (self.expected, i.expected_price), (self.actual, i.actual_price), (self.shipping, i.shipping), (self.customs, i.customs)]:
             widget.setValue(float(value or 0))
-        if i.currency:
-            self.currency.setCurrentText(i.currency)
+        set_combo_currency(self.currency, i.currency)
         self.shop.setText(i.shop or ""); self.url.setText(i.url or "")
         self.reason.setPlainText(i.reason or ""); self.notes.setPlainText(i.notes or "")
 
@@ -583,7 +590,7 @@ class WishlistDialog(QDialog):
             "variant": self.variant.text().strip() or None, "status": self.status.currentData(),
             "priority": self.priority.value(), "desired_price": self._val(self.desired),
             "expected_price": self._val(self.expected), "actual_price": self._val(self.actual),
-            "currency": self.currency.currentText(), "shipping": self._val(self.shipping),
+            "currency": current_currency(self.currency), "shipping": self._val(self.shipping),
             "customs": self._val(self.customs), "shop": self.shop.text().strip() or None,
             "url": self.url.text().strip() or None, "reason": self.reason.toPlainText().strip() or None,
             "notes": self.notes.toPlainText().strip() or None,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KILLCRITIC 1000-Loop-Invarianten-Audit für v0.2.87 (Merge-Stand M).
+"""KILLCRITIC 1000-Loop-Invarianten-Audit für v0.2.88 (Locale & Currency Hardening).
 
 Release-/Logik-/UI-Invarianten × 20 Wiederholungen (Anzahl dynamisch, Ausgabe nennt die Summe).
 Übernommen aus dem parallelen KILLCRITIC-RC und auf diesen Merge-Stand
@@ -7,12 +7,13 @@ portiert. Bewusst schnell und deterministisch (die Wiederholungen sind ein
 Stabilitäts-Smoke, keine Zufallsläufe); die tiefe Prüfung bleibt pytest.
 
 Enthält als dauerhafte Guards genau die Schwächen, die der Vergleich der
-beiden 0.2.87-Merges aufgedeckt hat (Doppelpfad, Reject-Lücke, Tinten- statt
+vorherigen 0.2.86-Merges aufgedeckt hat (Doppelpfad, Reject-Lücke, Tinten- statt
 Paar-Sperre, Legacy-Setting-Seeding).
 """
 from __future__ import annotations
 import json
 import sys
+from functools import partial
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,6 +25,10 @@ def read(rel: str) -> str:
 
 def j(rel: str):
     return json.loads(read(rel))
+
+
+def path_exists(rel: str) -> bool:
+    return (ROOT / rel).exists()
 
 
 def _order_ok(func_name: str, *, ai_before_site: bool) -> bool:
@@ -42,18 +47,18 @@ def _order_ok(func_name: str, *, ai_before_site: bool) -> bool:
 
 CHECKS = [
     # ── Version & Release-Dateien ────────────────────────────────────
-    ("version_app", lambda: 'APP_VERSION = "0.2.87"' in read('app_info.py')),
-    ("version_build", lambda: 'release-audit-media-hardening' in read('app_info.py')),
-    ("version_json", lambda: j('version.json')['version'] == '0.2.87'),
-    ("version_info", lambda: 'Build: release-audit-media-hardening' in read('VERSION_INFO.txt')),
-    ("latest_root", lambda: 'v0.2.87' in read('latest.json.template')),
-    ("latest_docs", lambda: 'v0.2.87' in read('docs/latest.json.template')),
-    ("installer_version", lambda: '#define MyAppVersion "0.2.87"' in read('installer/FountainPenManager_Setup.iss')),
-    ("readme_title", lambda: '# FountainPen Manager v0.2.87' in read('README.md')),
-    ("changelog_exists", lambda: (ROOT / 'CHANGELOG_0.2.87_RELEASE_AUDIT.md').exists()),
-    ("report_exists", lambda: (ROOT / 'RELEASE_REPORT_v0.2.87_RELEASE_AUDIT.md').exists()),
-    ("branch_history_a", lambda: (ROOT / 'CHANGELOG_0.2.79A_MANUFACTURER_FIRST_ROTATION_UX.md').exists()),
-    ("branch_history_b", lambda: (ROOT / 'RELEASE_REPORT_v0.2.79B_MANUFACTURER_FIRST_RELEASE_UI_RANDOM.md').exists()),
+    ("version_app", lambda: 'APP_VERSION = "0.2.88"' in read('app_info.py')),
+    ("version_build", lambda: 'locale-currency-hardening' in read('app_info.py')),
+    ("version_json", lambda: j('version.json')['version'] == '0.2.88'),
+    ("version_info", lambda: 'Build: locale-currency-hardening' in read('VERSION_INFO.txt')),
+    ("latest_root", lambda: 'v0.2.88' in read('latest.json.template')),
+    ("latest_docs", lambda: 'v0.2.88' in read('docs/latest.json.template')),
+    ("installer_version", lambda: '#define MyAppVersion "0.2.88"' in read('installer/FountainPenManager_Setup.iss')),
+    ("readme_title", lambda: '# FountainPen Manager v0.2.88' in read('README.md')),
+    ("changelog_exists", partial(path_exists, 'CHANGELOG_0.2.88_LOCALE_CURRENCY_HARDENING.md')),
+    ("report_exists", partial(path_exists, 'RELEASE_REPORT_v0.2.88_LOCALE_CURRENCY_HARDENING.md')),
+    ("branch_history_a", partial(path_exists, 'CHANGELOG_0.2.79A_MANUFACTURER_FIRST_ROTATION_UX.md')),
+    ("branch_history_b", partial(path_exists, 'RELEASE_REPORT_v0.2.79B_MANUFACTURER_FIRST_RELEASE_UI_RANDOM.md')),
     # ── Hersteller-zuerst ────────────────────────────────────────────
     ("manufacturer_catalog", lambda: 'MANUFACTURER_DOMAINS: dict[str, tuple[str, ...]]' in read('logic/pen_dimensions_service.py')),
     ("manufacturer_multi_domain", lambda: '"pilot": ("pilotpen.eu", "pilotpen.com")' in read('logic/pen_dimensions_service.py')),
@@ -97,38 +102,63 @@ CHECKS = [
     ("settings_instant_refresh", lambda: '_refresh_all_widgets()' in read('ui/settings_widget.py').split('def _save_rotation_settings')[1].split('def ')[0]),
     # ── i18n-Parität der neuen Kerne ─────────────────────────────────
     ("i18n_pct_params", lambda: all('{pct}' in j(f'i18n/{l}.json')['rotation']['hint_random_mode'] for l in ('de', 'en', 'fr'))),
-    # ── Hilfe-Abdeckung (v0.2.87) ────────────────────────────────────
+    # ── Hilfe-Abdeckung ────────────────────────────────────
     ("help_rotation_tab", lambda: '_add_rotation_tab' in read('ui/help_widget.py')),
     ("help_research_tab", lambda: '_add_research_tab' in read('ui/help_widget.py')),
     ("help_overlay_documented", lambda: all('manufacturer_domains.json' in j(f'i18n/{l}.json')['help']['research']['overlay_body'] for l in ('de', 'en', 'fr'))),
     ("help_generate_tooltip", lambda: '"rotation.generate_tooltip"' in read('ui/rotation_widget.py')),
-    # ── Benutzerhandbuch (v0.2.87) ───────────────────────────────────
-    ("manual_exists", lambda: (ROOT / 'docs' / 'BENUTZERHANDBUCH_DE.md').exists()),
+    # ── Benutzerhandbuch ───────────────────────────────────
+    ("manual_exists", partial(path_exists, 'docs/BENUTZERHANDBUCH_DE.md')),
     ("manual_linked_readme", lambda: 'docs/BENUTZERHANDBUCH_DE.md' in read('README.md')),
     ("manual_linked_help", lambda: 'help.manual_title' in read('ui/help_widget.py')),
-    # ── Recherche-Query-Regression (v0.2.87) ────────────────────────
+    # ── Recherche-Query-Regression ────────────────────────
     ("site_query_helper", lambda: 'def _site_query_terms' in read('logic/pen_dimensions_service.py')),
     ("site_query_minimal_dim", lambda: 'f"site:{domain} {site_terms}"' in read('logic/pen_dimensions_service.py')),
     ("site_query_no_full_phrase", lambda: 'f"site:{domain} {query}"' not in read('logic/pen_dimensions_service.py')),
     ("auto_search_stable_endpoint", lambda: 'html.duckduckgo.com/html/' in read('logic/pen_dimensions_service.py')),
-    # v0.2.87: bewusst asymmetrische Reihenfolge (Nutzervorgabe)
+    # bewusst asymmetrische Reihenfolge (Nutzervorgabe)
     ("dim_search_ai_first", lambda: _order_ok('build_dimension_search_urls', ai_before_site=True)),
     ("img_search_manufacturer_first", lambda: _order_ok('build_image_search_urls', ai_before_site=False)),
     ("search_cascade_ai_stage", lambda: 'ai_mode=True' in read('logic/pen_dimensions_service.py')),
     ("auto_lookup_manufacturer_first", lambda: 'manufacturer_domains_for_brand' in read('logic/pen_dimensions_service.py').split('def _phase_plan')[1].split('def ')[0]),
     # ── Neue 0.2.84-Features (aus Parallelzweig übernommen) ─────────
-    ("media_service_exists", lambda: (ROOT / 'logic' / 'media_storage_service.py').exists()),
+    ("media_service_exists", partial(path_exists, 'logic/media_storage_service.py')),
     ("media_service_size_cap", lambda: 'MAX_MEDIA_BYTES' in read('logic/media_storage_service.py')),
     ("media_service_path_guard", lambda: 'def is_inside' in read('logic/media_storage_service.py')),
     ("size_compare_dialog", lambda: 'size_compare_mode_overlay' in read('ui/pen_widget.py')),
     ("size_compare_metrics", lambda: all(k in read('ui/pen_widget.py') for k in ('size_compare_metric_closed', 'size_compare_metric_posted'))),
-    # ── Release-Analyse v0.2.87: Datenverlust-Guards ────────────────
-    ("media_import_non_fatal_pen", lambda: 'except Exception as exc:' in read('ui/pen_widget.py').split('def _store_pen_image_if_needed')[1].split('\n    def ')[0]),
-    ("media_import_non_fatal_sample", lambda: 'except Exception as exc:' in read('ui/writing_samples_widget.py').split('def _store_sample_image_if_needed')[1].split('\n    def ')[0]),
-    ("media_warning_after_commit", lambda: read('ui/pen_widget.py').count('self._warn_media_import_failed()') == 3),
-    ("pen_add_rolls_back", lambda: 'session.rollback()' in read('ui/pen_widget.py').split('def _add(self):')[1].split('\n    def ')[0]),
-    ("media_warning_keys", lambda: all('{error}' in j(f'i18n/{l}.json')['media']['import_failed_body'] for l in ('de', 'en', 'fr'))),
-    ("lookup_opens_two_stages", lambda: '_open_first_stages' in read('ui/pen_widget.py')),
+    # ── v0.2.88 Erststart, Backup, DB und Release-Härtung ─────────────
+    ("fresh_db_no_sample_inks", lambda: '_insert_default_inks()' not in read('database/db.py')),
+    ("tour_ink_before_pen", lambda: read('ui/tour_controller.py').find('"ink_add"') < read('ui/tour_controller.py').find('"pen_add"')),
+    ("tour_action_stays_on_cancel", lambda: 'if not execute_step_action(step, self.main_window)' in read('ui/tour_controller.py')),
+    ("tour_module_round_before_setup", lambda: read('ui/tour_controller.py').find('step("expert_intro"') < read('ui/tour_controller.py').find('step("setup_intro"') < read('ui/tour_controller.py').find('"ink_add"')),
+    ("tour_expert_mode_temporary", lambda: 'mode="expert"' in read('ui/tour_controller.py') and 'mode="original"' in read('ui/tour_controller.py') and '_restore_original_mode' in read('ui/tour_controller.py')),
+    ("rotation_toolbar_generates", lambda: 'self._run_page_action(5, "generate_suggestions")' in read('ui/main_window.py')),
+    ("full_backup_service", partial(path_exists, 'logic/backup_service.py')),
+    ("backup_manifest_checksums", lambda: 'sha256' in read('logic/backup_service.py') and 'PRAGMA integrity_check' in read('logic/backup_service.py')),
+    ("restore_fallback", lambda: 'pre_restore_' in read('ui/settings_widget.py') and 'restore_backup_rollback_success' in read('ui/settings_widget.py')),
+    ("foreign_keys_enabled", lambda: 'PRAGMA foreign_keys=ON' in read('database/db.py')),
+    ("migration_fail_fast", lambda: 'raise RuntimeError(f"Datenbankmigration' in read('database/db.py')),
+    ("manual_packaged_spec", lambda: 'BENUTZERHANDBUCH_DE.md' in read('FPM.spec')),
+    ("manual_packaged_installer", lambda: 'BENUTZERHANDBUCH_DE.md' in read('installer/FountainPenManager_Setup.iss')),
+    ("linux_ci_runtime_deps", lambda: 'pip install -r requirements.txt pytest' in read('.github/workflows/release-check.yml')),
+    ("linux_ci_gui_smoke", lambda: 'python tools/gui_smoke_test.py' in read('.github/workflows/release-check.yml')),
+    ("windows_ci_gui_smoke", lambda: 'python tools/gui_smoke_test.py' in read('.github/workflows/windows-release.yml')),
+    ("updater_zip_fail_closed", lambda: 'Unsicherer Pfad im Update-Archiv' in read('updater/common.py')),
+    # ── v0.2.88 Locale- und Währungshärtung ─────────────────────────
+    ("locale_spinbox_central", partial(path_exists, 'ui/locale_widgets.py')),
+    ("locale_parse_both_separators", lambda: 'parse_localized_number' in read('i18n/translator.py')),
+    ("currency_iso_stable", lambda: 'normalize_currency_code' in read('i18n/translator.py')),
+    ("currency_affix_dynamic", lambda: 'bind_currency_combo' in read('ui/locale_widgets.py')),
+    ("currency_affix_live_locale_refresh", lambda: '_fpm_currency_code' in read('ui/locale_widgets.py') and 'QApplication.allWidgets()' in read('ui/settings_widget.py')),
+    ("pen_currency_bound", lambda: 'bind_currency_combo(self.price_currency_combo, self.price_spin)' in read('ui/pen_widget.py')),
+    ("expense_currency_bound", lambda: 'bind_currency_combo(self.currency_combo, self.amt_spin' in read('ui/expenses_widget.py')),
+    ("fx_locale_parse", lambda: 'LocaleService.parse_localized_number' in read('ui/settings_widget.py')),
+    ("separator_groups_independent", lambda: 'self.decimal_group = QButtonGroup' in read('ui/settings_widget.py') and 'self.thousands_group = QButtonGroup' in read('ui/settings_widget.py')),
+    ("separator_space_supported", lambda: 'self.thou_space_rb' in read('ui/settings_widget.py') and '"FR":' in read('i18n/translator.py') and '"thousands_sep": " "' in read('i18n/translator.py')),
+    ("separator_conflict_blocked", lambda: 'settings.separators_must_differ' in read('ui/settings_widget.py') and 'normalize_number_separators' in read('i18n/translator.py')),
+    ("separator_empty_persists", lambda: 'if thousands_raw is None:' in read('i18n/translator.py')),
+    ("currency_regression_tests", partial(path_exists, 'tests/test_locale_currency_consistency_0288.py')),
 ]
 
 

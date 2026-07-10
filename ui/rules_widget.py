@@ -29,7 +29,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
@@ -44,7 +43,6 @@ from PySide6.QtWidgets import (
 from ui.ui_scale import scale_px
 from database.db import get_session
 from database.models import AppSettings, Rule
-from logic.auto_mode_service import RULE_GROUPS
 from i18n.translator import t
 
 CONDITION_KEYS = [

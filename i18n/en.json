@@ -366,8 +366,8 @@
     "quickstart_body": "<b>Recommended order:</b><br>1. Add inks<br>2. Optionally add nibs or store them on the pen<br>3. Add pens and assign nibs<br>4. Fill a pen<br>5. On the Rotation page, click “💡 Suggestions” and fill with one click on a row<br><br>After that, dashboard, safety timer, rotation and rule warnings work as intended.",
     "quickstart_title": "Quick start",
     "research": {
-      "lookup_body": "In the pen dialog, “Search dimensions” and “Search images” first query the <b>manufacturer’s website</b> (built in for ~46 known brands) and only then the open web. The online dimension lookup reads manufacturer pages conservatively, shows suggestions <b>before</b> applying them and only fills empty fields – your manual values are never overwritten. Confirmed hits are cached locally and instantly available next time.",
-      "lookup_title": "Dimensions & images: manufacturer first",
+      "lookup_body": "In the pen dialog, <b>dimension lookup</b> uses the cascade <b>AI/structured search → manufacturer site → open web → local cache</b>. Suggestions are shown before applying them and only fill empty fields; manual values are never overwritten. <b>Image search</b>, by contrast, intentionally starts on the manufacturer site and only then moves to the open web. Confirmed dimension matches are cached locally.",
+      "lookup_title": "Dimensions: AI first · Images: manufacturer first",
       "overlay_body": "Brand missing or domain wrong? Create the file <b>manufacturer_domains.json</b> in the data directory (next to the database) – no update needed. Example:<br><code>{ \"My Brand\": \"mybrand.example\",<br>&nbsp;&nbsp;\"Pilot\": [\"pilotpen.eu\", \"pilotpen.com\"] }</code><br>A string or a list of domains per brand; entries here override the built-in list. Wrong entries are harmless – the open web search always runs as the last stage.",
       "overlay_title": "Adding your own brands (manufacturer_domains.json)",
       "sources_body": "Every suggestion names its source: <b>manufacturer:&lt;domain&gt;</b> = straight from the maker (preferred and sorted first), <b>online:&lt;domain&gt;</b> = open web, <b>cache</b> = previously confirmed local hit. So you can see at a glance how reliable a value is.",
@@ -468,10 +468,6 @@
     "decimal_sep": ".",
     "region_label": "United States (US)",
     "thousands_sep": ","
-  },
-  "media": {
-    "import_failed_body": "Your data was saved, but the image could not be moved into the media library.\n\nReason: {error}\n\nThe original path or URL stays on the entry. You can set the image again later.",
-    "import_failed_title": "Image could not be imported"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -797,7 +793,9 @@
     "theme_work": "Work/Business",
     "title": "Smart Rotation",
     "vac_difficult": "Vac + difficult ink",
-    "warning_hard_rule_suffix": " (hard rule)"
+    "warning_hard_rule_suffix": " (hard rule)",
+    "generate_button": "💡 Generate suggestions",
+    "refresh_button": "↻ Refresh"
   },
   "rule_engine": {
     "no_active_violations": "No active rule violations. Score {score}.",
@@ -895,7 +893,10 @@
     "thousands_sep": "Thousands Separator",
     "title": "Settings",
     "ui_scale_saved_body": "UI scaling saved and applied. Factor: {factor}×",
-    "updates": "Updates"
+    "updates": "Updates",
+    "invalid_exchange_rate": "Invalid exchange rate for {currency}. Enter a number greater than 0.",
+    "thousands_space": "Space (1 234)",
+    "separators_must_differ": "Decimal and thousands separators must be different."
   },
   "tour": {
     "buttons": {
@@ -906,7 +907,9 @@
       "finish_abort": "Finish tour",
       "generate": "Generate suggestions →",
       "next": "Next →",
-      "open_dialog": "Open dialog →"
+      "open_dialog": "Open dialog →",
+      "optional_pen": "Choose second pen →",
+      "apply_suggestion": "Apply suggestion →"
     },
     "quickstart": {
       "body": "<b>Welcome to FountainPen Manager!</b><br><br>Recommended order for your first setup:<br><br><b>1.</b> 🖋  <b>Add inks</b> – Ink management → + Ink<br><b>2.</b> 🔧  <b>Add nibs</b> (optional, improves rotation)<br><b>3.</b> ✒  <b>Add pens</b> – Pen management → + Pen → assign nib<br><b>4.</b> 💧  <b>Fill with ink</b> – select pen → fill with ink<br><br>→ Afterwards the dashboard shows warnings, rotation makes suggestions, and the safety timer runs.",
@@ -922,8 +925,8 @@
         "title": "💰  Expenses"
       },
       "finished": {
-        "body": "You now know the main areas and have a pen, an ink, and a first suggestion. You can find the tour any time via <b>Help</b> or <b>Settings → Restart tour</b>.<br><br>Enjoy your FountainPen Manager.",
-        "title": "Done 🎉"
+        "title": "Setup and first rotation completed 🎉",
+        "body": "You know the everyday and expert modules, created your first data and applied a real rotation suggestion.<br><br>The guide can be restarted at any time from <b>Help</b> or <b>Settings</b>."
       },
       "first_purchase": {
         "body": "You know the areas now. Let’s add your first pen together. We start with a <b>wish</b>, move through <b>ordered</b> and <b>bought</b>, add an ink, and run the first rotation suggestion.",
@@ -934,8 +937,8 @@
         "title": "❓  Help"
       },
       "ink_add": {
-        "body": "We open the ink dialog. Enter an ink you own: brand, color, bottle size. You can set properties such as sheen or shimmer later.",
-        "title": "Step 3 / 4 – Add your first ink"
+        "title": "Step 1 – Add your first ink",
+        "body": "Add an ink you actually own. <b>Brand and name</b> are enough to begin; colour, bottle size, sheen, shimmer, and other properties can be added now or later.<br><br>If you cancel the dialog, this step remains active."
       },
       "inks": {
         "body": "Ink inventory with properties such as sheen, shimmer, pigment, waterproofness, remaining amount, and cleaning effort. This is the basis for rotation suggestions and safety rules.",
@@ -970,8 +973,8 @@
         "title": "☰  Settings"
       },
       "welcome": {
-        "body": "This short tour shows you the app areas and then guides you through your first pen purchase, ink, and suggestion.<br><br>You can stop at any time via <b>Skip</b> and restart later from <b>Help</b> or <b>Settings</b>.",
-        "title": "Welcome to FountainPen Manager"
+        "title": "Welcome to FountainPen Manager",
+        "body": "We start with a <b>module tour</b> so you first know where each function lives. Expert areas come deliberately at the end.<br><br>Then we create <b>one ink and one or two pens</b> together and run a real rotation through the first fill."
       },
       "wishlist": {
         "body": "Wish-list pens, inks, nibs, paper, and accessories. Status flow: <b>wish</b> → <b>ordered</b> → <b>bought</b>. When purchased, you can transfer the item cleanly into collection and expenses.",
@@ -984,18 +987,78 @@
       "wishlist_status": {
         "body": "You now see the wish in the list. Select it and use right click:<br>&nbsp;&nbsp;1) <b>Set status → Ordered</b><br>&nbsp;&nbsp;2) once the pen arrived: <b>Transfer as bought …</b><br><br>Transfer creates a real pen entry plus an expense. Click <b>Next</b> when done.",
         "title": "Step 2 / 4 – Status: ordered → bought"
+      },
+      "ink_created": {
+        "title": "✓ First ink saved",
+        "body": "Your first ink is ready and can now be used for fills, safety rules, and rotation suggestions."
+      },
+      "pen_add": {
+        "title": "Step 2 – Add your first pen",
+        "body": "Add your first pen now. The key fields are <b>brand, model, and filling system</b>. You can create or assign a nib now or add it later.<br><br>If you cancel the dialog, this step remains active."
+      },
+      "pen_created": {
+        "title": "✓ First pen saved",
+        "body": "Your first pen is ready. Next, the tour shows the main everyday areas. You can then fill the pen with the ink you just added."
+      },
+      "expert_modules": {
+        "title": "More modules in Expert mode",
+        "body": "Simple mode keeps the everyday workflow visible. Use the mode switch in the sidebar or Settings to access <b>Nibs, Paper, Writing Samples, Wishlist, Expenses, Statistics, Rules, and the Enthusiast Lab</b>."
+      },
+      "expert_intro": {
+        "title": "Expert functions – final part of the module tour",
+        "body": "For the final part, the guide temporarily switches to Expert mode. You will see nibs, paper, writing samples, wishlist, expenses, statistics, rules and the Enthusiast Lab.<br><br>Your original mode is restored automatically when the tour ends."
+      },
+      "writing_samples": {
+        "title": "📝 Writing samples",
+        "body": "Writing samples document real combinations of pen, nib, ink and paper. Several samples can later be compared side by side."
+      },
+      "statistics": {
+        "title": "📊 Statistics",
+        "body": "Analysis of usage, collection, expenses, maintenance and value development. Filters help compare specific periods and areas."
+      },
+      "enthusiast_lab": {
+        "title": "🧪 Enthusiast Lab",
+        "body": "Optional collector tools such as ink reach, colour-family gaps, nib history and cleaning effort. They deepen collection management but are not required to get started."
+      },
+      "setup_intro": {
+        "title": "Now we set up your first rotation together",
+        "body": "The module tour is complete. Now we work with real entries:<br><br><b>1.</b> add one ink<br><b>2.</b> add one pen<br><b>3.</b> optionally add a second pen<br><b>4.</b> generate and deliberately apply a suggestion"
+      },
+      "second_pen": {
+        "title": "Optional – add a second pen",
+        "body": "One pen is enough for rotation. A second pen makes the selection easier to understand.<br><br>Click <b>Choose second pen</b>. You can then decide whether to add it or skip this optional step."
+      },
+      "rotation_setup": {
+        "title": "Prepare rotation",
+        "body": "Rotation only considers <b>active, empty and available pens</b> plus inks that are not empty or archived. Your newly created entries meet these requirements."
+      },
+      "rotation_generate": {
+        "title": "Generate the first rotation suggestion",
+        "body": "Click <b>Generate suggestions</b>. The engine evaluates filling system, nib, ink risk, cleaning effort, colour spectrum, role and optional rules."
+      },
+      "rotation_result": {
+        "title": "Understand the suggestion",
+        "body": "Here you see the pen, ink, score and explanation. Click the score to inspect its components. Warnings remain visible, but the decision stays yours."
+      },
+      "rotation_apply": {
+        "title": "Deliberately apply the suggestion",
+        "body": "<b>Apply suggestion</b> records the suggested ink as a real fill. Only then does the safety timer start and the pen appear in the current rotation."
+      },
+      "rotation_active": {
+        "title": "Your first active rotation",
+        "body": "The fill now appears under <b>Current assignment</b>. From here you can manage standing time, cleaning, emptying and later refills."
       }
     },
     "triggers": {
-      "help_text": "<b>App tour</b> – walkthrough of all areas and guided first pen purchase (wish → ordered → bought → ink → first suggestion).",
+      "help_text": "<b>App guide</b> – module tour, expert functions, first ink, one or two pens and a complete rotation.",
       "reset_button": "🚀  Reset tour",
       "reset_done_body": "The app tour will be shown again on the next program start\nor can be started immediately from Help/Settings.",
       "reset_done_title": "Tour reset",
-      "reset_tooltip": "Show the app tour again on the next start with an empty database.",
+      "reset_tooltip": "Show the app guide again on the next start.",
       "start_button": "Start tour",
       "start_error": "The tour could not be started:\n{error}",
       "start_now_button": "👋  Start tour now",
-      "start_now_tooltip": "Start the app tour immediately – walkthrough plus guided first pen purchase.",
+      "start_now_tooltip": "Start the module tour, then set up the first ink, one or two pens and a rotation together.",
       "title": "Tour"
     },
     "wizard": {
@@ -1016,6 +1079,10 @@
       "welcome_body": "This short introduction shows the most important first steps.\n\nThe app has an intentional order:\n\n  🫙  Add inks first\n  ✒   Then add pens and assign ink\n  🔄  Only then do rotation and the safety timer come alive\n\nIf you add a pen first and then want to fill it, the ink dropdown will be empty because no ink exists yet.\n\nThis wizard guides you step by step.",
       "welcome_title": "Welcome to FountainPen Manager",
       "window_title": "✒  Welcome to FountainPen Manager"
+    },
+    "second_pen": {
+      "question_title": "Optional: add a second pen",
+      "question_body": "Would you like to add a second pen for this introduction?\n\nTwo pens make it easier to see how rotation chooses between candidates, but one pen is fully sufficient."
     }
   },
   "ui": {
@@ -1170,7 +1237,7 @@
       "bitte_zuerst_eine_tinte_auswahlen_80764650": "Please zuerst eine Ink select.",
       "charakter_bemerkung_z_b_ideal_fur_ef_burotauglic_7e2d5887": "Character/notes, e.g. ideal for EF, office-ready …",
       "charakter_fd98cec2": "Character",
-      "chf_e79d52f9": "USD",
+      "chf_e79d52f9": "CHF",
       "confirm_delete_ink": "Really delete '{ink}'?",
       "copy_refill": "⧉  Copy / refill",
       "csv_dateien_csv_f55ca42b": "CSV-files (*.csv)",
@@ -1348,7 +1415,7 @@
       "bearbeiten_95190570": "Edit",
       "bitte_marke_eingeben_d6a83c98": "Please Brand eingeben.",
       "bitte_name_eingeben_9b0d109a": "Please Name eingeben.",
-      "chf_fd68906e": "USD",
+      "chf_fd68906e": "CHF",
       "confirm_delete_paper": "Delete '{paper}'?",
       "durchschlag_59dea906": "Bleed-through",
       "edc_dfdf528d": "EDC",
@@ -1432,7 +1499,7 @@
       "bitte_modell_eingeben_f7b71446": "Please Model eingeben.",
       "bitte_zuerst_einen_fuller_auswahlen_92d03e90": "Please zuerst einen Pens select.",
       "buchungshistorie_65d20c39": "<b>Expense history</b>",
-      "chf_f1340bb8": "USD",
+      "chf_f1340bb8": "CHF",
       "confirm_delete_pen": "Really delete '{pen}'?\nAll ink loads will be lost.",
       "csv_dateien_csv_a2c5e427": "CSV-files (*.csv)",
       "datum_54b31ac2": "Date",
@@ -2004,7 +2071,25 @@
       "vorhandene_datenbankdatei_offnen_wechseln_96515b61": "Open / switch to an existing database file",
       "vorschau_57ca03ef": "Preview:",
       "wahrung_150ec8df": "Currency",
-      "was_mochtest_du_tun_3c2ef2c3": "What do you want to do?"
+      "was_mochtest_du_tun_3c2ef2c3": "What do you want to do?",
+      "full_backup_button": "💾  Full backup",
+      "restore_backup_button": "↩  Restore backup",
+      "open_data_folder_button": "📂  Open folder",
+      "optimize_button": "🧹  Optimize",
+      "full_backup_filter": "FPM full backup (*.fpmbackup)",
+      "full_backup_saved_message": "Full backup saved:\n{path}\n\nFiles included: {count}",
+      "backup_failed_title": "Backup failed",
+      "backup_failed_message": "The full backup could not be created:\n{error}",
+      "restore_backup_dialog_title": "Select an FPM full backup",
+      "restore_backup_confirm_title": "Restore this backup?",
+      "restore_backup_confirm_body": "The current database, media, and settings will be replaced by the backup. A fallback backup is created automatically first. Continue?",
+      "restore_backup_done_title": "Backup restored",
+      "restore_backup_done_body": "{count} files were restored.\n\nFallback backup of the previous data:\n{fallback}",
+      "restore_backup_failed_title": "Restore failed",
+      "restore_backup_failed_body": "The backup could not be fully restored:\n{error}\n\n{rollback_status}\n\nThe fallback backup is stored here:\n{fallback}",
+      "restore_backup_rollback_success": "The previous state was restored automatically from the fallback backup.",
+      "restore_backup_rollback_failed": "The automatic rollback to the previous state also failed: {error}",
+      "restore_backup_rollback_not_available": "No fallback backup had been created yet; the existing data was not intentionally replaced."
     },
     "statistics_widget": {
       "all_categories": "All categories",
@@ -2078,7 +2163,7 @@
       "artikelkarte_ce5fc39d": "Item card",
       "bearbeiten_12de14ad": "Edit",
       "brand_label": "Brand",
-      "chf_b878091d": "USD",
+      "chf_b878091d": "CHF",
       "confirm_delete_item": "Delete wishlist item '{title}'?",
       "currency_label": "Currency",
       "customs_label": "Customs",
@@ -2116,21 +2201,6 @@
       "wunsch_bd625c0d": "+ Add wish",
       "wunschpreis": "Desired price"
     }
-  },
-  "ui.pen_widget": {
-    "size_chart_hint": "Stylized pens by length; closed/uncapped/posted depending on selection.",
-    "size_compare_metric_best": "Best available measure",
-    "size_compare_metric_closed": "Closed",
-    "size_compare_metric_label": "Measure:",
-    "size_compare_metric_posted": "Posted",
-    "size_compare_metric_uncapped": "Uncapped",
-    "size_compare_mode_label": "View:",
-    "size_compare_mode_overlay": "Overlay",
-    "size_compare_mode_rows": "List",
-    "size_compare_overlay_title": "Overlay pen comparison",
-    "size_compare_ruler_mm": "Scale in mm",
-    "size_compare_scaled_title": "Stylized pens, scaled to size",
-    "size_compare_visual_hint": "Compares saved pen dimensions as stylized, scaled fountain pens. In overlay mode all pens start at the same left edge so length differences are immediately visible."
   },
   "update": {
     "apply_start_failed": "The update process could not be started: {error}",
@@ -2296,5 +2366,24 @@
       "regular": "Regular"
     },
     "untitled": "Untitled writing sample"
+  },
+  "ui.pen_widget": {
+    "size_compare_visual_hint": "Compares saved pen dimensions as stylized, scaled fountain pens. In overlay mode all pens start at the same left edge so length differences are immediately visible.",
+    "size_compare_mode_label": "View:",
+    "size_compare_mode_overlay": "Overlay",
+    "size_compare_mode_rows": "List",
+    "size_compare_metric_label": "Measure:",
+    "size_compare_metric_best": "Best available measure",
+    "size_compare_metric_closed": "Closed",
+    "size_compare_metric_uncapped": "Uncapped",
+    "size_compare_metric_posted": "Posted",
+    "size_compare_overlay_title": "Overlay pen comparison",
+    "size_compare_ruler_mm": "Scale in mm",
+    "size_compare_scaled_title": "Stylized pens, scaled to size",
+    "size_chart_hint": "Stylized pens by length; closed/uncapped/posted depending on selection."
+  },
+  "media": {
+    "import_failed_title": "Image could not be imported",
+    "import_failed_body": "Your data was saved, but the image could not be moved into the media library.\n\nReason: {error}\n\nThe original path or URL stays on the entry. You can set the image again later."
   }
 }

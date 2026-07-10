@@ -207,8 +207,8 @@ def main() -> int:
         return 1
     else:
         print(
-            f"i18n quality audit: OK  "
-            f"(0 untranslated, 0 leakage, 0 ternary literals)"
+            "i18n quality audit: OK  "
+            "(0 untranslated, 0 leakage, 0 ternary literals)"
         )
         return 0
 

@@ -2,7 +2,7 @@
 ; Inno Setup 6.x
 
 #define MyAppName "FountainPen Manager"
-#define MyAppVersion "0.2.87"
+#define MyAppVersion "0.2.88"
 #define MyAppPublisher "FountainPen Community"
 #define MyAppURL "https://github.com/sloogy/FPM/releases"
 #define MyAppExeName "FountainPenManager.exe"
@@ -52,6 +52,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "dist\FountainPenManager\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "version.json"; DestDir: "{app}"; Flags: ignoreversion
+Source: "docs\BENUTZERHANDBUCH_DE.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

@@ -1,24 +1,29 @@
 """
 Füllerverwaltung – CRUD, Tinte einfüllen, Reinigung markieren, Details-Panel.
 """
-from datetime import datetime, timedelta
+from datetime import datetime
 import csv
 from typing import Optional
 from pathlib import Path
-import shutil
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QDialog, QFormLayout, QComboBox, QDoubleSpinBox, QDateEdit, QTextEdit, QCheckBox, QGroupBox, QScrollArea, QMessageBox, QSplitter, QFrame, QSpinBox, QMenu, QTabWidget, QFileDialog, QInputDialog
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QDialog, QFormLayout, QComboBox, QDateEdit, QTextEdit, QCheckBox, QGroupBox, QScrollArea, QMessageBox, QSplitter, QFrame, QSpinBox, QMenu, QTabWidget, QFileDialog, QInputDialog
 from PySide6.QtCore import Qt, QDate, QRectF, QPointF
 from PySide6.QtGui import QColor, QFont, QPixmap, QPainter, QPen, QBrush, QPolygonF
 from database.db import get_session, _data_dir
-from i18n.translator import format_money, format_date, LocaleService, t
+from i18n.translator import format_money, format_date, LocaleService, normalize_currency_code, t
 from i18n.qt_i18n import translate_source_text
 from database.models import Pen, Ink, InkLoad, Nib, NibFormat, PenNibSetup, Expense
-from logic.rule_engine import RuleEngine, LEVEL_ICONS, LEVEL_COLORS
+from logic.rule_engine import RuleEngine, LEVEL_ICONS
 from logic.event_bus import AppEventBus
 from logic.budget_export_service import sync_default_outbox_from_session
-from logic.auto_mode_service import AutoModeService
 from logic.rotation_engine import RotationEngine
 from logic.media_storage_service import import_pen_image
+from ui.locale_widgets import (
+    LocalizedDoubleSpinBox as QDoubleSpinBox,
+    bind_currency_combo,
+    current_currency,
+    populate_currency_combo,
+    set_combo_currency,
+)
 from ui.ui_scale import scale_px
 from ui.ink_widget import InkDialog
 from ui.nib_widget import NibDialog
@@ -608,10 +613,16 @@ class PenWidget(QWidget):
             date_txt = format_date(exp.purchase_date) if exp.purchase_date else '—'
             typ_txt = type_labels.get(exp.item_type, exp.item_type or '—')
             desc_txt = exp.description or exp.vendor or exp.order_number or '—'
-            currency = exp.currency or 'CHF'
+            currency = exp.currency or LocaleService.instance().currency
             total = exp.total or 0.0
             total_by_currency[currency] = total_by_currency.get(currency, 0.0) + total
-            values = [date_txt, typ_txt, desc_txt, f'{currency} {exp.amount or 0.0:.2f}', f'{currency} {total:.2f}']
+            values = [
+                date_txt,
+                typ_txt,
+                desc_txt,
+                format_money(exp.amount or 0.0, currency),
+                format_money(total, currency),
+            ]
             for col, val in enumerate(values):
                 item = QTableWidgetItem(val)
                 if exp.item_type == 'service':
@@ -626,7 +637,10 @@ class PenWidget(QWidget):
         hh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         hh.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         self._detail_body_layout.addWidget(table)
-        totals = ' · '.join((f'{cur} {amount:.2f}' for cur, amount in sorted(total_by_currency.items())))
+        totals = ' · '.join(
+            format_money(amount, cur)
+            for cur, amount in sorted(total_by_currency.items())
+        )
         total_lbl = QLabel(t('ui.pen_widget.total_bookings_sum', total=totals))
         total_lbl.setStyleSheet('color:#2c3e50;font-weight:bold;padding:4px 0;')
         self._detail_body_layout.addWidget(total_lbl)
@@ -770,29 +784,26 @@ class PenWidget(QWidget):
             session.close()
 
     def _store_pen_image_if_needed(self, pen: Pen) -> None:
-        """Bild in die verwaltete Medienablage übernehmen – niemals fatal.
-
-        v0.2.87: Der Import kann scheitern (Netzfehler, Timeout, Datei zu groß,
-        fehlende Schreibrechte). Vorher riss die Exception die gesamte
-        Transaktion mit: Der Nutzer verlor den kompletten, frisch eingetippten
-        Füller, weil ein *kosmetischer* Bild-Download fehlschlug. Jetzt wird der
-        Fehler gemerkt, der ursprüngliche Pfad/die URL bleibt am Datensatz, und
-        der Aufrufer zeigt nach erfolgreichem Commit einen Hinweis.
-        """
+        """Import an image without risking the pen transaction."""
         self._last_media_warning = None
         raw = getattr(pen, 'image_path', None)
         if not raw:
             return
         try:
-            imported = import_pen_image(_data_dir(), raw, pen_id=pen.id, brand=pen.brand, model=pen.model)
-        except Exception as exc:  # noqa: BLE001 - Import darf den Datensatz nie kippen
+            imported = import_pen_image(
+                _data_dir(),
+                raw,
+                pen_id=pen.id,
+                brand=pen.brand,
+                model=pen.model,
+            )
+        except Exception as exc:  # media is optional; the pen itself must survive
             self._last_media_warning = str(exc)
             return
         if imported:
             pen.image_path = imported
 
     def _warn_media_import_failed(self) -> None:
-        """Nach dem Commit über einen fehlgeschlagenen Bildimport informieren."""
         message = getattr(self, '_last_media_warning', None)
         if not message:
             return
@@ -803,29 +814,32 @@ class PenWidget(QWidget):
             t('media.import_failed_body', error=message),
         )
 
-    def _add(self):
+    def _add(self) -> bool:
         dlg = PenDialog(self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            session = get_session()
-            try:
-                data = dlg.get_data()
-                if not data.get('nib_id') and dlg.should_create_nib():
-                    data['nib_id'] = self._resolve_nib(session, dlg)
-                pen = Pen(**data)
-                session.add(pen)
-                session.flush()
-                self._store_pen_image_if_needed(pen)
-                self._sync_pen_nib_setup(session, pen, dlg)
-                _sync_purchase_expense_for_pen(session, pen)
-                session.commit()
-                AppEventBus.instance().pens_changed.emit()
-                self.refresh()
-                self._warn_media_import_failed()
-            except Exception as e:
-                session.rollback()
-                QMessageBox.critical(self, t('ui.pen_widget.fehler_46938af3'), str(e))
-            finally:
-                session.close()
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return False
+        session = get_session()
+        try:
+            data = dlg.get_data()
+            if not data.get('nib_id') and dlg.should_create_nib():
+                data['nib_id'] = self._resolve_nib(session, dlg)
+            pen = Pen(**data)
+            session.add(pen)
+            session.flush()
+            self._store_pen_image_if_needed(pen)
+            self._sync_pen_nib_setup(session, pen, dlg)
+            _sync_purchase_expense_for_pen(session, pen)
+            session.commit()
+            AppEventBus.instance().pens_changed.emit()
+            self.refresh()
+            self._warn_media_import_failed()
+            return True
+        except Exception as e:
+            session.rollback()
+            QMessageBox.critical(self, t('ui.pen_widget.fehler_46938af3'), str(e))
+            return False
+        finally:
+            session.close()
 
     def _edit(self, *args):
         pen_id = self._selected_id()
@@ -870,16 +884,13 @@ class PenWidget(QWidget):
         errors = []
 
         def to_float(v):
-            try:
-                return float(str(v).replace(',', '.')) if str(v).strip() else None
-            except Exception:
+            if not str(v or '').strip():
                 return None
+            return LocaleService.instance().parse_number(str(v))
 
         def to_int(v, default=None):
-            try:
-                return int(float(str(v).replace(',', '.'))) if str(v).strip() else default
-            except Exception:
-                return default
+            value = to_float(v)
+            return int(value) if value is not None else default
 
         def to_date(v):
             """Datumstring in mehreren Formaten parsen: ISO, DD.MM.YYYY, MM/DD/YYYY, YYYY/MM/DD."""
@@ -931,7 +942,7 @@ class PenWidget(QWidget):
                         color = (row.get('color') or row.get('Farbe') or '').strip() or None
                         capacity = to_float(row.get('ink_capacity_ml') or row.get('Füllgröße') or row.get('Füllvolumen'))
                         pen = session.query(Pen).filter(Pen.brand == brand, Pen.model == model, Pen.color == color, Pen.ink_capacity_ml == capacity).first()
-                        data = dict(brand=brand, model=model, color=color, ink_capacity_ml=capacity, fill_system=(row.get('fill_system') or row.get('Füllsystem') or 'converter').strip() or 'converter', purchase_price=to_float(row.get('purchase_price') or row.get('Kaufpreis')), purchase_currency=(row.get('purchase_currency') or row.get('Kaufpreis-Währung') or LocaleService.instance().currency).strip()[:3].upper() or None, current_market_value=to_float(row.get('current_market_value') or row.get('Marktwert')), market_currency=(row.get('market_currency') or row.get('Marktwert-Währung') or row.get('purchase_currency') or LocaleService.instance().currency).strip()[:3].upper() or None, insurance_value=to_float(row.get('insurance_value') or row.get('Versicherungswert')), insurance_currency=(row.get('insurance_currency') or row.get('Versicherungswert-Währung') or LocaleService.instance().currency).strip()[:3].upper() or None, length_mm=to_float(row.get('length_mm') or row.get('Länge geschlossen')), length_uncapped_mm=to_float(row.get('length_uncapped_mm') or row.get('Länge offen')), length_posted_mm=to_float(row.get('length_posted_mm') or row.get('Länge gepostet')), diameter_mm=to_float(row.get('diameter_mm') or row.get('Durchmesser')), section_diameter_mm=to_float(row.get('section_diameter_mm') or row.get('Griffdurchmesser')), weight_g=to_float(row.get('weight_g') or row.get('Gewicht')), popularity_rating=to_int(row.get('popularity_rating') or row.get('Beliebtheit'), 3), rotation_role=(row.get('rotation_role') or row.get('Rotationsrolle') or 'writer').strip() or 'writer', rotation_theme=(row.get('rotation_theme') or row.get('Standard-Thema') or row.get('Thema') or '').strip() or None, tags=(row.get('tags') or row.get('Tags') or '').strip() or None, writing_feel_notes=(row.get('writing_feel_notes') or row.get('Schreibgefühl') or '').strip() or None, problem_notes=(row.get('problem_notes') or row.get('Probleme') or '').strip() or None, cleaning_notes=(row.get('cleaning_notes') or row.get('Reinigung') or '').strip() or None, purchase_date=to_date(row.get('purchase_date') or row.get('Kaufdatum')))
+                        data = dict(brand=brand, model=model, color=color, ink_capacity_ml=capacity, fill_system=(row.get('fill_system') or row.get('Füllsystem') or 'converter').strip() or 'converter', purchase_price=to_float(row.get('purchase_price') or row.get('Kaufpreis')), purchase_currency=normalize_currency_code(row.get('purchase_currency') or row.get('Kaufpreis-Währung'), LocaleService.instance().currency), current_market_value=to_float(row.get('current_market_value') or row.get('Marktwert')), market_currency=normalize_currency_code(row.get('market_currency') or row.get('Marktwert-Währung') or row.get('purchase_currency'), LocaleService.instance().currency), insurance_value=to_float(row.get('insurance_value') or row.get('Versicherungswert')), insurance_currency=normalize_currency_code(row.get('insurance_currency') or row.get('Versicherungswert-Währung'), LocaleService.instance().currency), length_mm=to_float(row.get('length_mm') or row.get('Länge geschlossen')), length_uncapped_mm=to_float(row.get('length_uncapped_mm') or row.get('Länge offen')), length_posted_mm=to_float(row.get('length_posted_mm') or row.get('Länge gepostet')), diameter_mm=to_float(row.get('diameter_mm') or row.get('Durchmesser')), section_diameter_mm=to_float(row.get('section_diameter_mm') or row.get('Griffdurchmesser')), weight_g=to_float(row.get('weight_g') or row.get('Gewicht')), popularity_rating=to_int(row.get('popularity_rating') or row.get('Beliebtheit'), 3), rotation_role=(row.get('rotation_role') or row.get('Rotationsrolle') or 'writer').strip() or 'writer', rotation_theme=(row.get('rotation_theme') or row.get('Standard-Thema') or row.get('Thema') or '').strip() or None, tags=(row.get('tags') or row.get('Tags') or '').strip() or None, writing_feel_notes=(row.get('writing_feel_notes') or row.get('Schreibgefühl') or '').strip() or None, problem_notes=(row.get('problem_notes') or row.get('Probleme') or '').strip() or None, cleaning_notes=(row.get('cleaning_notes') or row.get('Reinigung') or '').strip() or None, purchase_date=to_date(row.get('purchase_date') or row.get('Kaufdatum')))
                         if pen:
                             for k, v in data.items():
                                 setattr(pen, k, v)
@@ -1676,8 +1687,8 @@ class ServiceBlockDialog(QDialog):
         self.cost_spin.setRange(0, 99999)
         self.cost_spin.setDecimals(2)
         self.cost_currency_combo = QComboBox()
-        self.cost_currency_combo.addItems([t('ui.pen_widget.chf_f1340bb8'), t('ui.pen_widget.eur_e9bda4fd'), t('ui.pen_widget.usd_cb134c6f'), t('ui.pen_widget.gbp_ae06210c')])
-        self.cost_currency_combo.setCurrentText(LocaleService.instance().currency)
+        populate_currency_combo(self.cost_currency_combo)
+        bind_currency_combo(self.cost_currency_combo, self.cost_spin)
         _cost_row = QHBoxLayout()
         _cost_row.addWidget(self.cost_spin, 1)
         _cost_row.addWidget(self.cost_currency_combo)
@@ -1737,7 +1748,7 @@ class ServiceBlockDialog(QDialog):
             end_qd = self.end_edit.date()
             end = datetime(end_qd.year(), end_qd.month(), end_qd.day())
             days = max(0, start_qd.daysTo(end_qd))
-        return {'status': self.status_combo.currentData(), 'start': start, 'end': end, 'days': days, 'cost': self.cost_spin.value(), 'currency': self.cost_currency_combo.currentText(), 'notes': self.notes_edit.toPlainText().strip() or None}
+        return {'status': self.status_combo.currentData(), 'start': start, 'end': end, 'days': days, 'cost': self.cost_spin.value(), 'currency': current_currency(self.cost_currency_combo), 'notes': self.notes_edit.toPlainText().strip() or None}
 
 class PenDialog(QDialog):
     """Dialog zum Anlegen/Bearbeiten eines Füllers."""
@@ -1913,25 +1924,22 @@ class PenDialog(QDialog):
         currencies = ['CHF', 'EUR', 'USD', 'GBP']
         self.price_spin = QDoubleSpinBox()
         self.price_spin.setRange(0, 99999)
-        self.price_spin.setSuffix(f' {default_cur}')
         self.price_spin.setDecimals(2)
         self.market_spin = QDoubleSpinBox()
         self.market_spin.setRange(0, 99999)
-        self.market_spin.setSuffix(f' {default_cur}')
         self.market_spin.setDecimals(2)
         self.insur_spin = QDoubleSpinBox()
         self.insur_spin.setRange(0, 99999)
-        self.insur_spin.setSuffix(f' {default_cur}')
         self.insur_spin.setDecimals(2)
         self.price_currency_combo = QComboBox()
-        self.price_currency_combo.addItems(currencies)
-        self.price_currency_combo.setCurrentText(default_cur)
+        populate_currency_combo(self.price_currency_combo, default_cur, currencies)
         self.market_currency_combo = QComboBox()
-        self.market_currency_combo.addItems(currencies)
-        self.market_currency_combo.setCurrentText(default_cur)
+        populate_currency_combo(self.market_currency_combo, default_cur, currencies)
         self.insurance_currency_combo = QComboBox()
-        self.insurance_currency_combo.addItems(currencies)
-        self.insurance_currency_combo.setCurrentText(default_cur)
+        populate_currency_combo(self.insurance_currency_combo, default_cur, currencies)
+        bind_currency_combo(self.price_currency_combo, self.price_spin)
+        bind_currency_combo(self.market_currency_combo, self.market_spin)
+        bind_currency_combo(self.insurance_currency_combo, self.insur_spin)
         fl2.addRow(t('ui.pen_widget.kaufdatum_76cc01cf'), self.date_edit)
         fl2.addRow(t('ui.pen_widget.kaufpreis_6ae12ade'), self.price_spin)
         fl2.addRow(t('ui.pen_widget.kaufpreis_wahrung_2400553f'), self.price_currency_combo)
@@ -2240,10 +2248,6 @@ class PenDialog(QDialog):
                         pass
             return
 
-        # v0.2.87: Die ersten ZWEI Stufen öffnen (vorher nur eine).
-        # Maße: KI-Prompt + Herstellerseite. Bilder: Hersteller + KI.
-        # Vorher blieb die jeweils zweite - fachlich wichtigste - Stufe
-        # unsichtbar, obwohl sie gebaut wurde.
         def _open_first_stages(urls) -> bool:
             any_opened = False
             for url in list(urls or ())[:2]:
@@ -2286,9 +2290,12 @@ class PenDialog(QDialog):
         self.price_spin.setValue(p.purchase_price or 0)
         self.market_spin.setValue(p.current_market_value or 0)
         self.insur_spin.setValue(p.insurance_value or 0)
-        self.price_currency_combo.setCurrentText(getattr(p, 'purchase_currency', None) or LocaleService.instance().currency)
-        self.market_currency_combo.setCurrentText(getattr(p, 'market_currency', None) or getattr(p, 'purchase_currency', None) or LocaleService.instance().currency)
-        self.insurance_currency_combo.setCurrentText(getattr(p, 'insurance_currency', None) or LocaleService.instance().currency)
+        set_combo_currency(self.price_currency_combo, getattr(p, 'purchase_currency', None))
+        set_combo_currency(
+            self.market_currency_combo,
+            getattr(p, 'market_currency', None) or getattr(p, 'purchase_currency', None),
+        )
+        set_combo_currency(self.insurance_currency_combo, getattr(p, 'insurance_currency', None))
         self.len_spin.setValue(p.length_mm or 0)
         self.uncapped_spin.setValue(getattr(p, 'length_uncapped_mm', None) or 0)
         self.posted_spin.setValue(getattr(p, 'length_posted_mm', None) or 0)
@@ -2397,7 +2404,7 @@ class PenDialog(QDialog):
     def get_data(self) -> dict:
         d = self.date_edit.date()
         tags = [t for t, cb in self.tag_cbs.items() if cb.isChecked()]
-        return {'brand': self.brand_edit.text().strip(), 'model': self.model_edit.text().strip(), 'color': self.color_edit.text().strip() or None, 'fill_system': self.fs_combo.currentData(), 'nib_id': self.nib_combo.currentData(), 'compatible_nibs': self.compat_edit.toPlainText().strip() or None, 'incompatible_nibs': self.incompat_edit.toPlainText().strip() or None, 'purchase_date': datetime(d.year(), d.month(), d.day()), 'purchase_price': self.price_spin.value() or None, 'purchase_currency': self.price_currency_combo.currentText(), 'current_market_value': self.market_spin.value() or None, 'market_currency': self.market_currency_combo.currentText(), 'insurance_value': self.insur_spin.value() or None, 'insurance_currency': self.insurance_currency_combo.currentText(), 'length_mm': self.len_spin.value() or None, 'length_uncapped_mm': self.uncapped_spin.value() or None, 'length_posted_mm': self.posted_spin.value() or None, 'diameter_mm': self.dia_spin.value() or None, 'section_diameter_mm': self.section_dia_spin.value() or None, 'weight_g': self.wt_spin.value() or None, 'image_path': self._prepare_image_path(), 'ink_capacity_ml': self.capacity_spin.value() or None, 'popularity_rating': self.pop_spin.value(), 'must_include_in_rotation': self.must_rotation_cb.isChecked(), 'rotation_role': self.role_combo.currentData() or 'writer', 'rotation_theme': self.theme_combo.currentData(), 'tags': ','.join(tags) or None, 'writing_feel_notes': self.feel_edit.toPlainText().strip() or None, 'problem_notes': self.problem_edit.toPlainText().strip() or None, 'cleaning_notes': self.clean_edit.toPlainText().strip() or None}
+        return {'brand': self.brand_edit.text().strip(), 'model': self.model_edit.text().strip(), 'color': self.color_edit.text().strip() or None, 'fill_system': self.fs_combo.currentData(), 'nib_id': self.nib_combo.currentData(), 'compatible_nibs': self.compat_edit.toPlainText().strip() or None, 'incompatible_nibs': self.incompat_edit.toPlainText().strip() or None, 'purchase_date': datetime(d.year(), d.month(), d.day()), 'purchase_price': self.price_spin.value() or None, 'purchase_currency': current_currency(self.price_currency_combo), 'current_market_value': self.market_spin.value() or None, 'market_currency': current_currency(self.market_currency_combo), 'insurance_value': self.insur_spin.value() or None, 'insurance_currency': current_currency(self.insurance_currency_combo), 'length_mm': self.len_spin.value() or None, 'length_uncapped_mm': self.uncapped_spin.value() or None, 'length_posted_mm': self.posted_spin.value() or None, 'diameter_mm': self.dia_spin.value() or None, 'section_diameter_mm': self.section_dia_spin.value() or None, 'weight_g': self.wt_spin.value() or None, 'image_path': self._prepare_image_path(), 'ink_capacity_ml': self.capacity_spin.value() or None, 'popularity_rating': self.pop_spin.value(), 'must_include_in_rotation': self.must_rotation_cb.isChecked(), 'rotation_role': self.role_combo.currentData() or 'writer', 'rotation_theme': self.theme_combo.currentData(), 'tags': ','.join(tags) or None, 'writing_feel_notes': self.feel_edit.toPlainText().strip() or None, 'problem_notes': self.problem_edit.toPlainText().strip() or None, 'cleaning_notes': self.clean_edit.toPlainText().strip() or None}
 
     def should_create_nib(self) -> bool:
         return bool(self.create_nib_cb.isChecked() and (not self.nib_combo.currentData()) and (self.nib_brand_edit.text().strip() or self.nib_fineness_edit.text().strip() or self.nib_physical_edit.text().strip() or self.nib_material_edit.text().strip() or self.nib_grind_edit.text().strip()))

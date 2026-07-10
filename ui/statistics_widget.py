@@ -13,8 +13,7 @@ from typing import Iterable
 
 from PySide6.QtCore import QDate, QLocale, Qt, Signal
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QComboBox, QDateEdit, QTableWidget, QTableWidgetItem, QHeaderView,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QDateEdit, QTableWidget, QTableWidgetItem, QHeaderView,
     QGroupBox, QSplitter, QScrollArea, QFrame, QFileDialog, QPushButton, QMessageBox,
 )
 

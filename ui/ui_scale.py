@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 from typing import Optional
+from types import SimpleNamespace
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QFont
@@ -29,9 +30,7 @@ PRESETS: list[ScalePreset] = [
     ScalePreset("large", "Sehr groß", 1.34),
 ]
 
-_CURRENT_FACTOR: float = 1.0
-_PATCH_INSTALLED = False
-_ORIGINAL_SET_STYLESHEET = None
+_SCALE_STATE = SimpleNamespace(factor=1.0, patch_installed=False, original_set_stylesheet=None)
 
 
 def _scale_inline_css(css: str, factor: float) -> str:
@@ -66,18 +65,17 @@ def install_inline_stylesheet_scaler() -> None:
     QApplication.setStyleSheet bleibt unangetastet; das globale Stylesheet ist
     bereits über ``get_stylesheet(scale)`` skaliert.
     """
-    global _PATCH_INSTALLED, _ORIGINAL_SET_STYLESHEET
-    if _PATCH_INSTALLED:
+    if _SCALE_STATE.patch_installed:
         return
     try:
         from PySide6.QtWidgets import QWidget
-        _ORIGINAL_SET_STYLESHEET = QWidget.setStyleSheet
+        _SCALE_STATE.original_set_stylesheet = QWidget.setStyleSheet
 
         def _patched_set_stylesheet(self, stylesheet: str) -> None:
-            return _ORIGINAL_SET_STYLESHEET(self, _scale_inline_css(stylesheet or "", _CURRENT_FACTOR))
+            return _SCALE_STATE.original_set_stylesheet(self, _scale_inline_css(stylesheet or "", _SCALE_STATE.factor))
 
         QWidget.setStyleSheet = _patched_set_stylesheet
-        _PATCH_INSTALLED = True
+        _SCALE_STATE.patch_installed = True
     except Exception:
         pass
 
@@ -146,9 +144,8 @@ def apply_ui_scaling(app: Optional[QApplication] = None, mode: str | None = None
 
     if mode is None:
         mode = _load_mode_from_settings("auto")
-    global _CURRENT_FACTOR
     factor = current_scale_factor(app, mode)
-    _CURRENT_FACTOR = factor
+    _SCALE_STATE.factor = factor
     install_inline_stylesheet_scaler()
 
     # Point Size skaliert sauber mit Qt/DPI. Das Stylesheet bekommt zusätzlich

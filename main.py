@@ -62,7 +62,6 @@ except ModuleNotFoundError as exc:
 try:
     from database.db import init_db
     from ui.main_window import MainWindow
-    from ui.styles import get_stylesheet
     from ui.ui_scale import apply_ui_scaling
     from i18n.translator import load_language_from_settings
     from i18n.qt_i18n import install_qt_i18n_hooks

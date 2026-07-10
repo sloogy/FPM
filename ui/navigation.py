@@ -141,10 +141,15 @@ class CalibreSidebar(QWidget):
         self.set_current_page(page)
         self.pageSelected.emit(page)
 
+    def set_mode(self, mode: str) -> str:
+        """Modus programmatisch setzen und Navigation neu aufbauen."""
+        self._mode = set_app_mode(mode)
+        self._setup_ui()
+        return self._mode
+
     def _toggle_mode(self) -> None:
         new_mode = EXPERT_MODE if self._mode == SIMPLE_MODE else SIMPLE_MODE
-        self._mode = set_app_mode(new_mode)
-        self._setup_ui()
+        self.set_mode(new_mode)
         self.modeChanged.emit(self._mode)
 
     def set_current_page(self, page: int):

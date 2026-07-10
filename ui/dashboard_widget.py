@@ -10,7 +10,7 @@ FIX v0.2.3:
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QTableWidget, QTableWidgetItem, QHeaderView,
-    QGroupBox, QScrollArea, QMenu, QApplication, QPushButton,
+    QGroupBox, QMenu, QApplication, QPushButton,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
@@ -22,7 +22,6 @@ from logic.event_bus import AppEventBus
 from logic.rule_engine import RuleEngine
 from logic.collection_health_service import build_collection_health
 from logic.budget_export_service import load_budgetmanager_savings_goals
-from PySide6.QtWidgets import QFrame
 
 
 # ---------------------------------------------------------------------------
@@ -375,7 +374,7 @@ class DashboardWidget(QWidget):
 
             # Karten aktualisieren
             # Onboarding-Panel anzeigen wenn weder Füller noch Tinten vorhanden
-            self._onboarding.setVisible(total_pens == 0 and len(inks) == 0)
+            self._onboarding.setVisible(total_pens == 0 or len(inks) == 0)
             _set_card_value(self._card_active,  str(len(active_loads)))
             self._card_active.setToolTip(t('ui.dashboard_widget.pen_archive_tooltip', active=total_pens, archived=len(archived_pens)))
             _set_card_value(self._card_inks,    str(len(inks)))

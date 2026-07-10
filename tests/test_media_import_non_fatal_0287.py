@@ -1,4 +1,4 @@
-"""v0.2.87: Ein fehlgeschlagener Medien-Import darf niemals Daten zerstören.
+"""v0.2.88: Ein fehlgeschlagener Medien-Import darf niemals Daten zerstören.
 
 Hintergrund (Release-Analyse): In `pen_widget._add/_edit/_duplicate` und
 `writing_samples_widget._add/_edit` lief `import_*_image()` **innerhalb** der
@@ -140,7 +140,7 @@ def test_pen_widget_media_import_is_non_fatal():
     assert "_warn_media_import_failed" in src
     # Warnung erst NACH dem Commit
     # Genau die drei Methoden, die Bilder importieren – und nur diese.
-    importing = ("def _add(self):", "def _edit_pen_by_id(self, pen_id: int):", "def _copy_pen(self):")
+    importing = ("def _add(self) -> bool:", "def _edit_pen_by_id(self, pen_id: int):", "def _copy_pen(self):")
     for sig in importing:
         body = _method_body(src, sig)
         assert "_store_pen_image_if_needed(pen)" in body, sig
@@ -165,7 +165,7 @@ def test_writing_samples_media_import_is_non_fatal():
 def test_pen_widget_add_rolls_back_on_error():
     """Vorher fehlte im _add-Fehlerpfad ein explizites rollback()."""
     src = _src("ui/pen_widget.py")
-    add_body = _method_body(src, "def _add(self):")
+    add_body = _method_body(src, "def _add(self) -> bool:")
     assert "session.rollback()" in add_body
 
 

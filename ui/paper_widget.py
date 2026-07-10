@@ -6,15 +6,22 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit,
-    QDialog, QFormLayout, QSpinBox, QDoubleSpinBox, QDateEdit,
-    QTextEdit, QCheckBox, QGroupBox, QScrollArea, QMessageBox, QFrame, QComboBox,
+    QDialog, QFormLayout, QSpinBox, QDateEdit,
+    QTextEdit, QCheckBox, QGroupBox, QMessageBox, QComboBox,
     QStackedWidget, QMenu,
 )
 from PySide6.QtCore import Qt, QDate
+from ui.locale_widgets import (
+    LocalizedDoubleSpinBox as QDoubleSpinBox,
+    bind_currency_combo,
+    current_currency,
+    populate_currency_combo,
+    set_combo_currency,
+)
 from ui.ui_scale import scale_px
 from database.db import get_session
 from database.models import Paper, Expense
-from i18n.translator import LocaleService, format_money, t
+from i18n.translator import LocaleService, t
 from ui.common import EmptyStateWidget
 from logic.event_bus import AppEventBus
 from logic.budget_export_service import sync_default_outbox_from_session
@@ -271,8 +278,8 @@ class PaperDialog(QDialog):
         g3=QGroupBox(t('ui.paper_widget.kauf_seitenstand_770a5f22')); f3=QFormLayout(g3)
         self.date_edit  =QDateEdit(QDate.currentDate()); self.date_edit.setCalendarPopup(True); self.date_edit.setDisplayFormat(LocaleService.instance().qt_date_format)
         default_cur = LocaleService.instance().currency
-        self.price_spin =QDoubleSpinBox(); self.price_spin.setRange(0,999); self.price_spin.setSuffix(f" {default_cur}"); self.price_spin.setDecimals(2)
-        self.price_currency_combo = QComboBox(); self.price_currency_combo.addItems([t('ui.paper_widget.chf_fd68906e'), t('ui.paper_widget.eur_053331dc'), t('ui.paper_widget.usd_7710baa9'), t('ui.paper_widget.gbp_30813cbc')]); self.price_currency_combo.setCurrentText(default_cur)
+        self.price_spin =QDoubleSpinBox(); self.price_spin.setRange(0,999); self.price_spin.setDecimals(2)
+        self.price_currency_combo = QComboBox(); populate_currency_combo(self.price_currency_combo, default_cur); bind_currency_combo(self.price_currency_combo, self.price_spin)
         self.pages_spin =QSpinBox(); self.pages_spin.setRange(0,9999); self.pages_spin.setSuffix(t('ui.paper_widget.seiten_gesamt_20d48e06'))
         self.used_spin  =QSpinBox(); self.used_spin.setRange(0,9999); self.used_spin.setSuffix(t('ui.paper_widget.seiten_verbraucht_c62fff3b'))
         self.notes_edit =QTextEdit(); self.notes_edit.setMaximumHeight(70)
@@ -302,7 +309,7 @@ class PaperDialog(QDialog):
         if p.purchase_date:
             d=p.purchase_date; self.date_edit.setDate(QDate(d.year,d.month,d.day))
         self.price_spin.setValue(p.purchase_price or 0)
-        self.price_currency_combo.setCurrentText(getattr(p, "purchase_currency", None) or LocaleService.instance().currency)
+        set_combo_currency(self.price_currency_combo, getattr(p, "purchase_currency", None))
         self.pages_spin.setValue(p.pages_total or 0); self.used_spin.setValue(p.pages_used or 0)
         self.notes_edit.setPlainText(p.notes or "")
 
@@ -325,7 +332,7 @@ class PaperDialog(QDialog):
             "is_edc":self.edc_cb.isChecked(),
             "purchase_date":datetime(d.year(),d.month(),d.day()),
             "purchase_price":self.price_spin.value() or None,
-            "purchase_currency": self.price_currency_combo.currentText(),
+            "purchase_currency": current_currency(self.price_currency_combo),
             "pages_total":self.pages_spin.value() or None,
             "pages_used":self.used_spin.value(),
             "notes":self.notes_edit.toPlainText().strip() or None,

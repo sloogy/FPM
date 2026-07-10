@@ -324,19 +324,45 @@ def download_file(url: str, dest: Path, timeout_s: int = 30) -> None:
 
 
 def safe_extract_zip(zip_path: Path, dest_dir: Path) -> None:
-    """Extrahiert ZIP ohne ZipSlip (Pfad-Traversal)."""
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(zip_path, "r") as z:
-        for member in z.infolist():
-            if not member.filename:
+    """Extrahiert ein ZIP fail-closed ohne Pfad-Traversal oder Symlinks.
+
+    Ein einziges unsicheres Mitglied verwirft das gesamte Update. So entsteht
+    kein scheinbar erfolgreiches, aber unvollständig extrahiertes Staging.
+    """
+    import stat
+    from pathlib import PurePosixPath
+
+    destination_root = dest_dir.resolve()
+    with zipfile.ZipFile(zip_path, "r") as archive:
+        validated: list[tuple[zipfile.ZipInfo, PurePosixPath]] = []
+        for member in archive.infolist():
+            raw_name = member.filename.replace("\\", "/")
+            if not raw_name:
                 continue
-            member_path = Path(member.filename)
-            if member_path.is_absolute() or ".." in member_path.parts:
+            member_path = PurePosixPath(raw_name)
+            unix_mode = member.external_attr >> 16
+            unsafe = (
+                member_path.is_absolute()
+                or ".." in member_path.parts
+                or bool(re.match(r"^[A-Za-z]:", raw_name))
+                or stat.S_ISLNK(unix_mode)
+            )
+            target = (destination_root / Path(*member_path.parts)).resolve()
+            if unsafe or target != destination_root and destination_root not in target.parents:
+                raise ValueError(f"Unsicherer Pfad im Update-Archiv: {member.filename}")
+            validated.append((member, member_path))
+
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        for member, member_path in validated:
+            target = dest_dir.joinpath(*member_path.parts)
+            if member.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
                 continue
-            target = (dest_dir / member_path).resolve()
-            if not str(target).startswith(str(dest_dir.resolve())):
-                continue
-            z.extract(member, dest_dir)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with archive.open(member, "r") as source, target.open("wb") as destination:
+                import shutil
+
+                shutil.copyfileobj(source, destination)
 
 
 def staging_dir_for(version_str: str) -> Path:

@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
     QTableWidget, QTableWidgetItem, QHeaderView, QSplitter, QTreeWidget,
     QTreeWidgetItem, QDialog, QFormLayout, QComboBox, QDateEdit,
-    QTextEdit, QSpinBox, QDoubleSpinBox, QFileDialog, QMessageBox,
+    QTextEdit, QSpinBox, QFileDialog, QMessageBox,
     QStackedWidget, QGroupBox, QMenu,
 )
 
@@ -21,13 +21,13 @@ from logic.media_storage_service import import_writing_sample_image
 from logic.writing_sample_service import (
     build_binder_tree,
     evaluate_sample,
-    sample_quality_score,
     suggested_sample_title,
     compare_samples,
     BinderNode,
 )
 from ui.common import EmptyStateWidget
 from ui.theme import BTN_PRIMARY
+from ui.locale_widgets import LocalizedDoubleSpinBox as QDoubleSpinBox
 from ui.ui_scale import scale_px
 
 SAMPLE_TYPES = ["regular", "ink_test", "paper_test", "nib_tuning", "quote", "longform"]
@@ -357,8 +357,6 @@ class WritingSamplesWidget(QWidget):
                 pen = sess.get(Pen, sample.pen_id) if sess else None
             except Exception:
                 pen = None
-        # v0.2.87: Import darf die Transaktion nie kippen (sonst verliert der
-        # Nutzer die komplette Schreibprobe, weil ein Bild-Download scheiterte).
         try:
             imported = import_writing_sample_image(
                 _data_dir(),
@@ -368,7 +366,7 @@ class WritingSamplesWidget(QWidget):
                 model=getattr(pen, "model", None),
                 title=sample.title,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # media is optional; the sample itself must survive
             self._last_media_warning = str(exc)
             return
         if imported:
@@ -449,6 +447,7 @@ class WritingSamplesWidget(QWidget):
                 session.commit()
                 AppEventBus.instance().emit_samples()
                 self.refresh()
+                self._warn_media_import_failed()
         finally:
             session.close()
 

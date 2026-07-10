@@ -36,6 +36,7 @@ def main() -> int:
         from i18n.qt_i18n import install_qt_i18n_hooks
         from ui.main_window import MainWindow
         from logic.app_mode import EXPERT_MODE, SIMPLE_MODE, SIMPLE_PAGES, set_app_mode
+        from ui.tour_controller import build_steps, should_show_tour
         from ui.styles import get_stylesheet
         from ui.ui_scale import apply_ui_scaling
     except Exception as exc:
@@ -55,6 +56,17 @@ def main() -> int:
         assert tr.t("nav.dashboard") != "nav.dashboard"
         assert tr.t("rotation.msg_fill_success") != "rotation.msg_fill_success"
 
+    # Frische Sammlung: erst Modulrunde (Expertenteil am Schluss), dann echte Datenanlage.
+    assert should_show_tour() is True
+    tour_steps = build_steps()
+    ids = [step.step_id for step in tour_steps]
+    assert [step.page_index for step in tour_steps if step.on_next is not None][:2] == [2, 1]
+    assert ids.index("expert_intro") < ids.index("setup_intro") < ids.index("ink_add")
+    assert ids.index("ink_add") < ids.index("pen_add") < ids.index("rotation_generate")
+    assert {3, 4, 6, 7, 8, 11, 12, 13} <= {
+        step.page_index for step in tour_steps if step.mode == "expert"
+    }
+
     # Simple Mode is the DAU default: expert-only pages must not be reachable by accident.
     set_app_mode(SIMPLE_MODE)
     window = MainWindow()
@@ -71,6 +83,21 @@ def main() -> int:
         window._navigate(page)  # intentional smoke hook: exercises lazy page creation
         assert window._stack.currentIndex() == page
         app.processEvents()
+
+    # Reale Schnellaktion: sie muss Vorschläge erzeugen, nicht nur die Seite aktualisieren.
+    from database.db import get_session
+    from database.models import Ink, Pen
+    session = get_session()
+    try:
+        session.add(Ink(brand="Smoke", name="Blue", color_family="blue", color_hex="#24518a"))
+        session.add(Pen(brand="Smoke", model="Pen", fill_system="converter"))
+        session.commit()
+    finally:
+        session.close()
+    window._run_page_action(5, "generate_suggestions")
+    rotation = window._ensure_widget(5)
+    assert rotation._last_suggestions
+    assert rotation.sug_table.rowCount() >= 1
 
     QTimer.singleShot(50, app.quit)
     app.exec()

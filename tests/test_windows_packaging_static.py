@@ -27,7 +27,7 @@ def test_pyinstaller_spec_collects_required_runtime_data():
 
 def test_inno_setup_script_is_release_ready():
     iss = read("installer/FountainPenManager_Setup.iss")
-    assert '#define MyAppVersion "0.2.87"' in iss
+    assert '#define MyAppVersion "0.2.88"' in iss
     assert "FountainPenManager.exe" in iss
     assert "OutputBaseFilename=FountainPenManager_Setup_{#MyAppVersion}" in iss
     assert "WizardStyle=modern" in iss

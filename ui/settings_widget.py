@@ -8,22 +8,26 @@ v0.2.4 – Änderbarer Datenbankpfad:
 - Alle Widgets werden nach dem Wechsel automatisch aktualisiert.
 """
 import csv
+import math
 import os
 import shutil
 import sqlite3
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QGroupBox, QFormLayout, QComboBox, QSpinBox, QLineEdit, QFileDialog, QMessageBox, QApplication, QDialog, QDialogButtonBox, QRadioButton, QButtonGroup, QDoubleSpinBox, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QStackedWidget, QListWidget, QListWidgetItem, QScrollArea, QFrame, QSizePolicy, QAbstractItemView
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QGroupBox, QFormLayout, QComboBox, QSpinBox, QLineEdit, QFileDialog, QMessageBox, QApplication, QDialog, QDialogButtonBox, QRadioButton, QButtonGroup, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QStackedWidget, QListWidget, QListWidgetItem, QScrollArea, QFrame, QSizePolicy, QAbstractItemView
 from PySide6.QtCore import Qt, Signal
 from app_info import APP_VERSION
-from database.db import get_session, get_db_path, reinit_db, set_db_path, reset_inkloads, reset_ink_levels, reset_pen_status, factory_reset_userdata
+from database.db import dispose_db, get_data_dir, get_session, get_db_path, reinit_db, reset_inkloads, reset_ink_levels, reset_pen_status, factory_reset_userdata
 from i18n.translator import REGION_PRESETS, DEFAULT_EXCHANGE_RATES, DATE_FORMAT_OPTIONS, LocaleService, Translator, t
 from i18n.qt_i18n import apply_widget_tree, translate_source_text
 from database.models import AppSettings, Pen, Ink, Nib, Paper, InkLoad, Expense
+from logic.backup_service import create_full_backup, restore_full_backup
 from logic.budget_export_service import export_expenses_jsonl, default_budgetmanager_to_fpm_path, existing_fpm_bridge_ids, import_budgetmanager_proposals, load_budgetmanager_expense_proposals, sync_default_outbox_from_session
 from ui.navigation import NavigationSettingsDialog
 from logic.app_mode import APP_MODE_KEY, EXPERT_MODE, SIMPLE_MODE, get_app_mode, normalize_app_mode
+from ui.locale_widgets import LocalizedDoubleSpinBox as QDoubleSpinBox, set_money_affix
 from ui.ui_scale import PRESETS, apply_ui_scaling, scale_px
 
 def _refresh_all_widgets():
@@ -43,6 +47,12 @@ def _refresh_all_widgets():
             settings_w = stack.widget(i)
             if hasattr(settings_w, '_update_path_label'):
                 settings_w._update_path_label()
+    # Locale changes must affect already open dialogs and decimal fields too,
+    # not only pages that implement refresh().
+    for widget in QApplication.allWidgets():
+        refresh_locale = getattr(widget, 'refresh_locale', None)
+        if callable(refresh_locale):
+            refresh_locale()
 
 class DbPathDialog(QDialog):
     """
@@ -272,11 +282,13 @@ class SettingsWidget(QWidget):
         self.budget_month_spin.setRange(0.0, 1_000_000.0)
         self.budget_month_spin.setDecimals(2)
         self.budget_month_spin.setSpecialValueText(t("settings.budget_no_limit"))
+        set_money_affix(self.budget_month_spin)
         app_fl.addRow(t("settings.budget_monthly"), self.budget_month_spin)
         self.budget_year_spin = QDoubleSpinBox()
         self.budget_year_spin.setRange(0.0, 10_000_000.0)
         self.budget_year_spin.setDecimals(2)
         self.budget_year_spin.setSpecialValueText(t("settings.budget_no_limit"))
+        set_money_affix(self.budget_year_spin)
         app_fl.addRow(t("settings.budget_yearly"), self.budget_year_spin)
         self.app_mode_combo = QComboBox()
         self.app_mode_combo.addItem(t('settings.mode_simple'), SIMPLE_MODE)
@@ -372,6 +384,10 @@ class SettingsWidget(QWidget):
         dec_row = QHBoxLayout()
         self.dec_point_rb = QRadioButton(t('ui.settings_widget.punkt_1_234_56_4daf83b0'))
         self.dec_comma_rb = QRadioButton(t('ui.settings_widget.komma_1_234_56_ea863434'))
+        self.decimal_group = QButtonGroup(self)
+        self.decimal_group.setExclusive(True)
+        self.decimal_group.addButton(self.dec_point_rb)
+        self.decimal_group.addButton(self.dec_comma_rb)
         self.dec_point_rb.setChecked(True)
         dec_row.addWidget(self.dec_point_rb)
         dec_row.addWidget(self.dec_comma_rb)
@@ -381,16 +397,20 @@ class SettingsWidget(QWidget):
         self.thou_apos_rb = QRadioButton(t('ui.settings_widget.apostroph_1_234_3ed2e7fe'))
         self.thou_dot_rb = QRadioButton(t('ui.settings_widget.punkt_1_234_3ef398cc'))
         self.thou_comma_rb = QRadioButton(t('ui.settings_widget.komma_1_234_231b46e3'))
+        self.thou_space_rb = QRadioButton(t('settings.thousands_space'))
         self.thou_none_rb = QRadioButton(t('ui.settings_widget.keines_1234_eadbf854'))
+        self.thousands_group = QButtonGroup(self)
+        self.thousands_group.setExclusive(True)
         self.thou_apos_rb.setChecked(True)
-        for rb in (self.thou_apos_rb, self.thou_dot_rb, self.thou_comma_rb, self.thou_none_rb):
+        for rb in (self.thou_apos_rb, self.thou_dot_rb, self.thou_comma_rb, self.thou_space_rb, self.thou_none_rb):
+            self.thousands_group.addButton(rb)
             thou_row.addWidget(rb)
         thou_row.addStretch()
         region_fl.addRow(t('ui.settings_widget.tausendertrennzeichen_0162cb70'), thou_row)
         self.locale_preview = QLabel()
         self.locale_preview.setStyleSheet('color:#2563eb; font-weight:bold; font-size:14px;')
         region_fl.addRow(t('ui.settings_widget.vorschau_57ca03ef'), self.locale_preview)
-        for w in (self.dec_point_rb, self.dec_comma_rb, self.thou_apos_rb, self.thou_dot_rb, self.thou_comma_rb, self.thou_none_rb):
+        for w in (self.dec_point_rb, self.dec_comma_rb, self.thou_apos_rb, self.thou_dot_rb, self.thou_comma_rb, self.thou_space_rb, self.thou_none_rb):
             w.toggled.connect(self._update_locale_preview)
         self.currency_combo.currentIndexChanged.connect(self._update_locale_preview)
         self.date_format_combo.currentIndexChanged.connect(self._update_locale_preview)
@@ -408,7 +428,7 @@ class SettingsWidget(QWidget):
         for row, cur in enumerate(self._fx_currencies):
             self.fx_table.setItem(row, 0, QTableWidgetItem(cur))
             self.fx_table.item(row, 0).setFlags(Qt.ItemFlag.ItemIsEnabled)
-            self.fx_table.setItem(row, 1, QTableWidgetItem(str(DEFAULT_EXCHANGE_RATES[cur])))
+            self.fx_table.setItem(row, 1, QTableWidgetItem(self._format_fx_value(DEFAULT_EXCHANGE_RATES[cur])))
         fx_layout.addWidget(self.fx_table)
         fx_save_btn = self._styled_button(t('ui.settings_widget.legacy_exact.text_015'), 'success')
         fx_save_btn.clicked.connect(self._save_region_and_fx)
@@ -434,7 +454,13 @@ class SettingsWidget(QWidget):
         root.addWidget(db_grp)
         actions_grp, actions_layout = self._v_card(t('ui.settings_widget.legacy_exact.text_019'))
         db_btns = QHBoxLayout()
-        for label, kind, slot in [('💾  Backup', 'success', self._backup), ('📂  Ordner öffnen', 'secondary', self._open_data_folder), ('🧹  Optimieren', 'purple', self._vacuum)]:
+        actions = [
+            (t('ui.settings_widget.full_backup_button'), 'success', self._backup),
+            (t('ui.settings_widget.restore_backup_button'), 'warning', self._restore_backup),
+            (t('ui.settings_widget.open_data_folder_button'), 'secondary', self._open_data_folder),
+            (t('ui.settings_widget.optimize_button'), 'purple', self._vacuum),
+        ]
+        for label, kind, slot in actions:
             b = self._styled_button(label, kind)
             b.clicked.connect(slot)
             db_btns.addWidget(b)
@@ -572,7 +598,7 @@ class SettingsWidget(QWidget):
             else:
                 self.dec_point_rb.setChecked(True)
             thou = AppSettings.get(session, 'locale_thousands_sep', "'")
-            rb_map = {"'": self.thou_apos_rb, '.': self.thou_dot_rb, ',': self.thou_comma_rb, '': self.thou_none_rb}
+            rb_map = {"'": self.thou_apos_rb, '.': self.thou_dot_rb, ',': self.thou_comma_rb, ' ': self.thou_space_rb, '': self.thou_none_rb}
             rb = rb_map.get(thou, self.thou_apos_rb)
             rb.setChecked(True)
             import json as _json
@@ -581,7 +607,7 @@ class SettingsWidget(QWidget):
                 rates = {**DEFAULT_EXCHANGE_RATES, **_json.loads(rates_raw)}
                 for row, cur in enumerate(self._fx_currencies):
                     val = rates.get(cur, DEFAULT_EXCHANGE_RATES.get(cur, 1.0))
-                    self.fx_table.item(row, 1).setText(str(val))
+                    self.fx_table.item(row, 1).setText(self._format_fx_value(val))
             self._update_locale_preview()
             slots = AppSettings.get(session, 'edc_slots', '5')
             try:
@@ -590,6 +616,8 @@ class SettingsWidget(QWidget):
             except (TypeError, ValueError):
                 self.budget_month_spin.setValue(0.0)
                 self.budget_year_spin.setValue(0.0)
+            set_money_affix(self.budget_month_spin)
+            set_money_affix(self.budget_year_spin)
             self.slots_spin.setValue(int(slots))
             if hasattr(self, 'app_mode_combo'):
                 ui_mode = get_app_mode()
@@ -673,7 +701,7 @@ class SettingsWidget(QWidget):
             self.dec_comma_rb.setChecked(True)
         else:
             self.dec_point_rb.setChecked(True)
-        thou_map = {"'": self.thou_apos_rb, '.': self.thou_dot_rb, ',': self.thou_comma_rb, '': self.thou_none_rb}
+        thou_map = {"'": self.thou_apos_rb, '.': self.thou_dot_rb, ',': self.thou_comma_rb, ' ': self.thou_space_rb, '': self.thou_none_rb}
         rb = thou_map.get(preset.get('thousands_sep', "'"), self.thou_apos_rb)
         rb.setChecked(True)
         fmt = preset.get('date_format', 'DD.MM.YYYY')
@@ -693,17 +721,29 @@ class SettingsWidget(QWidget):
             return '.'
         if self.thou_comma_rb.isChecked():
             return ','
+        if self.thou_space_rb.isChecked():
+            return ' '
         return ''
 
     def _update_locale_preview(self):
-        """Vorschau des aktuellen Zahlenformats."""
+        """Vorschau exakt in der später verwendeten Währungsposition."""
         dec = self._get_decimal_sep()
         thou = self._get_thousands_sep()
         cur = self.currency_combo.currentData() or 'CHF'
+        region = self.region_combo.currentData() or 'CH'
+        position = REGION_PRESETS.get(region, {}).get('currency_position', 'before')
         fmt = self.date_format_combo.currentData() if hasattr(self, 'date_format_combo') else 'DD.MM.YYYY'
         num = '1{thou}234{dec}56'.format(thou=thou, dec=dec)
+        money = f'{num} {cur}' if position == 'after' else f'{cur} {num}'
         date_example = str(fmt).replace('YYYY', '2026').replace('DD', '31').replace('MM', '12')
-        self.locale_preview.setText(f'{cur} {num}   ·   {num} {cur}   ·   {date_example}')
+        self.locale_preview.setText(f'{money}   ·   {date_example}')
+
+    @staticmethod
+    def _format_fx_value(value: float) -> str:
+        """Wechselkurs kompakt mit aktivem Dezimalzeichen anzeigen."""
+        service = LocaleService.instance()
+        raw = f'{float(value):.6f}'.rstrip('0').rstrip('.')
+        return raw.replace('.', service.decimal_sep)
 
     def _save_region_and_fx(self):
         """Region, Trennzeichen und Wechselkurse in AppSettings speichern."""
@@ -712,6 +752,8 @@ class SettingsWidget(QWidget):
         try:
             dec = self._get_decimal_sep()
             thou = self._get_thousands_sep()
+            if thou and thou == dec:
+                raise ValueError(t('settings.separators_must_differ'))
             cur = self.currency_combo.currentData() or 'CHF'
             region = self.region_combo.currentData() or 'CH'
             date_format = self.date_format_combo.currentData() or REGION_PRESETS.get(region, {}).get('date_format', 'DD.MM.YYYY')
@@ -724,10 +766,14 @@ class SettingsWidget(QWidget):
             rates = {'CHF': 1.0}
             for row, fx_cur in enumerate(self._fx_currencies):
                 item = self.fx_table.item(row, 1)
-                try:
-                    rates[fx_cur] = float((item.text() if item else '').replace(',', '.') or 1.0)
-                except ValueError:
-                    rates[fx_cur] = DEFAULT_EXCHANGE_RATES.get(fx_cur, 1.0)
+                parsed = LocaleService.parse_localized_number(
+                    item.text() if item else '',
+                    decimal_sep=dec,
+                    thousands_sep=thou,
+                )
+                if parsed is None or not math.isfinite(parsed) or parsed <= 0:
+                    raise ValueError(t('settings.invalid_exchange_rate', currency=fx_cur))
+                rates[fx_cur] = parsed
             AppSettings.set(session, 'exchange_rates_json', _json.dumps(rates))
             QMessageBox.information(self, t('ui.settings_widget.gespeichert_28cb30ac'), t('ui.settings_widget.region_saved_message', region=region, currency=cur))
             LocaleService.reset()
@@ -759,11 +805,101 @@ class SettingsWidget(QWidget):
             QMessageBox.critical(self, t('ui.settings_widget.fehler_beim_pfadwechsel_9b0711c5'), t('ui.settings_widget.db_path_change_failed_message', error=e))
 
     def _backup(self):
-        src = get_db_path()
-        dest, _ = QFileDialog.getSaveFileName(self, t('ui.settings_widget.backup_speichern_ba303091'), str(Path.home() / 'fpm_backup.db'), t('ui.settings_widget.sqlite_db_fc737339'))
-        if dest:
-            shutil.copy2(src, dest)
-            QMessageBox.information(self, t('ui.settings_widget.backup_5b11f811'), t('ui.settings_widget.backup_saved_message', path=dest))
+        stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        default = Path.home() / f'FPM_full_backup_{stamp}.fpmbackup'
+        dest, _ = QFileDialog.getSaveFileName(
+            self,
+            t('ui.settings_widget.backup_speichern_ba303091'),
+            str(default),
+            t('ui.settings_widget.full_backup_filter'),
+        )
+        if not dest:
+            return
+        try:
+            result = create_full_backup(dest)
+            QMessageBox.information(
+                self,
+                t('ui.settings_widget.backup_5b11f811'),
+                t(
+                    'ui.settings_widget.full_backup_saved_message',
+                    path=result.path,
+                    count=result.file_count,
+                ),
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                t('ui.settings_widget.backup_failed_title'),
+                t('ui.settings_widget.backup_failed_message', error=e),
+            )
+
+    def _restore_backup(self):
+        source, _ = QFileDialog.getOpenFileName(
+            self,
+            t('ui.settings_widget.restore_backup_dialog_title'),
+            str(Path.home()),
+            t('ui.settings_widget.full_backup_filter'),
+        )
+        if not source:
+            return
+        reply = QMessageBox.question(
+            self,
+            t('ui.settings_widget.restore_backup_confirm_title'),
+            t('ui.settings_widget.restore_backup_confirm_body'),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        current_db = get_db_path()
+        data_dir = get_data_dir()
+        fallback_dir = data_dir / 'backups'
+        fallback_dir.mkdir(parents=True, exist_ok=True)
+        fallback = fallback_dir / f'pre_restore_{datetime.now().strftime("%Y%m%d_%H%M%S")}.fpmbackup'
+        try:
+            create_full_backup(fallback, data_dir=data_dir, db_path=current_db)
+            dispose_db()
+            result = restore_full_backup(source, data_dir=data_dir, db_path=current_db)
+            reinit_db(current_db)
+            _refresh_all_widgets()
+            QMessageBox.information(
+                self,
+                t('ui.settings_widget.restore_backup_done_title'),
+                t(
+                    'ui.settings_widget.restore_backup_done_body',
+                    count=result.restored_file_count,
+                    fallback=fallback,
+                ),
+            )
+        except Exception as e:
+            rollback_status = t('ui.settings_widget.restore_backup_rollback_not_available')
+            if fallback.is_file():
+                try:
+                    dispose_db()
+                    restore_full_backup(fallback, data_dir=data_dir, db_path=current_db)
+                    reinit_db(current_db)
+                    rollback_status = t('ui.settings_widget.restore_backup_rollback_success')
+                    _refresh_all_widgets()
+                except Exception as rollback_error:
+                    rollback_status = t(
+                        'ui.settings_widget.restore_backup_rollback_failed',
+                        error=rollback_error,
+                    )
+            else:
+                try:
+                    reinit_db(current_db)
+                except Exception:
+                    pass
+            QMessageBox.critical(
+                self,
+                t('ui.settings_widget.restore_backup_failed_title'),
+                t(
+                    'ui.settings_widget.restore_backup_failed_body',
+                    error=e,
+                    fallback=fallback,
+                    rollback_status=rollback_status,
+                ),
+            )
 
     def _open_data_folder(self):
         folder = get_db_path().parent

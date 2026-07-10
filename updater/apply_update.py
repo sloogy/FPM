@@ -8,7 +8,6 @@ import shutil
 import stat
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 from packaging import version as _version

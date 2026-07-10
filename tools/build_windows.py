@@ -72,6 +72,9 @@ def write_portable_launchers(portable: Path) -> None:
     (data_dir / "backups").mkdir(exist_ok=True)
     (data_dir / "backups" / ".keep").write_text("Portable backups live here.\n", encoding="utf-8")
     (portable / "VERSION.txt").write_text(APP_VERSION + "\n", encoding="utf-8")
+    docs_dir = portable / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / "docs" / "BENUTZERHANDBUCH_DE.md", docs_dir / "BENUTZERHANDBUCH_DE.md")
     (portable / "README_PORTABLE.txt").write_text(
         f"{APP_NAME} portable Windows build v{APP_VERSION}\n\n"
         "Start: double-click start-windows.cmd or FountainPenManager.exe.\n\n"

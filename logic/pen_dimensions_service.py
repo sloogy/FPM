@@ -21,6 +21,7 @@ import urllib.parse
 import urllib.request
 import unicodedata
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable, Iterable
 
 DIMENSION_FIELDS = (
@@ -129,8 +130,7 @@ MANUFACTURER_DOMAINS: dict[str, tuple[str, ...]] = {
     "waterman": ("waterman.com",),
 }
 
-_manufacturer_overlay_cache: dict[str, tuple[str, ...]] | None = None
-_manufacturer_overlay_path: Path | None = None
+_OVERLAY_STATE = SimpleNamespace(cache=None, path=None)
 
 
 def load_manufacturer_overlay(data_dir: Path | None) -> dict[str, tuple[str, ...]]:
@@ -139,12 +139,13 @@ def load_manufacturer_overlay(data_dir: Path | None) -> dict[str, tuple[str, ...
     Werte dürfen ein einzelner Domain-String oder eine Liste von Domains sein:
     ``{"asvine": "asvine.example"}`` oder ``{"pilot": ["pilotpen.eu", "pilotpen.com"]}``.
     """
-    global _manufacturer_overlay_cache, _manufacturer_overlay_path
     if data_dir is None:
-        return _manufacturer_overlay_cache or {}
+        # Ohne expliziten Datenordner nur den eingebauten Katalog verwenden.
+        # Ein zuvor geladener Test-/Fremdordner darf nicht global weiterwirken.
+        return {}
     path = Path(data_dir) / "manufacturer_domains.json"
-    if _manufacturer_overlay_cache is not None and _manufacturer_overlay_path == path:
-        return _manufacturer_overlay_cache
+    if _OVERLAY_STATE.cache is not None and _OVERLAY_STATE.path == path:
+        return _OVERLAY_STATE.cache
     overlay: dict[str, tuple[str, ...]] = {}
     try:
         if path.exists():
@@ -164,8 +165,8 @@ def load_manufacturer_overlay(data_dir: Path | None) -> dict[str, tuple[str, ...
                         overlay[normalize_pen_key(key, "")] = domains
     except Exception:
         overlay = {}
-    _manufacturer_overlay_cache = overlay
-    _manufacturer_overlay_path = path
+    _OVERLAY_STATE.cache = overlay
+    _OVERLAY_STATE.path = path
     return overlay
 
 
@@ -879,7 +880,7 @@ def _fetch_url_text(url: str, timeout_s: int = DEFAULT_ONLINE_TIMEOUT_S) -> str:
     req = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "FountainPenManager/0.2.87 reference lookup (+user approved)",
+            "User-Agent": "FountainPenManager/0.2.86 reference lookup (+user approved)",
             "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.3",
         },
     )

@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit,
     QDialog, QFormLayout, QSpinBox, QTextEdit, QCheckBox,
-    QGroupBox, QScrollArea, QMessageBox, QFrame, QMenu,
+    QGroupBox, QScrollArea, QMessageBox, QMenu,
     QStackedWidget, QComboBox,
 )
 from PySide6.QtCore import Qt
