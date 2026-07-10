@@ -6,9 +6,9 @@ Eine einzige Versionsquelle fuer UI, Installer, Portable-ZIP und Updater.
 """
 
 APP_NAME = "FountainPen Manager"
-APP_VERSION = "0.2.89"
+APP_VERSION = "0.2.90"
 APP_RELEASE_DATE = "10. Juli 2026"
-APP_BUILD = "packaging-spec-ci-fix"
+APP_BUILD = "windows-path-release-fix"
 APP_DESCRIPTION = (
     "Einheitliche, app-gesteuerte Zahlen- und Währungsformate mit sicherer "
     "Komma-/Punkt-Eingabe sowie gehärteter Rotation, Führung und Datensicherung."
