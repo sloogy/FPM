@@ -4,12 +4,12 @@
 
 This release produces two Windows artifacts, following the BudgetTool release model:
 
-- `FountainPenManager-v0.2.88-portable-windows.zip`
-- `FountainPenManager_Setup_0.2.88.exe`
+- `FountainPenManager-v0.2.89-portable-windows.zip`
+- `FountainPenManager_Setup_0.2.89.exe`
 
 It also creates:
 
-- `FountainPenManager_Setup_0.2.88.zip`
+- `FountainPenManager_Setup_0.2.89.zip`
 - `latest.json`
 - `SHA256SUMS.txt`
 

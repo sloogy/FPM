@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KILLCRITIC 1000-Loop-Invarianten-Audit für v0.2.88 (Locale & Currency Hardening).
+"""KILLCRITIC 1000-Loop-Invarianten-Audit für v0.2.89 (Packaging- und CI-Fix).
 
 Release-/Logik-/UI-Invarianten × 20 Wiederholungen (Anzahl dynamisch, Ausgabe nennt die Summe).
 Übernommen aus dem parallelen KILLCRITIC-RC und auf diesen Merge-Stand
@@ -47,16 +47,16 @@ def _order_ok(func_name: str, *, ai_before_site: bool) -> bool:
 
 CHECKS = [
     # ── Version & Release-Dateien ────────────────────────────────────
-    ("version_app", lambda: 'APP_VERSION = "0.2.88"' in read('app_info.py')),
-    ("version_build", lambda: 'locale-currency-hardening' in read('app_info.py')),
-    ("version_json", lambda: j('version.json')['version'] == '0.2.88'),
-    ("version_info", lambda: 'Build: locale-currency-hardening' in read('VERSION_INFO.txt')),
-    ("latest_root", lambda: 'v0.2.88' in read('latest.json.template')),
-    ("latest_docs", lambda: 'v0.2.88' in read('docs/latest.json.template')),
-    ("installer_version", lambda: '#define MyAppVersion "0.2.88"' in read('installer/FountainPenManager_Setup.iss')),
-    ("readme_title", lambda: '# FountainPen Manager v0.2.88' in read('README.md')),
-    ("changelog_exists", partial(path_exists, 'CHANGELOG_0.2.88_LOCALE_CURRENCY_HARDENING.md')),
-    ("report_exists", partial(path_exists, 'RELEASE_REPORT_v0.2.88_LOCALE_CURRENCY_HARDENING.md')),
+    ("version_app", lambda: 'APP_VERSION = "0.2.89"' in read('app_info.py')),
+    ("version_build", lambda: 'packaging-spec-ci-fix' in read('app_info.py')),
+    ("version_json", lambda: j('version.json')['version'] == '0.2.89'),
+    ("version_info", lambda: 'Build: packaging-spec-ci-fix' in read('VERSION_INFO.txt')),
+    ("latest_root", lambda: 'v0.2.89' in read('latest.json.template')),
+    ("latest_docs", lambda: 'v0.2.89' in read('docs/latest.json.template')),
+    ("installer_version", lambda: '#define MyAppVersion "0.2.89"' in read('installer/FountainPenManager_Setup.iss')),
+    ("readme_title", lambda: '# FountainPen Manager v0.2.89' in read('README.md')),
+    ("changelog_exists", partial(path_exists, 'CHANGELOG_0.2.89_PACKAGING_CI_FIX.md')),
+    ("report_exists", partial(path_exists, 'RELEASE_REPORT_v0.2.89_PACKAGING_CI_FIX.md')),
     ("branch_history_a", partial(path_exists, 'CHANGELOG_0.2.79A_MANUFACTURER_FIRST_ROTATION_UX.md')),
     ("branch_history_b", partial(path_exists, 'RELEASE_REPORT_v0.2.79B_MANUFACTURER_FIRST_RELEASE_UI_RANDOM.md')),
     # ── Hersteller-zuerst ────────────────────────────────────────────

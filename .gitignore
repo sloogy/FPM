@@ -32,6 +32,9 @@ MANIFEST
 *.manifest
 *.spec
 
+# Projektweite PyInstaller-Konfiguration muss versioniert werden
+!/FPM.spec
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt

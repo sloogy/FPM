@@ -1,42 +1,42 @@
 {
   "app": "FountainPen Manager",
   "channel": "stable",
-  "version": "0.2.88",
-  "release_tag": "v0.2.88",
+  "version": "0.2.89",
+  "release_tag": "v0.2.89",
   "assets": {
     "windows": {
       "type": "portable-zip",
-      "url": "https://github.com/sloogy/FPM/releases/download/v0.2.88/FountainPenManager-v0.2.88-portable-windows.zip",
+      "url": "https://github.com/sloogy/FPM/releases/download/v0.2.89/FountainPenManager-v0.2.89-portable-windows.zip",
       "sha256": "PUT_SHA256_HERE"
     },
     "linux": {
       "type": "portable-zip",
-      "url": "https://github.com/sloogy/FPM/releases/download/v0.2.88/FountainPenManager-v0.2.88-portable-linux.zip",
+      "url": "https://github.com/sloogy/FPM/releases/download/v0.2.89/FountainPenManager-v0.2.89-portable-linux.zip",
       "sha256": "PUT_SHA256_HERE"
     },
     "portable_windows_zip": {
       "type": "portable-zip",
-      "url": "https://github.com/sloogy/FPM/releases/download/v0.2.88/FountainPenManager-v0.2.88-portable-windows.zip",
+      "url": "https://github.com/sloogy/FPM/releases/download/v0.2.89/FountainPenManager-v0.2.89-portable-windows.zip",
       "sha256": "PUT_SHA256_HERE"
     },
     "portable_linux_zip": {
       "type": "portable-zip",
-      "url": "https://github.com/sloogy/FPM/releases/download/v0.2.88/FountainPenManager-v0.2.88-portable-linux.zip",
+      "url": "https://github.com/sloogy/FPM/releases/download/v0.2.89/FountainPenManager-v0.2.89-portable-linux.zip",
       "sha256": "PUT_SHA256_HERE"
     },
     "portable_zip": {
       "type": "portable-zip",
-      "url": "https://github.com/sloogy/FPM/releases/download/v0.2.88/FountainPenManager-v0.2.88-portable-windows.zip",
+      "url": "https://github.com/sloogy/FPM/releases/download/v0.2.89/FountainPenManager-v0.2.89-portable-windows.zip",
       "sha256": "PUT_SHA256_HERE"
     },
     "windows_installer": {
       "type": "installer",
-      "url": "https://github.com/sloogy/FPM/releases/download/v0.2.88/FountainPenManager_Setup_0.2.88.exe",
+      "url": "https://github.com/sloogy/FPM/releases/download/v0.2.89/FountainPenManager_Setup_0.2.89.exe",
       "sha256": "PUT_SHA256_HERE"
     },
     "windows_installer_zip": {
       "type": "installer-zip",
-      "url": "https://github.com/sloogy/FPM/releases/download/v0.2.88/FountainPenManager_Setup_0.2.88.zip",
+      "url": "https://github.com/sloogy/FPM/releases/download/v0.2.89/FountainPenManager_Setup_0.2.89.zip",
       "sha256": "PUT_SHA256_HERE"
     }
   }

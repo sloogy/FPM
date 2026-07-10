@@ -1,8 +1,10 @@
-# FountainPen Manager v0.2.88
+# FountainPen Manager v0.2.89
 
 FountainPen Manager ist eine offlinefähige Desktop-App für Füller, Tinten, Federn, Papier, Schreibproben, Rotation, Wartung, Ausgaben, Wishlist und Sammlerwert.
 
-## Release-Fokus v0.2.88
+## Release-Fokus v0.2.89
+
+v0.2.89 ist ein Packaging- und CI-Patch für v0.2.88. Die PyInstaller-Spezifikation wird nun versioniert und steht auch in frischen GitHub-Checkouts sowie Windows-Builds bereit.
 
 v0.2.88 vereinheitlicht **alle Dezimal- und Währungsfelder**. Nicht mehr das Betriebssystem entscheidet, ob eine Eingabe mit Komma oder Punkt erscheint, sondern die in der App gewählte Region.
 

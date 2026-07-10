@@ -4,12 +4,12 @@
 
 Cette version crée deux artefacts Windows, selon le modèle du BudgetTool :
 
-- `FountainPenManager-v0.2.88-portable-windows.zip`
-- `FountainPenManager_Setup_0.2.88.exe`
+- `FountainPenManager-v0.2.89-portable-windows.zip`
+- `FountainPenManager_Setup_0.2.89.exe`
 
 Elle crée aussi :
 
-- `FountainPenManager_Setup_0.2.88.zip`
+- `FountainPenManager_Setup_0.2.89.zip`
 - `latest.json`
 - `SHA256SUMS.txt`
 

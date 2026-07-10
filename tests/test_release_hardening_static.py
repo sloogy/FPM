@@ -6,8 +6,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_release_version_metadata_is_current():
     src = (ROOT / "app_info.py").read_text(encoding="utf-8")
-    assert 'APP_VERSION = "0.2.88"' in src
-    assert 'APP_BUILD = "locale-currency-hardening"' in src
+    assert 'APP_VERSION = "0.2.89"' in src
+    assert 'APP_BUILD = "packaging-spec-ci-fix"' in src
 
 
 def test_i18n_runtime_does_not_translate_inside_longer_words():
