@@ -1,0 +1,5 @@
+# Build-only dependencies for release packaging.
+# Runtime users do not need Python or these packages.
+pyinstaller>=6.0
+
+pytest>=8.0

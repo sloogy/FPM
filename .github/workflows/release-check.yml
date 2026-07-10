@@ -1,0 +1,40 @@
+name: Release Check
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  static-release-check:
+    name: Static release checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test tooling
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Compile Python sources
+        run: python -m compileall -q .
+
+      - name: Run unit and regression tests
+        run: python -m pytest -q
+
+      - name: Run i18n audits
+        run: |
+          python tools/i18n_audit.py
+          python tools/i18n_quality_audit.py
+          python tools/i18n_key_wiring_audit.py
+          python tools/i18n_runtime_audit.py
+          python tools/i18n_visible_text_audit.py

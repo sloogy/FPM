@@ -1,0 +1,3 @@
+FountainPen Manager Version 0.2.87
+Datum: 8. Juli 2026
+Build: release-audit-media-hardening

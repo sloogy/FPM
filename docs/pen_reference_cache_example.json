@@ -1,0 +1,23 @@
+{
+  "pens": [
+    {
+      "brand": "Pilot",
+      "model": "Custom 74",
+      "source": "manual/manufacturer",
+      "source_url": "https://example.invalid/pilot-custom-74",
+      "length_mm": 143,
+      "length_uncapped_mm": 125,
+      "length_posted_mm": 159,
+      "diameter_mm": 14.7,
+      "section_diameter_mm": 10.3,
+      "weight_g": 20,
+      "fill_system": "cartridge/converter",
+      "ink_capacity_ml": 0.8,
+      "image_urls": [
+        "https://example.invalid/images/pilot-custom-74.jpg"
+      ],
+      "confidence": 0.95,
+      "notes": "Beispiel: echte Werte bitte gegen Hersteller- oder Shopdaten prüfen. Datei als pen_dimensions_cache.json ins FPM-Datenverzeichnis kopieren."
+    }
+  ]
+}
