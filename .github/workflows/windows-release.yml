@@ -416,6 +416,47 @@ jobs:
                   assert {"component.json", "component.json.sig", "payload/module.json"} <= names
           PY
 
+      - name: Build unsigned LifePlanner prerelease modules from gated runtimes
+        if: contains(github.ref_name, '-rc.')
+        shell: bash
+        run: |
+          set -euo pipefail
+          WIN_RUNTIME="$(python tools/runtime_artifact.py locate --search-root artifacts/windows --binary FountainPenManager.exe)"
+          LINUX_RUNTIME="$(python tools/runtime_artifact.py locate --search-root artifacts/linux --binary FountainPenManager)"
+          echo "FPM_WIN_RUNTIME=${WIN_RUNTIME}" >> "$GITHUB_ENV"
+          echo "FPM_LINUX_RUNTIME=${LINUX_RUNTIME}" >> "$GITHUB_ENV"
+          mkdir -p modules
+          python tools/build_lifeplanner_module.py \
+            --runtime-dir "$WIN_RUNTIME" \
+            --runtime-name FountainPenManager \
+            --platform windows-x86_64 \
+            --unsigned-prerelease-tag "$GITHUB_REF_NAME" \
+            --output-dir modules
+          python tools/build_lifeplanner_module.py \
+            --runtime-dir "$LINUX_RUNTIME" \
+            --runtime-name FountainPenManager \
+            --platform linux-x86_64 \
+            --unsigned-prerelease-tag "$GITHUB_REF_NAME" \
+            --output-dir modules
+          test -f "modules/${FPM_MODULE_WINDOWS}"
+          test -f "modules/${FPM_MODULE_LINUX}"
+
+      - name: Verify and host-install unsigned prerelease modules
+        if: contains(github.ref_name, '-rc.')
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/lifeplanner_host_contract.py "modules/${FPM_MODULE_WINDOWS}" \
+            --allow-unsigned \
+            --platform windows-x86_64 --id fpm --version "$FPM_APP_VERSION" \
+            --install-root host_install/windows
+          python tools/lifeplanner_host_contract.py "modules/${FPM_MODULE_LINUX}" \
+            --allow-unsigned \
+            --platform linux-x86_64 --id fpm --version "$FPM_APP_VERSION" \
+            --install-root host_install/linux
+          test -f "host_install/windows/fpm/${FPM_APP_VERSION}/FountainPenManager/FountainPenManager.exe"
+          test -f "host_install/linux/fpm/${FPM_APP_VERSION}/FountainPenManager/FountainPenManager"
+
       - name: Build clearly marked unsigned prerelease assets
         if: contains(github.ref_name, '-rc.')
         shell: bash
@@ -425,9 +466,11 @@ jobs:
             --prerelease \
             --version "$FPM_APP_VERSION" \
             --release-tag "$GITHUB_REF_NAME" \
-            --windows-build-dir artifacts/windows \
-            --linux-build-dir artifacts/linux \
+            --windows-build-dir "$FPM_WIN_RUNTIME" \
+            --linux-build-dir "$FPM_LINUX_RUNTIME" \
             --installer-dir artifacts/installer \
+            --module-windows "modules/${FPM_MODULE_WINDOWS}" \
+            --module-linux "modules/${FPM_MODULE_LINUX}" \
             --out-dir prerelease_assets
 
       - name: Verify unsigned prerelease checksums and warning
@@ -438,6 +481,16 @@ jobs:
           test -f prerelease_assets/UNSIGNED_PRERELEASE.txt
           test ! -f prerelease_assets/latest.json
           (cd prerelease_assets && sha256sum -c SHA256SUMS.txt)
+          python - <<'PY'
+          import os, zipfile
+          from pathlib import Path
+          root = Path("prerelease_assets")
+          for name in (os.environ["FPM_MODULE_WINDOWS"], os.environ["FPM_MODULE_LINUX"]):
+              with zipfile.ZipFile(root / name) as archive:
+                  names = set(archive.namelist())
+                  assert {"component.json", "payload/module.json"} <= names
+                  assert "component.json.sig" not in names
+          PY
 
       - name: Upload combined tagged artifact
         uses: actions/upload-artifact@v4
@@ -462,7 +515,7 @@ jobs:
           else
             asset_dir="prerelease_assets"
             title="FountainPenManager $GITHUB_REF_NAME — UNSIGNED TEST BUILD"
-            release_flags=(--prerelease --notes "Unsigned test build for Windows/Linux validation. Not for production use.")
+            release_flags=(--prerelease --notes "Unsigned Windows/Linux test build including unsigned LifePlanner .lpmodule packages. Local module installation requires explicit trust confirmation. Not for production use.")
           fi
           gh release create "$GITHUB_REF_NAME" "$asset_dir"/* \
             --verify-tag --title "$title" "${release_flags[@]}"

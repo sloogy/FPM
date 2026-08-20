@@ -54,7 +54,7 @@ The workflow `.github/workflows/windows-release.yml` builds on `windows-latest`:
 5. SHA256SUMS and `latest.json`
 6. Artifact upload and GitHub Release upload for tags
 
-A numbered tag such as `v0.3.05-rc.1` runs the real Windows/Linux builds and installer without signing keys. The results are published as a clearly marked unsigned GitHub Prerelease, without `latest.json` or LifePlanner modules. Only the exact final tag `v0.3.05` requires the Authenticode and LifePlanner keys and may publish the stable release.
+A numbered tag such as `v0.3.05-rc.2` runs the real Windows/Linux builds, installer, and both LifePlanner modules without signing keys. The results are published as a clearly marked unsigned GitHub Prerelease without `latest.json`. The `.lpmodule` files are unsigned for manual testing and require explicit trust confirmation in LifePlanner. Only the exact final tag `v0.3.05` requires the Authenticode and LifePlanner keys and may publish the stable release.
 
 ## Enterprise release gate v0.3.05
 

@@ -127,6 +127,12 @@ def test_prerelease_asset_builder_creates_unsigned_rc_without_update_manifest(tm
     (linux / "_internal" / "runtime.so").write_bytes(b"so")
     installer.mkdir()
     (installer / "FountainPenManager_Setup.exe").write_bytes(b"installer")
+    module_windows = tmp_path / "fpm_0.3.05_Windows_x86_64.lpmodule"
+    module_linux = tmp_path / "fpm_0.3.05_Linux_x86_64.lpmodule"
+    for module in (module_windows, module_linux):
+        with zipfile.ZipFile(module, "w") as archive:
+            archive.writestr("component.json", b"{}")
+            archive.writestr("payload/module.json", b"{}")
 
     subprocess.run(
         [
@@ -143,6 +149,10 @@ def test_prerelease_asset_builder_creates_unsigned_rc_without_update_manifest(tm
             str(linux),
             "--installer-dir",
             str(installer),
+            "--module-windows",
+            str(module_windows),
+            "--module-linux",
+            str(module_linux),
             "--out-dir",
             str(out),
         ],
@@ -154,14 +164,19 @@ def test_prerelease_asset_builder_creates_unsigned_rc_without_update_manifest(tm
         "FountainPenManager-v0.3.05-rc.1-portable-linux.zip",
         "FountainPenManager_Setup_0.3.05-rc.1.exe",
         "FountainPenManager_Setup_0.3.05-rc.1.zip",
+        "fpm_0.3.05_Windows_x86_64.lpmodule",
+        "fpm_0.3.05_Linux_x86_64.lpmodule",
         "UNSIGNED_PRERELEASE.txt",
         "SHA256SUMS.txt",
     }
     assert expected == {path.name for path in out.iterdir() if path.is_file()}
     assert not (out / "latest.json").exists()
-    assert "UNSIGNED TEST BUILD" in (out / "UNSIGNED_PRERELEASE.txt").read_text(
-        encoding="utf-8"
-    )
+    warning = (out / "UNSIGNED_PRERELEASE.txt").read_text(encoding="utf-8")
+    assert "UNSIGNED TEST BUILD" in warning
+    assert "LifePlanner-.lpmodule-Pakete sind ebenfalls unsigniert" in warning
+    for module in (module_windows.name, module_linux.name):
+        with zipfile.ZipFile(out / module) as archive:
+            assert "component.json.sig" not in archive.namelist()
     with zipfile.ZipFile(out / "FountainPenManager_Setup_0.3.05-rc.1.zip") as archive:
         notice = archive.read("WINDOWS_DOWNLOAD_HINWEIS.txt").decode("utf-8")
         assert "nicht digital signiert" in notice

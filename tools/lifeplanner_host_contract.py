@@ -3,7 +3,8 @@
 
 This is not a replacement for the LifePlanner host. It is a fail-closed contract
 implementation that proves FPM's .lpmodule can be verified and installed by a
-host using only the public release key.
+host. Production packages require the public release key; explicitly allowed
+unsigned prereleases follow LifePlanner's manual-confirmation development path.
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from pathlib import Path, PurePosixPath
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from tools.release_signing import tree_sha256, verify_b64  # noqa: E402
+from tools.release_signing import tree_sha256, verify_b64
 
 COMPONENT_SCHEMA = "lifeplanner.component.v1"
 MODULE_SCHEMA = "lifeplanner.module.v1"
@@ -49,7 +50,8 @@ def _read_required(archive: zipfile.ZipFile, name: str) -> bytes:
 def verify_module(
     module_path: Path,
     *,
-    public_key_b64: str,
+    public_key_b64: str | None = None,
+    allow_unsigned: bool = False,
     expected_id: str | None = None,
     expected_version: str | None = None,
     expected_platform: str | None = None,
@@ -58,8 +60,17 @@ def verify_module(
         for info in archive.infolist():
             _validate_member(info.filename, info)
         component_bytes = _read_required(archive, "component.json")
-        signature_bytes = _read_required(archive, "component.json.sig")
-        verify_b64(component_bytes, signature_bytes, public_key_b64)
+        try:
+            signature_bytes = archive.read("component.json.sig")
+        except KeyError:
+            signature_bytes = None
+        if signature_bytes is None:
+            if not allow_unsigned:
+                raise ValueError("required module entry missing: component.json.sig")
+        else:
+            if not public_key_b64:
+                raise ValueError("signed module verification requires a public key")
+            verify_b64(component_bytes, signature_bytes, public_key_b64)
         try:
             component = json.loads(component_bytes.decode("utf-8"))
         except Exception as exc:
@@ -120,7 +131,8 @@ def install_module(
     module_path: Path,
     *,
     install_root: Path,
-    public_key_b64: str,
+    public_key_b64: str | None = None,
+    allow_unsigned: bool = False,
     expected_id: str | None = None,
     expected_version: str | None = None,
     expected_platform: str | None = None,
@@ -129,6 +141,7 @@ def install_module(
     component = verify_module(
         module_path,
         public_key_b64=public_key_b64,
+        allow_unsigned=allow_unsigned,
         expected_id=expected_id,
         expected_version=expected_version,
         expected_platform=expected_platform,
@@ -169,7 +182,8 @@ def install_module(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("module", type=Path)
-    parser.add_argument("--public-key-file", type=Path, required=True)
+    parser.add_argument("--public-key-file", type=Path)
+    parser.add_argument("--allow-unsigned", action="store_true")
     parser.add_argument("--platform")
     parser.add_argument("--id")
     parser.add_argument("--version")
@@ -177,12 +191,19 @@ def main() -> int:
     parser.add_argument("--replace", action="store_true")
     args = parser.parse_args()
     try:
-        public_key_b64 = args.public_key_file.read_text(encoding="ascii").strip()
+        public_key_b64 = (
+            args.public_key_file.read_text(encoding="ascii").strip()
+            if args.public_key_file
+            else None
+        )
+        if not public_key_b64 and not args.allow_unsigned:
+            raise ValueError("--public-key-file is required unless --allow-unsigned is set")
         if args.install_root:
             target = install_module(
                 args.module,
                 install_root=args.install_root,
                 public_key_b64=public_key_b64,
+                allow_unsigned=args.allow_unsigned,
                 expected_id=args.id,
                 expected_version=args.version,
                 expected_platform=args.platform,
@@ -193,6 +214,7 @@ def main() -> int:
             verify_module(
                 args.module,
                 public_key_b64=public_key_b64,
+                allow_unsigned=args.allow_unsigned,
                 expected_id=args.id,
                 expected_version=args.version,
                 expected_platform=args.platform,

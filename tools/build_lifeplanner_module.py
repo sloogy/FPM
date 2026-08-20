@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Build a LifePlanner .lpmodule from a verified, signed FPM runtime artifact.
+"""Build a LifePlanner .lpmodule from a gated FPM runtime artifact.
 
-The tool deliberately does *not* build FPM itself. It only packages an already
-gated runtime bundle whose signed attestation is verified before any module is
-created. This keeps the LifePlanner module on the same enterprise release path
-as the standalone application.
+The tool deliberately does *not* build FPM itself. Production modules require
+a verified signed runtime attestation. Explicit release-candidate builds may
+package the already-gated CI runtime without keys; those archives stay visibly
+unsigned and are accepted by LifePlanner only after manual confirmation.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -21,14 +22,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app_info import APP_VERSION  # noqa: E402
-from tools.release_signing import (  # noqa: E402
+from app_info import APP_VERSION
+from tools.release_signing import (
     key_id,
     public_key_b64_from_private,
     sign_b64,
     tree_sha256,
 )
-from tools.runtime_artifact import verify_attestation  # noqa: E402
+from tools.runtime_artifact import verify_attestation
 
 PLATFORM_ASSET_SUFFIX = {
     "windows-x86_64": "Windows_x86_64",
@@ -45,20 +46,17 @@ def module_asset_name(module_id: str, version: str, platform: str) -> str:
     return f"{module_id}_{version}_{suffix}.lpmodule"
 
 
-def build_module(
-    *,
-    runtime_dir: Path,
-    runtime_name: str,
-    platform: str,
-    artifact_manifest: Path,
-    artifact_signature: Path,
-    public_key_b64: str,
-    output: Path,
-    requires_host: str,
-    private_key_b64: str | None,
-) -> Path:
-    if platform not in PLATFORM_ASSET_SUFFIX:
-        raise ValueError(f"unsupported platform: {platform}")
+def _module_manifest() -> dict:
+    manifest = json.loads((ROOT / "module.json").read_text(encoding="utf-8"))
+    if manifest.get("version") != APP_VERSION:
+        raise ValueError(
+            f"module.json version mismatch: {manifest.get('version')} != {APP_VERSION}; "
+            "run tools/sync_version.py"
+        )
+    return manifest
+
+
+def _validate_runtime(runtime_dir: Path, runtime_name: str) -> Path:
     if (
         not runtime_name
         or Path(runtime_name).name != runtime_name
@@ -66,30 +64,25 @@ def build_module(
         or ":" in runtime_name
     ):
         raise ValueError("runtime name must be a simple directory name")
-    manifest = json.loads((ROOT / "module.json").read_text(encoding="utf-8"))
-    if manifest.get("version") != APP_VERSION:
-        raise ValueError(
-            f"module.json version mismatch: {manifest.get('version')} != {APP_VERSION}; run tools/sync_version.py"
-        )
-
-    artifact = verify_attestation(
-        runtime_dir=runtime_dir,
-        manifest_path=artifact_manifest,
-        signature_path=artifact_signature,
-        public_key_b64=public_key_b64,
-        expected_platform=platform,
-        expected_version=APP_VERSION,
-    )
-
-    if private_key_b64:
-        signer_public = public_key_b64_from_private(private_key_b64)
-        if signer_public != public_key_b64.strip():
-            raise ValueError("module signing key does not match the trusted runtime-artifact release key")
-
     runtime = runtime_dir.resolve()
     if not runtime.is_dir():
         raise ValueError(f"runtime directory missing: {runtime}")
+    return runtime
 
+
+def _write_module(
+    *,
+    manifest: dict,
+    runtime: Path,
+    runtime_name: str,
+    platform: str,
+    source_artifact: dict,
+    output: Path,
+    requires_host: str,
+    private_key_b64: str | None,
+    public_key_b64: str | None,
+    release_tag: str | None = None,
+) -> Path:
     with tempfile.TemporaryDirectory(prefix="lpmodule-") as temp_name:
         payload = Path(temp_name) / "payload"
         payload.mkdir()
@@ -106,15 +99,13 @@ def build_module(
             "description": manifest.get("description", ""),
             "platforms": [platform],
             "payload_sha256": tree_sha256(payload),
-            "source_artifact": {
-                "schema": artifact["schema"],
-                "tree_sha256": artifact["tree_sha256"],
-                "signing_key_id": artifact["signing_key_id"],
-                "platform": artifact["platform"],
-            },
-            "signing_key_id": key_id(public_key_b64),
+            "source_artifact": source_artifact,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
+        if public_key_b64:
+            metadata["signing_key_id"] = key_id(public_key_b64)
+        if release_tag:
+            metadata["prerelease_tag"] = release_tag
         metadata_bytes = canonical_json(metadata)
 
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -130,14 +121,100 @@ def build_module(
     return output
 
 
+def build_module(
+    *,
+    runtime_dir: Path,
+    runtime_name: str,
+    platform: str,
+    artifact_manifest: Path,
+    artifact_signature: Path,
+    public_key_b64: str,
+    output: Path,
+    requires_host: str,
+    private_key_b64: str | None,
+) -> Path:
+    if platform not in PLATFORM_ASSET_SUFFIX:
+        raise ValueError(f"unsupported platform: {platform}")
+    runtime = _validate_runtime(runtime_dir, runtime_name)
+    manifest = _module_manifest()
+
+    artifact = verify_attestation(
+        runtime_dir=runtime_dir,
+        manifest_path=artifact_manifest,
+        signature_path=artifact_signature,
+        public_key_b64=public_key_b64,
+        expected_platform=platform,
+        expected_version=APP_VERSION,
+    )
+
+    if private_key_b64:
+        signer_public = public_key_b64_from_private(private_key_b64)
+        if signer_public != public_key_b64.strip():
+            raise ValueError("module signing key does not match the trusted runtime-artifact release key")
+
+    return _write_module(
+        manifest=manifest,
+        runtime=runtime,
+        runtime_name=runtime_name,
+        platform=platform,
+        source_artifact={
+            "schema": artifact["schema"],
+            "tree_sha256": artifact["tree_sha256"],
+            "signing_key_id": artifact["signing_key_id"],
+            "platform": artifact["platform"],
+        },
+        output=output,
+        requires_host=requires_host,
+        private_key_b64=private_key_b64,
+        public_key_b64=public_key_b64,
+    )
+
+
+def build_unsigned_prerelease_module(
+    *,
+    runtime_dir: Path,
+    runtime_name: str,
+    platform: str,
+    release_tag: str,
+    output: Path,
+    requires_host: str,
+) -> Path:
+    """Package a gated RC runtime without creating or requiring signing keys."""
+    if platform not in PLATFORM_ASSET_SUFFIX:
+        raise ValueError(f"unsupported platform: {platform}")
+    expected_tag = f"v{APP_VERSION}"
+    if not re.fullmatch(rf"{re.escape(expected_tag)}-rc\.[1-9][0-9]*", release_tag):
+        raise ValueError(f"unsigned module builds require an RC tag, got: {release_tag}")
+    runtime = _validate_runtime(runtime_dir, runtime_name)
+    manifest = _module_manifest()
+    return _write_module(
+        manifest=manifest,
+        runtime=runtime,
+        runtime_name=runtime_name,
+        platform=platform,
+        source_artifact={
+            "schema": "fpm.runtime-artifact.unsigned-prerelease.v1",
+            "tree_sha256": tree_sha256(runtime),
+            "platform": platform,
+            "release_tag": release_tag,
+        },
+        output=output,
+        requires_host=requires_host,
+        private_key_b64=None,
+        public_key_b64=None,
+        release_tag=release_tag,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runtime-dir", type=Path, required=True)
     parser.add_argument("--runtime-name", required=True)
     parser.add_argument("--platform", choices=sorted(PLATFORM_ASSET_SUFFIX), required=True)
-    parser.add_argument("--artifact-manifest", type=Path, required=True)
-    parser.add_argument("--artifact-signature", type=Path, required=True)
-    parser.add_argument("--public-key-file", type=Path, required=True)
+    parser.add_argument("--artifact-manifest", type=Path)
+    parser.add_argument("--artifact-signature", type=Path)
+    parser.add_argument("--public-key-file", type=Path)
+    parser.add_argument("--unsigned-prerelease-tag")
     output_group = parser.add_mutually_exclusive_group(required=True)
     output_group.add_argument("--output", type=Path)
     output_group.add_argument("--output-dir", type=Path)
@@ -147,27 +224,49 @@ def main() -> int:
 
     try:
         manifest = json.loads((ROOT / "module.json").read_text(encoding="utf-8"))
-        public_key_b64 = args.public_key_file.read_text(encoding="ascii").strip()
-        key = os.environ.get("LIFEPLANNER_UPDATE_PRIVATE_KEY_B64", "").strip() or None
-        if not key and not args.allow_unsigned:
-            raise ValueError(
-                "LIFEPLANNER_UPDATE_PRIVATE_KEY_B64 missing; release modules must be signed"
-            )
+        public_key_b64 = None
+        key = None
+        if args.unsigned_prerelease_tag:
+            if any((args.artifact_manifest, args.artifact_signature, args.public_key_file)):
+                raise ValueError(
+                    "unsigned prerelease mode must not receive attestation or key arguments"
+                )
+        else:
+            if not all((args.artifact_manifest, args.artifact_signature, args.public_key_file)):
+                raise ValueError(
+                    "signed runtime mode requires artifact manifest, signature and public key"
+                )
+            public_key_b64 = args.public_key_file.read_text(encoding="ascii").strip()
+            key = os.environ.get("LIFEPLANNER_UPDATE_PRIVATE_KEY_B64", "").strip() or None
+            if not key and not args.allow_unsigned:
+                raise ValueError(
+                    "LIFEPLANNER_UPDATE_PRIVATE_KEY_B64 missing; release modules must be signed"
+                )
         if args.output:
             output = args.output
         else:
             output = args.output_dir / module_asset_name(manifest["id"], manifest["version"], args.platform)
-        built = build_module(
-            runtime_dir=args.runtime_dir,
-            runtime_name=args.runtime_name,
-            platform=args.platform,
-            artifact_manifest=args.artifact_manifest,
-            artifact_signature=args.artifact_signature,
-            public_key_b64=public_key_b64,
-            output=output,
-            requires_host=args.requires_host,
-            private_key_b64=key,
-        )
+        if args.unsigned_prerelease_tag:
+            built = build_unsigned_prerelease_module(
+                runtime_dir=args.runtime_dir,
+                runtime_name=args.runtime_name,
+                platform=args.platform,
+                release_tag=args.unsigned_prerelease_tag,
+                output=output,
+                requires_host=args.requires_host,
+            )
+        else:
+            built = build_module(
+                runtime_dir=args.runtime_dir,
+                runtime_name=args.runtime_name,
+                platform=args.platform,
+                artifact_manifest=args.artifact_manifest,
+                artifact_signature=args.artifact_signature,
+                public_key_b64=public_key_b64,
+                output=output,
+                requires_host=args.requires_host,
+                private_key_b64=key,
+            )
         print(built)
         return 0
     except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:

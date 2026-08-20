@@ -12,7 +12,11 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from app_info import APP_VERSION
-from tools.build_lifeplanner_module import build_module, module_asset_name
+from tools.build_lifeplanner_module import (
+    build_module,
+    build_unsigned_prerelease_module,
+    module_asset_name,
+)
 from tools.lifeplanner_host_contract import install_module, verify_module
 from tools.runtime_artifact import canonical_json, create_attestation
 
@@ -102,6 +106,65 @@ def test_real_module_build_signature_and_host_install(tmp_path, platform):
         "FountainPenManager.exe" if platform == "windows-x86_64" else "FountainPenManager"
     )
     assert executable.is_file()
+
+
+@pytest.mark.parametrize("platform", ["windows-x86_64", "linux-x86_64"])
+def test_unsigned_prerelease_module_matches_lifeplanner_manual_install_contract(
+    tmp_path, platform
+):
+    runtime = _runtime(tmp_path, platform)
+    module = build_unsigned_prerelease_module(
+        runtime_dir=runtime,
+        runtime_name="FountainPenManager",
+        platform=platform,
+        release_tag=f"v{APP_VERSION}-rc.2",
+        output=tmp_path / "modules" / module_asset_name("fpm", APP_VERSION, platform),
+        requires_host=">=0.5.0",
+    )
+
+    with zipfile.ZipFile(module) as archive:
+        assert "component.json.sig" not in archive.namelist()
+    with pytest.raises(ValueError, match="component.json.sig"):
+        verify_module(module, expected_platform=platform)
+
+    component = verify_module(
+        module,
+        allow_unsigned=True,
+        expected_id="fpm",
+        expected_version=APP_VERSION,
+        expected_platform=platform,
+    )
+    assert component["prerelease_tag"] == f"v{APP_VERSION}-rc.2"
+    assert component["source_artifact"]["release_tag"] == f"v{APP_VERSION}-rc.2"
+    assert "signing_key_id" not in component
+
+    target = install_module(
+        module,
+        install_root=tmp_path / "host-prerelease",
+        allow_unsigned=True,
+        expected_id="fpm",
+        expected_version=APP_VERSION,
+        expected_platform=platform,
+    )
+    executable = target / "FountainPenManager" / (
+        "FountainPenManager.exe"
+        if platform == "windows-x86_64"
+        else "FountainPenManager"
+    )
+    assert executable.is_file()
+
+
+def test_unsigned_module_builder_rejects_non_rc_tag(tmp_path):
+    runtime = _runtime(tmp_path, "linux-x86_64")
+    with pytest.raises(ValueError, match="does not match|require an RC tag"):
+        build_unsigned_prerelease_module(
+            runtime_dir=runtime,
+            runtime_name="FountainPenManager",
+            platform="linux-x86_64",
+            release_tag=f"v{APP_VERSION}",
+            output=tmp_path / "rejected.lpmodule",
+            requires_host=">=0.5.0",
+        )
 
 
 def test_module_build_refuses_runtime_modified_after_attestation(tmp_path):
@@ -246,7 +309,7 @@ def test_release_metadata_derives_tag_manifest_and_all_asset_names_from_app_vers
     assert '"module.json": sync_module_manifest(check)' in sync_source
 
 
-def test_release_candidate_tag_builds_but_cannot_publish_unsigned():
+def test_release_candidate_publishes_unsigned_modules_without_update_manifest():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github/workflows/windows-release.yml").read_text(
         encoding="utf-8"
@@ -255,6 +318,13 @@ def test_release_candidate_tag_builds_but_cannot_publish_unsigned():
     assert "Mark unsigned release-candidate artifacts" in workflow
     assert "UNSIGNED TEST BUILD" in workflow
     assert "--prerelease" in workflow
+    assert "Build unsigned LifePlanner prerelease modules from gated runtimes" in workflow
+    assert '--unsigned-prerelease-tag "$GITHUB_REF_NAME"' in workflow
+    assert "Verify and host-install unsigned prerelease modules" in workflow
+    assert workflow.count("--allow-unsigned") == 2
+    assert '--module-windows "modules/${FPM_MODULE_WINDOWS}"' in workflow
+    assert '--module-linux "modules/${FPM_MODULE_LINUX}"' in workflow
+    assert 'assert "component.json.sig" not in names' in workflow
     assert "test ! -f prerelease_assets/latest.json" in workflow
     production_only = (
         "startsWith(github.ref, 'refs/tags/') && "

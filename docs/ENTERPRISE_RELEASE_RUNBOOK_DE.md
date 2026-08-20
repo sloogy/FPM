@@ -18,9 +18,9 @@
 - Ruff, Bandit, komplette Pytest-/Coverage-Suite und GUI-Smoke grün.
 - Versionen und Templates mit `python tools/sync_version.py --check` synchron.
 - Keine lokalen Änderungen und keine Platzhalter-Hashes im gebauten `latest.json`.
-- Den nummerierten RC-Tag `v0.3.05-rc.1` setzen. Er startet die echten Windows-/Linux-Builds und den Inno-Setup-Installer ohne Signier-Keys.
-- Der Workflow veröffentlicht die RC-Artefakte ausdrücklich als unsigned GitHub-Prerelease. Er erzeugt dabei weder ein `latest.json` für automatische Updates noch LifePlanner-Module.
-- Portable Windows, Portable Linux und Installer auf sauberen Testsystemen prüfen. Bei Korrekturen `rc.2`, `rc.3` usw. verwenden und bestehende Tags nicht verschieben.
+- Den nächsten freien nummerierten RC-Tag setzen (`v0.3.05-rc.2`). Er startet die echten Windows-/Linux-Builds, den Inno-Setup-Installer und beide LifePlanner-Module ohne Signier-Keys.
+- Der Workflow veröffentlicht die RC-Artefakte ausdrücklich als unsigned GitHub-Prerelease. Er erzeugt kein `latest.json` für automatische Updates. Die beiden `.lpmodule` enthalten keine `component.json.sig`; LifePlanner behandelt sie wie lokale Entwicklungspakete und verlangt bei der Installation eine ausdrückliche Vertrauensbestätigung.
+- Portable Windows, Portable Linux, Installer und beide `.lpmodule` auf sauberen Testsystemen prüfen. Bei Korrekturen `rc.3`, `rc.4` usw. verwenden und bestehende Tags nicht verschieben.
 
 ## 4. Release erzeugen
 

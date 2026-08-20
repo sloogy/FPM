@@ -22,18 +22,17 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import shutil
 import stat
 import sys
 import zipfile
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app_info import APP_NAME, APP_VERSION  # noqa: E402
+from app_info import APP_NAME, APP_VERSION
 
 WINDOWS_BINARY = "FountainPenManager.exe"
 LINUX_BINARY = "FountainPenManager"
@@ -259,7 +258,13 @@ def create_installer_assets(
     return normalized, installer_zip
 
 
-def copy_module_asset(source: Path, output_dir: Path, expected_name: str) -> Path:
+def copy_module_asset(
+    source: Path,
+    output_dir: Path,
+    expected_name: str,
+    *,
+    require_signature: bool,
+) -> Path:
     source = source.resolve()
     if not source.is_file():
         die(f"LifePlanner module asset missing: {source}")
@@ -267,8 +272,13 @@ def copy_module_asset(source: Path, output_dir: Path, expected_name: str) -> Pat
     shutil.copy2(source, target)
     with zipfile.ZipFile(target) as archive:
         names = set(archive.namelist())
-        if {"component.json", "component.json.sig", "payload/module.json"} - names:
+        if {"component.json", "payload/module.json"} - names:
             die(f"{target.name}: incomplete LifePlanner module archive")
+        has_signature = "component.json.sig" in names
+        if require_signature and not has_signature:
+            die(f"{target.name}: stable LifePlanner module is not signed")
+        if not require_signature and has_signature:
+            die(f"{target.name}: prerelease LifePlanner module must stay unsigned")
     return target
 
 
@@ -359,10 +369,10 @@ def main() -> int:
             f"Tag mismatch: expected {expected_tag}, "
             f"got {args.release_tag}"
         )
-    if not args.prerelease and (
-        not args.base_url or not args.module_windows or not args.module_linux
-    ):
-        die("Stable releases require base URL and both signed LifePlanner modules")
+    if not args.module_windows or not args.module_linux:
+        die("All releases require both LifePlanner module assets")
+    if not args.prerelease and not args.base_url:
+        die("Stable releases require a base URL")
 
     output_dir = args.out_dir.resolve()
     if output_dir.exists():
@@ -402,21 +412,6 @@ def main() -> int:
         starter_name="start-linux.sh",
     )
 
-    if args.prerelease:
-        (output_dir / "UNSIGNED_PRERELEASE.txt").write_text(
-            f"FountainPen Manager {args.release_tag}\n"
-            "=====================================\n\n"
-            "UNSIGNED TEST BUILD / NICHT SIGNIERTER TESTBUILD\n\n"
-            "Dieses Prerelease dient ausschließlich der Funktionsprüfung. "
-            "Windows kann deshalb eine Sicherheitswarnung anzeigen. Die "
-            "finale Version wird erst nach erfolgreicher Prüfung mit "
-            "Authenticode- und LifePlanner-Keys veröffentlicht.\n",
-            encoding="utf-8",
-        )
-        write_checksums(output_dir)
-        print_created_assets(output_dir, "Prerelease")
-        return 0
-
     module_manifest = json.loads((ROOT / "module.json").read_text(encoding="utf-8"))
     if module_manifest.get("version") != args.version:
         die("module.json version does not match release version")
@@ -425,12 +420,32 @@ def main() -> int:
         args.module_windows,
         output_dir,
         f"{module_id}_{args.version}_Windows_x86_64.lpmodule",
+        require_signature=not args.prerelease,
     )
     module_linux = copy_module_asset(
         args.module_linux,
         output_dir,
         f"{module_id}_{args.version}_Linux_x86_64.lpmodule",
+        require_signature=not args.prerelease,
     )
+
+    if args.prerelease:
+        (output_dir / "UNSIGNED_PRERELEASE.txt").write_text(
+            f"FountainPen Manager {args.release_tag}\n"
+            "=====================================\n\n"
+            "UNSIGNED TEST BUILD / NICHT SIGNIERTER TESTBUILD\n\n"
+            "Dieses Prerelease dient ausschließlich der Funktionsprüfung. "
+            "Windows kann deshalb eine Sicherheitswarnung anzeigen. Die "
+            "beiden LifePlanner-.lpmodule-Pakete sind ebenfalls unsigniert "
+            "und benötigen bei lokaler Installation eine ausdrückliche "
+            "Vertrauensbestätigung. Die finale Version wird erst nach "
+            "erfolgreicher Prüfung mit Authenticode- und LifePlanner-Keys "
+            "veröffentlicht.\n",
+            encoding="utf-8",
+        )
+        write_checksums(output_dir)
+        print_created_assets(output_dir, "Prerelease")
+        return 0
 
     assets = {
         "windows": asset(args.base_url, windows_zip, "portable-zip"),
