@@ -242,7 +242,7 @@ def test_diagnostics_bundle_contains_no_database_or_media(monkeypatch, tmp_path)
         assert "python" in metadata and "platform" in metadata
 
 
-def test_release_workflows_are_valid_and_fail_closed():
+def test_release_workflows_are_valid_and_explicitly_unsigned():
     root = Path(__file__).resolve().parents[1]
     release = (root / ".github/workflows/windows-release.yml").read_text(encoding="utf-8")
     check = (root / ".github/workflows/release-check.yml").read_text(encoding="utf-8")
@@ -251,7 +251,12 @@ def test_release_workflows_are_valid_and_fail_closed():
     assert "constraints-windows.lock" in release and "constraints-linux.lock" in release
     assert "--require-hashes" in release and "--only-binary=:all:" in release
     assert "softprops/action-gh-release" not in release
-    assert "signtool" in release and "verify /pa" in release
+    assert "Mark all tagged artifacts as unsigned" in release
+    assert "UNSIGNED_RELEASE.txt" in release
+    assert "--allow-unsigned" in release
+    assert "signtool" not in release.lower()
+    assert "WINDOWS_SIGNING_CERT_BASE64" not in release
+    assert "LIFEPLANNER_UPDATE_PRIVATE_KEY_B64" not in release
     assert "needs: [build, installer]" in release
     assert "shell: python" not in release
     assert "constraints-windows.lock" in check and "constraints-linux.lock" in check

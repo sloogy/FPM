@@ -8,9 +8,9 @@ FountainPen Manager ist eine lokale Desktop-App zur Verwaltung von Füllern, Tin
 - Aktive Downloads lassen sich tatsächlich abbrechen; Größenlimits und atomare Update-Downloads verhindern unvollständige Dateien.
 - SQLite-Sicherheitsbackups werden vor Migrationen konsistent, integritätsgeprüft und atomar erzeugt.
 - Rotierende Produktionslogs, globale Crash-Hooks und ein datenschutzarmes Diagnosepaket verbessern den Support.
-- Windows-/Linux-Releases verwenden getrennte Hash-Locks, vollständige Gates und verpflichtende Authenticode-Prüfung für Tag-Releases.
-- LifePlanner-Module entstehen im selben gegateten Publishjob wie die Standalone-Assets. RC-Module bleiben ohne Keys ausdrücklich unsigniert; Produktionsmodule verlangen eine Ed25519-attestierte Runtime und den später gemeinsam eingerichteten Release-Key.
-- 421 Tests, fünf i18n-Audits, GUI-Smoke sowie 139.000 KILLCRITIC-Checks sind in der hash-gelockten Linux-Release-Umgebung grün; auch das gebaute PyInstaller-Bundle initialisiert erfolgreich.
+- Windows-/Linux-Releases verwenden getrennte Hash-Locks und vollständige Gates. Windows-App und Installer werden bis zur späteren gemeinsamen Key-Einrichtung ausdrücklich als unsigned veröffentlicht.
+- LifePlanner-/LiveManager-Module entstehen im selben gegateten Publishjob wie die Standalone-Assets. RC- und stabile `.lpmodule` bleiben im vorgesehenen `--allow-unsigned`-Modus und verlangen bei lokaler Installation eine ausdrückliche Vertrauensbestätigung.
+- 424 Tests, fünf i18n-Audits, GUI-Smoke sowie 139.000 KILLCRITIC-Checks sind in der hash-gelockten Linux-Release-Umgebung grün; auch das gebaute PyInstaller-Bundle initialisiert erfolgreich.
 
 ## Handbücher
 
@@ -58,11 +58,10 @@ Offizielle Builds installieren ausschließlich `constraints-linux.lock` bzw. `co
 
 ## Release
 
-- Nächster Testtag: `v0.3.05-rc.2` für einen klar als unsigned markierten GitHub-Prerelease mit Windows-/Linux-Testartefakten und beiden `.lpmodule`-Paketen
-- Finaler Produktionstag nach erfolgreichem RC-Test und Key-Einrichtung: `v0.3.05`
+- Erfolgreicher Testtag: `v0.3.05-rc.2` mit Windows-/Linux-Testartefakten und beiden `.lpmodule`-Paketen
+- Finaler unsigned Vollrelease: `v0.3.05`; Keys werden bewusst erst später gemeinsam eingerichtet
 - Status dieses Pakets: lokal vollständig validierter Enterprise-Release-Candidate
-- Beide Plattform-Locks sind erzeugt und installationsgeprüft; vor der öffentlichen Binärfreigabe bleiben die GitHub-Matrix und die realen Authenticode-Signaturen verbindlich.
-- Für Release-Module muss zusätzlich `LIFEPLANNER_UPDATE_PRIVATE_KEY_B64` als 32-Byte-Ed25519-Key (Base64) gesetzt sein.
+- Beide Plattform-Locks sind erzeugt und installationsgeprüft; die GitHub-Matrix, Checksummen, Warnhinweise und Host-Testinstallation bleiben vor der Veröffentlichung verbindlich.
 - Ablauf: [Enterprise-Release-Runbook](docs/ENTERPRISE_RELEASE_RUNBOOK_DE.md)
 - Offizieller Releasepfad: `https://github.com/sloogy/FPM/releases`
 - Daten und Medien liegen außerhalb des Programmordners beziehungsweise im portablen `data/`-Ordner.

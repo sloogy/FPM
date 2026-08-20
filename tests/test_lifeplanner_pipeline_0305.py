@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from app_info import APP_VERSION
 from tools.build_lifeplanner_module import (
     build_module,
-    build_unsigned_prerelease_module,
+    build_unsigned_release_module,
     module_asset_name,
 )
 from tools.lifeplanner_host_contract import install_module, verify_module
@@ -109,15 +109,16 @@ def test_real_module_build_signature_and_host_install(tmp_path, platform):
 
 
 @pytest.mark.parametrize("platform", ["windows-x86_64", "linux-x86_64"])
-def test_unsigned_prerelease_module_matches_lifeplanner_manual_install_contract(
-    tmp_path, platform
+@pytest.mark.parametrize("release_tag", [f"v{APP_VERSION}", f"v{APP_VERSION}-rc.2"])
+def test_unsigned_release_module_matches_lifeplanner_manual_install_contract(
+    tmp_path, platform, release_tag
 ):
     runtime = _runtime(tmp_path, platform)
-    module = build_unsigned_prerelease_module(
+    module = build_unsigned_release_module(
         runtime_dir=runtime,
         runtime_name="FountainPenManager",
         platform=platform,
-        release_tag=f"v{APP_VERSION}-rc.2",
+        release_tag=release_tag,
         output=tmp_path / "modules" / module_asset_name("fpm", APP_VERSION, platform),
         requires_host=">=0.5.0",
     )
@@ -134,8 +135,8 @@ def test_unsigned_prerelease_module_matches_lifeplanner_manual_install_contract(
         expected_version=APP_VERSION,
         expected_platform=platform,
     )
-    assert component["prerelease_tag"] == f"v{APP_VERSION}-rc.2"
-    assert component["source_artifact"]["release_tag"] == f"v{APP_VERSION}-rc.2"
+    assert component["release_tag"] == release_tag
+    assert component["source_artifact"]["release_tag"] == release_tag
     assert "signing_key_id" not in component
 
     target = install_module(
@@ -154,14 +155,14 @@ def test_unsigned_prerelease_module_matches_lifeplanner_manual_install_contract(
     assert executable.is_file()
 
 
-def test_unsigned_module_builder_rejects_non_rc_tag(tmp_path):
+def test_unsigned_module_builder_rejects_unversioned_tag(tmp_path):
     runtime = _runtime(tmp_path, "linux-x86_64")
-    with pytest.raises(ValueError, match="does not match|require an RC tag"):
-        build_unsigned_prerelease_module(
+    with pytest.raises(ValueError, match="require.*v0.3.05"):
+        build_unsigned_release_module(
             runtime_dir=runtime,
             runtime_name="FountainPenManager",
             platform="linux-x86_64",
-            release_tag=f"v{APP_VERSION}",
+            release_tag=f"v{APP_VERSION}-beta.1",
             output=tmp_path / "rejected.lpmodule",
             requires_host=">=0.5.0",
         )
@@ -234,10 +235,10 @@ def test_release_workflow_has_one_publisher_and_no_parallel_module_release():
         for path in (root / ".github" / "workflows").glob("*.yml")
     )
     assert all_workflows.count("gh release create") == 1
-    assert "Build LifePlanner modules only from signed runtime artifacts" in workflow
-    assert "runtime_artifact.py verify" in workflow
+    assert "Build unsigned LifePlanner modules from gated runtimes" in workflow
     assert "lifeplanner_host_contract.py" in workflow
     assert "--output-dir modules" in workflow
+    assert "--allow-unsigned" in workflow
     assert "v0.3.05" not in workflow  # tag and asset names must be derived, never hard-coded here
     assert not (root / ".github/workflows/lifeplanner-module-release.yml").exists()
 
@@ -315,13 +316,13 @@ def test_release_candidate_publishes_unsigned_modules_without_update_manifest():
         encoding="utf-8"
     )
     assert 'release_metadata.py --validate-tag "$GITHUB_REF_NAME"' in workflow
-    assert "Mark unsigned release-candidate artifacts" in workflow
+    assert "Mark all tagged artifacts as unsigned" in workflow
     assert "UNSIGNED TEST BUILD" in workflow
     assert "--prerelease" in workflow
-    assert "Build unsigned LifePlanner prerelease modules from gated runtimes" in workflow
-    assert '--unsigned-prerelease-tag "$GITHUB_REF_NAME"' in workflow
-    assert "Verify and host-install unsigned prerelease modules" in workflow
-    assert workflow.count("--allow-unsigned") == 2
+    assert "Build unsigned LifePlanner modules from gated runtimes" in workflow
+    assert '--release-tag "$GITHUB_REF_NAME"' in workflow
+    assert "Verify and host-install unsigned modules" in workflow
+    assert workflow.count("--allow-unsigned") == 4
     assert '--module-windows "modules/${FPM_MODULE_WINDOWS}"' in workflow
     assert '--module-linux "modules/${FPM_MODULE_LINUX}"' in workflow
     assert 'assert "component.json.sig" not in names' in workflow
@@ -330,5 +331,19 @@ def test_release_candidate_publishes_unsigned_modules_without_update_manifest():
         "startsWith(github.ref, 'refs/tags/') && "
         "!contains(github.ref_name, '-')"
     )
-    assert workflow.count(production_only) >= 5
-    assert workflow.count("if: ${{ !contains(github.ref_name, '-') }}") >= 6
+    assert workflow.count(production_only) == 0
+    assert workflow.count("if: ${{ !contains(github.ref_name, '-') }}") == 3
+
+
+def test_stable_release_is_explicitly_unsigned_and_keyless():
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github/workflows/windows-release.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "UNSIGNED_RELEASE.txt" in workflow
+    assert "UNSIGNED RELEASE" in workflow
+    assert 'assert "component.json.sig" not in names' in workflow
+    assert "WINDOWS_SIGNING_CERT_BASE64" not in workflow
+    assert "WINDOWS_SIGNING_CERT_PASSWORD" not in workflow
+    assert "LIFEPLANNER_UPDATE_PRIVATE_KEY_B64" not in workflow
+    assert "signtool" not in workflow.lower()

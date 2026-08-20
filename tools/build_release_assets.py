@@ -242,7 +242,7 @@ def create_installer_assets(
         "Der Installer ist Authenticode-signiert und wurde vor der "
         "Veröffentlichung mit signtool geprüft.\n"
         if signed
-        else "Dieser Prerelease-Installer ist nicht digital signiert.\n"
+        else "Dieser Release-Installer ist nicht digital signiert.\n"
     )
     (work / "WINDOWS_DOWNLOAD_HINWEIS.txt").write_text(
         "FountainPen Manager Windows-Download\n"
@@ -278,7 +278,7 @@ def copy_module_asset(
         if require_signature and not has_signature:
             die(f"{target.name}: stable LifePlanner module is not signed")
         if not require_signature and has_signature:
-            die(f"{target.name}: prerelease LifePlanner module must stay unsigned")
+            die(f"{target.name}: configured unsigned LifePlanner module contains a signature")
     return target
 
 
@@ -398,7 +398,7 @@ def main() -> int:
         installer_dir=args.installer_dir.resolve(),
         output_dir=output_dir,
         version=asset_version,
-        signed=not args.prerelease,
+        signed=False,
     )
 
     validate_portable_zip(
@@ -420,13 +420,13 @@ def main() -> int:
         args.module_windows,
         output_dir,
         f"{module_id}_{args.version}_Windows_x86_64.lpmodule",
-        require_signature=not args.prerelease,
+        require_signature=False,
     )
     module_linux = copy_module_asset(
         args.module_linux,
         output_dir,
         f"{module_id}_{args.version}_Linux_x86_64.lpmodule",
-        require_signature=not args.prerelease,
+        require_signature=False,
     )
 
     if args.prerelease:
@@ -436,11 +436,10 @@ def main() -> int:
             "UNSIGNED TEST BUILD / NICHT SIGNIERTER TESTBUILD\n\n"
             "Dieses Prerelease dient ausschließlich der Funktionsprüfung. "
             "Windows kann deshalb eine Sicherheitswarnung anzeigen. Die "
-            "beiden LifePlanner-.lpmodule-Pakete sind ebenfalls unsigniert "
+            "beiden LifePlanner-/LiveManager-.lpmodule-Pakete sind ebenfalls unsigniert "
             "und benötigen bei lokaler Installation eine ausdrückliche "
-            "Vertrauensbestätigung. Die finale Version wird erst nach "
-            "erfolgreicher Prüfung mit Authenticode- und LifePlanner-Keys "
-            "veröffentlicht.\n",
+            "Vertrauensbestätigung. Es werden bewusst keine Signier-Keys "
+            "verwendet.\n",
             encoding="utf-8",
         )
         write_checksums(output_dir)
@@ -474,6 +473,7 @@ def main() -> int:
     manifest = {
         "app": APP_NAME,
         "channel": "stable",
+        "signature_policy": "allow-unsigned",
         "version": args.version,
         "release_tag": args.release_tag,
         "assets": assets,
@@ -481,6 +481,19 @@ def main() -> int:
     latest_json = output_dir / "latest.json"
     latest_json.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    (output_dir / "UNSIGNED_RELEASE.txt").write_text(
+        f"FountainPen Manager {args.release_tag}\n"
+        "=====================================\n\n"
+        "UNSIGNED RELEASE / NICHT SIGNIERTER RELEASE\n\n"
+        "Windows-Anwendung und Installer sind nicht Authenticode-signiert; "
+        "Windows kann deshalb eine Sicherheitswarnung anzeigen. Die beiden "
+        "LifePlanner-/LiveManager-.lpmodule-Pakete enthalten keine "
+        "component.json.sig und benötigen bei lokaler Installation eine "
+        "ausdrückliche Vertrauensbestätigung. Integrität und Downloadnamen "
+        "werden durch SHA256SUMS.txt und latest.json geprüft.\n",
         encoding="utf-8",
     )
 

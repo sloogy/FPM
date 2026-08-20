@@ -3,8 +3,8 @@
 
 This is not a replacement for the LifePlanner host. It is a fail-closed contract
 implementation that proves FPM's .lpmodule can be verified and installed by a
-host. Production packages require the public release key; explicitly allowed
-unsigned prereleases follow LifePlanner's manual-confirmation development path.
+host. Signed packages require the public release key; explicitly allowed
+unsigned releases follow LifePlanner/LiveManager's manual-confirmation path.
 """
 from __future__ import annotations
 

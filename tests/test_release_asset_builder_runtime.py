@@ -38,7 +38,6 @@ def test_combined_asset_builder_creates_verified_cross_platform_release(tmp_path
     for module in (module_windows, module_linux):
         with zipfile.ZipFile(module, "w") as archive:
             archive.writestr("component.json", b"{}")
-            archive.writestr("component.json.sig", b"test")
             archive.writestr("payload/module.json", b"{}")
 
     subprocess.run(
@@ -75,6 +74,7 @@ def test_combined_asset_builder_creates_verified_cross_platform_release(tmp_path
         "fpm_0.3.05_Windows_x86_64.lpmodule",
         "fpm_0.3.05_Linux_x86_64.lpmodule",
         "latest.json",
+        "UNSIGNED_RELEASE.txt",
         "SHA256SUMS.txt",
     }
     assert expected <= {path.name for path in out.iterdir() if path.is_file()}
@@ -82,6 +82,7 @@ def test_combined_asset_builder_creates_verified_cross_platform_release(tmp_path
     manifest = json.loads((out / "latest.json").read_text(encoding="utf-8"))
     assert manifest["version"] == "0.3.05"
     assert manifest["release_tag"] == "v0.3.05"
+    assert manifest["signature_policy"] == "allow-unsigned"
 
     for key in (
         "windows",
@@ -109,7 +110,14 @@ def test_combined_asset_builder_creates_verified_cross_platform_release(tmp_path
 
     with zipfile.ZipFile(out / "FountainPenManager_Setup_0.3.05.zip") as archive:
         notice = archive.read("WINDOWS_DOWNLOAD_HINWEIS.txt").decode("utf-8")
-        assert "Authenticode-signiert" in notice
+        assert "nicht digital signiert" in notice
+
+    warning = (out / "UNSIGNED_RELEASE.txt").read_text(encoding="utf-8")
+    assert "UNSIGNED RELEASE" in warning
+    assert "LifePlanner-/LiveManager-.lpmodule-Pakete" in warning
+    for module in (module_windows.name, module_linux.name):
+        with zipfile.ZipFile(out / module) as archive:
+            assert "component.json.sig" not in archive.namelist()
 
 
 def test_prerelease_asset_builder_creates_unsigned_rc_without_update_manifest(tmp_path):
@@ -173,7 +181,7 @@ def test_prerelease_asset_builder_creates_unsigned_rc_without_update_manifest(tm
     assert not (out / "latest.json").exists()
     warning = (out / "UNSIGNED_PRERELEASE.txt").read_text(encoding="utf-8")
     assert "UNSIGNED TEST BUILD" in warning
-    assert "LifePlanner-.lpmodule-Pakete sind ebenfalls unsigniert" in warning
+    assert "LifePlanner-/LiveManager-.lpmodule-Pakete sind ebenfalls unsigniert" in warning
     for module in (module_windows.name, module_linux.name):
         with zipfile.ZipFile(out / module) as archive:
             assert "component.json.sig" not in archive.namelist()

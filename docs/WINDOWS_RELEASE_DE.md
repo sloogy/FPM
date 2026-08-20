@@ -54,8 +54,8 @@ Der Workflow `.github/workflows/windows-release.yml` baut auf `windows-latest`:
 5. SHA256SUMS und `latest.json`
 6. Upload als Artifact und bei Tags als GitHub Release Asset
 
-Ein nummerierter Tag wie `v0.3.05-rc.2` führt die echten Windows-/Linux-Builds, den Installer und beide LifePlanner-Module ohne Signier-Keys aus. Die Ergebnisse werden klar als unsigned GitHub-Prerelease veröffentlicht, jedoch ohne `latest.json`. Die `.lpmodule` sind für manuelle Tests unsigniert und benötigen in LifePlanner eine ausdrückliche Vertrauensbestätigung. Nur der exakte finale Tag `v0.3.05` verlangt Authenticode- und LifePlanner-Keys und darf den stabilen Release veröffentlichen.
+Ein nummerierter Tag wie `v0.3.05-rc.2` führt die echten Windows-/Linux-Builds, den Installer und beide LifePlanner-/LiveManager-Module ohne Signier-Keys aus. Die Ergebnisse werden klar als unsigned GitHub-Prerelease veröffentlicht, jedoch ohne `latest.json`. Der exakte finale Tag `v0.3.05` veröffentlicht nach denselben Gates einen normalen unsigned Release mit `latest.json` und `UNSIGNED_RELEASE.txt`. Die `.lpmodule` benötigen bei lokaler Installation eine ausdrückliche Vertrauensbestätigung.
 
 ## Enterprise-Freigabe v0.3.05
 
-Offizielle Tag-Releases werden nur mit den getrennten Hash-Locks `constraints-windows.lock` und `constraints-linux.lock` gebaut. Die Windows-App und der Installer müssen mit Authenticode signiert und durch `signtool verify /pa /all /v` bestätigt sein. Fehlen Lockdatei, CI-Gate oder Signatur-Secrets, bricht der Workflow ohne Fallback ab. Details stehen in `ENTERPRISE_RELEASE_RUNBOOK_DE.md`.
+Offizielle Tag-Releases werden nur mit den getrennten Hash-Locks `constraints-windows.lock` und `constraints-linux.lock` gebaut. Windows-App, Installer und `.lpmodule` sind in diesem Release ausdrücklich unsigned; Signatur-Secrets werden nicht benötigt. Fehlende Lockdateien, CI-Gates, Checksummen, Warnhinweise oder Host-Testinstallationen brechen den Workflow ab. Details stehen in `ENTERPRISE_RELEASE_RUNBOOK_DE.md`.

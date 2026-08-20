@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Build a LifePlanner .lpmodule from a gated FPM runtime artifact.
 
-The tool deliberately does *not* build FPM itself. Production modules require
-a verified signed runtime attestation. Explicit release-candidate builds may
-package the already-gated CI runtime without keys; those archives stay visibly
-unsigned and are accepted by LifePlanner only after manual confirmation.
+The tool deliberately does *not* build FPM itself. Signed modules may use a
+verified runtime attestation. Explicit ``--allow-unsigned`` builds package the
+already-gated CI runtime without keys; those archives stay visibly unsigned
+and are accepted by LifePlanner/LiveManager only after manual confirmation.
 """
 from __future__ import annotations
 
@@ -105,7 +105,7 @@ def _write_module(
         if public_key_b64:
             metadata["signing_key_id"] = key_id(public_key_b64)
         if release_tag:
-            metadata["prerelease_tag"] = release_tag
+            metadata["release_tag"] = release_tag
         metadata_bytes = canonical_json(metadata)
 
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -170,7 +170,7 @@ def build_module(
     )
 
 
-def build_unsigned_prerelease_module(
+def build_unsigned_release_module(
     *,
     runtime_dir: Path,
     runtime_name: str,
@@ -179,12 +179,16 @@ def build_unsigned_prerelease_module(
     output: Path,
     requires_host: str,
 ) -> Path:
-    """Package a gated RC runtime without creating or requiring signing keys."""
+    """Package a gated tagged runtime without creating or requiring keys."""
     if platform not in PLATFORM_ASSET_SUFFIX:
         raise ValueError(f"unsupported platform: {platform}")
     expected_tag = f"v{APP_VERSION}"
-    if not re.fullmatch(rf"{re.escape(expected_tag)}-rc\.[1-9][0-9]*", release_tag):
-        raise ValueError(f"unsigned module builds require an RC tag, got: {release_tag}")
+    valid_rc = re.fullmatch(rf"{re.escape(expected_tag)}-rc\.[1-9][0-9]*", release_tag)
+    if release_tag != expected_tag and not valid_rc:
+        raise ValueError(
+            f"unsigned module builds require {expected_tag} or {expected_tag}-rc.N, "
+            f"got: {release_tag}"
+        )
     runtime = _validate_runtime(runtime_dir, runtime_name)
     manifest = _module_manifest()
     return _write_module(
@@ -193,7 +197,7 @@ def build_unsigned_prerelease_module(
         runtime_name=runtime_name,
         platform=platform,
         source_artifact={
-            "schema": "fpm.runtime-artifact.unsigned-prerelease.v1",
+            "schema": "fpm.runtime-artifact.unsigned-release.v1",
             "tree_sha256": tree_sha256(runtime),
             "platform": platform,
             "release_tag": release_tag,
@@ -214,7 +218,7 @@ def main() -> int:
     parser.add_argument("--artifact-manifest", type=Path)
     parser.add_argument("--artifact-signature", type=Path)
     parser.add_argument("--public-key-file", type=Path)
-    parser.add_argument("--unsigned-prerelease-tag")
+    parser.add_argument("--release-tag")
     output_group = parser.add_mutually_exclusive_group(required=True)
     output_group.add_argument("--output", type=Path)
     output_group.add_argument("--output-dir", type=Path)
@@ -226,19 +230,23 @@ def main() -> int:
         manifest = json.loads((ROOT / "module.json").read_text(encoding="utf-8"))
         public_key_b64 = None
         key = None
-        if args.unsigned_prerelease_tag:
+        if args.allow_unsigned:
+            if not args.release_tag:
+                raise ValueError("--allow-unsigned requires --release-tag")
             if any((args.artifact_manifest, args.artifact_signature, args.public_key_file)):
                 raise ValueError(
-                    "unsigned prerelease mode must not receive attestation or key arguments"
+                    "unsigned release mode must not receive attestation or key arguments"
                 )
         else:
+            if args.release_tag:
+                raise ValueError("--release-tag is only valid with --allow-unsigned")
             if not all((args.artifact_manifest, args.artifact_signature, args.public_key_file)):
                 raise ValueError(
                     "signed runtime mode requires artifact manifest, signature and public key"
                 )
             public_key_b64 = args.public_key_file.read_text(encoding="ascii").strip()
             key = os.environ.get("LIFEPLANNER_UPDATE_PRIVATE_KEY_B64", "").strip() or None
-            if not key and not args.allow_unsigned:
+            if not key:
                 raise ValueError(
                     "LIFEPLANNER_UPDATE_PRIVATE_KEY_B64 missing; release modules must be signed"
                 )
@@ -246,12 +254,12 @@ def main() -> int:
             output = args.output
         else:
             output = args.output_dir / module_asset_name(manifest["id"], manifest["version"], args.platform)
-        if args.unsigned_prerelease_tag:
-            built = build_unsigned_prerelease_module(
+        if args.allow_unsigned:
+            built = build_unsigned_release_module(
                 runtime_dir=args.runtime_dir,
                 runtime_name=args.runtime_name,
                 platform=args.platform,
-                release_tag=args.unsigned_prerelease_tag,
+                release_tag=args.release_tag,
                 output=output,
                 requires_host=args.requires_host,
             )

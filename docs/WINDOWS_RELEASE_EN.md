@@ -54,8 +54,8 @@ The workflow `.github/workflows/windows-release.yml` builds on `windows-latest`:
 5. SHA256SUMS and `latest.json`
 6. Artifact upload and GitHub Release upload for tags
 
-A numbered tag such as `v0.3.05-rc.2` runs the real Windows/Linux builds, installer, and both LifePlanner modules without signing keys. The results are published as a clearly marked unsigned GitHub Prerelease without `latest.json`. The `.lpmodule` files are unsigned for manual testing and require explicit trust confirmation in LifePlanner. Only the exact final tag `v0.3.05` requires the Authenticode and LifePlanner keys and may publish the stable release.
+A numbered tag such as `v0.3.05-rc.2` runs the real Windows/Linux builds, installer, and both LifePlanner/LiveManager modules without signing keys. The results are published as a clearly marked unsigned GitHub Prerelease without `latest.json`. The exact final tag `v0.3.05` publishes a normal unsigned release after the same gates, including `latest.json` and `UNSIGNED_RELEASE.txt`. Local `.lpmodule` installation requires explicit trust confirmation.
 
 ## Enterprise release gate v0.3.05
 
-Official tagged releases are built only from the separate hash locks `constraints-windows.lock` and `constraints-linux.lock`. The Windows application and installer must be Authenticode-signed and pass `signtool verify /pa /all /v`. Missing locks, CI gates, or signing secrets stop the workflow without an insecure fallback.
+Official tagged releases are built only from the separate hash locks `constraints-windows.lock` and `constraints-linux.lock`. The Windows application, installer, and `.lpmodule` files are explicitly unsigned for this release; signing secrets are not required. Missing locks, CI gates, checksums, warnings, or host test installations stop the workflow.
