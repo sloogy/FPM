@@ -25,7 +25,7 @@ from i18n.translator import LocaleService, t
 from ui.common import EmptyStateWidget, ResponsiveDialog
 from logic.event_bus import AppEventBus
 from logic.budget_export_service import sync_default_outbox_from_session
-from ui.theme import BTN_MUTED, BTN_PRIMARY, BTN_SUCCESS
+from ui.theme import btn_muted, btn_primary, btn_success
 
 PAPER_TYPE_KEYS = ["notebook", "loose", "pad", "other"]
 
@@ -86,7 +86,7 @@ class PaperWidget(QWidget):
         hdr.addWidget(self.search_edit)
 
         add_btn = QPushButton(t('ui.paper_widget.papier_hinzufugen_986b4afe'))
-        add_btn.setStyleSheet(BTN_PRIMARY)
+        add_btn.setStyleSheet(btn_primary())
         add_btn.clicked.connect(self._add)
         hdr.addWidget(add_btn)
         root.addLayout(hdr)
@@ -297,8 +297,8 @@ class PaperDialog(ResponsiveDialog):
         root.addWidget(g3)
 
         br=QHBoxLayout(); br.addStretch()
-        cancel=QPushButton(t('ui.paper_widget.abbrechen_7baa411a')); cancel.setStyleSheet(BTN_MUTED); cancel.clicked.connect(self.reject)
-        save=QPushButton(t('ui.paper_widget.speichern_8fa88b2c')); save.setStyleSheet(BTN_SUCCESS); save.clicked.connect(self._save)
+        cancel=QPushButton(t('ui.paper_widget.abbrechen_7baa411a')); cancel.setStyleSheet(btn_muted()); cancel.clicked.connect(self.reject)
+        save=QPushButton(t('ui.paper_widget.speichern_8fa88b2c')); save.setStyleSheet(btn_success()); save.clicked.connect(self._save)
         br.addWidget(cancel); br.addWidget(save); root.addLayout(br)
 
     def _load(self):

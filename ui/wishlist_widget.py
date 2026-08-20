@@ -18,7 +18,7 @@ from i18n.translator import LocaleService, t
 from logic.article_card_service import ensure_article_card
 from logic.event_bus import AppEventBus
 from logic.budget_export_service import sync_default_outbox_from_session
-from ui.theme import BTN_PRIMARY, BTN_SECONDARY, BTN_SUCCESS, BTN_DANGER
+from ui.theme import btn_danger, btn_primary, btn_secondary, btn_success
 from ui.localized_inputs import LocalizedDoubleSpinBox
 from ui.locale_widgets import (
     bind_currency_combo,
@@ -53,7 +53,7 @@ class WishlistWidget(QWidget):
         hdr.addWidget(title)
         hdr.addStretch()
         add = QPushButton(t('ui.wishlist_widget.wunsch_bd625c0d'))
-        add.setStyleSheet(BTN_PRIMARY)
+        add.setStyleSheet(btn_primary())
         add.clicked.connect(self._add)
         hdr.addWidget(add)
         root.addLayout(hdr)
@@ -102,14 +102,14 @@ class WishlistWidget(QWidget):
         # Buttonleiste: Kernaktionen sichtbar machen statt nur im Kontextmenü.
         btn_row = QHBoxLayout()
         self.edit_btn = QPushButton("\u270f  " + t("common.edit"))
-        self.edit_btn.setStyleSheet(BTN_SECONDARY)
+        self.edit_btn.setStyleSheet(btn_secondary())
         self.edit_btn.clicked.connect(self._edit)
         self.transfer_btn = QPushButton("\U0001f6d2  " + t('ui.wishlist_widget.als_gekauft_ubernehmen_4d301ce7'))
-        self.transfer_btn.setStyleSheet(BTN_SUCCESS)
+        self.transfer_btn.setStyleSheet(btn_success())
         self.transfer_btn.setToolTip(t("wishlist.use_transfer_body"))
         self.transfer_btn.clicked.connect(self._mark_bought)
         self.delete_btn = QPushButton("\U0001f5d1  " + t("common.delete"))
-        self.delete_btn.setStyleSheet(BTN_DANGER)
+        self.delete_btn.setStyleSheet(btn_danger())
         self.delete_btn.clicked.connect(self._delete)
         for b in (self.edit_btn, self.transfer_btn, self.delete_btn):
             b.setEnabled(False)

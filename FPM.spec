@@ -25,6 +25,10 @@ datas = [
     (str(ROOT / "i18n" / "de.json"), "i18n"),
     (str(ROOT / "i18n" / "en.json"), "i18n"),
     (str(ROOT / "i18n" / "fr.json"), "i18n"),
+    # Theme profiles are loaded from disk at runtime just like the locales.
+    # Without them only the two built-in profiles remain.
+    *[(str(path), "ui/profiles")
+      for path in sorted((ROOT / "ui" / "profiles").glob("*.json"))],
     (str(ROOT / "README.md"), "."),
     (str(ROOT / "version.json"), "."),
     (str(ROOT / "docs" / "BENUTZERHANDBUCH_DE.md"), "docs"),

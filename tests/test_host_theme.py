@@ -1,8 +1,19 @@
 """Zentrales Designprofil des LifePlanner-Hosts."""
 import json
 
+import pytest
+
 from ui.host_theme import host_scale_factor, load_host_theme, recolor
 from ui.styles import get_stylesheet
+from ui.theme_manager import ThemeManager
+
+
+@pytest.fixture(autouse=True)
+def _fresh_theme():
+    """Das aktive Profil ist ein Singleton - sonst faerbt ein Test den naechsten."""
+    ThemeManager.reset()
+    yield
+    ThemeManager.reset()
 
 
 def _profile(tmp_path, name="Nord - Dunkel", modus="dunkel", size=10, **farben):
@@ -18,12 +29,23 @@ def _profile(tmp_path, name="Nord - Dunkel", modus="dunkel", size=10, **farben):
     return path
 
 
-def test_without_host_the_stylesheet_is_unchanged(monkeypatch):
+def test_without_host_the_local_profile_applies(monkeypatch):
+    """Ohne Host gilt das eigene Profil - frueher blieb FPM hier fest hell.
+
+    Genau daran lag es, dass ein dunkles Design im eigenstaendigen Betrieb
+    gar nicht erst zur Verfuegung stand.
+    """
+    from ui.theme_manager import BUILTIN_PROFILES, DEFAULT_PROFILE
+
     monkeypatch.delenv("LIFEPLANNER_THEME_FILE", raising=False)
     css = get_stylesheet()
     assert load_host_theme() is None
-    # Die bisherigen Literale muessen im Standalone-Betrieb erhalten bleiben.
-    assert "#f0f3f7" in css and "#2c3e50" in css and "#3498db" in css
+    standard = BUILTIN_PROFILES[DEFAULT_PROFILE]
+    assert standard["hintergrund_app"] in css
+    assert standard["text"] in css
+    assert standard["akzent"] in css
+    # Keine Farbe mehr, die kein Profil kennt.
+    assert "#3498db" not in css
 
 
 def test_host_profile_recolours_main_window_and_accent(monkeypatch, tmp_path):
@@ -59,10 +81,23 @@ def test_broken_or_foreign_files_are_ignored(monkeypatch, tmp_path):
 
 
 def test_recolor_skips_invalid_colour_values():
+    """Ein uebergebenes Profil mit unbrauchbaren Farben aendert nichts."""
     css = "background: #f0f3f7;"
     assert recolor(css, {"farben": {"hintergrund_app": "rot"}}) == css
     assert recolor(css, {"farben": {}}) == css
-    assert recolor(css, None) == css
+
+
+def test_recolor_without_argument_uses_the_active_profile(monkeypatch):
+    """Ohne uebergebenes Profil gilt das aktive - dafuer ist die Funktion da.
+
+    Die Inline-Stylesheets der Widgets laufen genau so hier durch.
+    """
+    from ui.theme_manager import BUILTIN_PROFILES, DEFAULT_PROFILE
+
+    monkeypatch.delenv("LIFEPLANNER_THEME_FILE", raising=False)
+    ThemeManager.reset()
+    expected = BUILTIN_PROFILES[DEFAULT_PROFILE]["hintergrund_app"]
+    assert recolor("background: #f0f3f7;") == f"background: {expected};"
 
 
 def test_recolor_is_single_pass_and_never_chains():
@@ -74,12 +109,19 @@ def test_recolor_is_single_pass_and_never_chains():
     assert recolor("card: #ffffff;", theme) == "card: #222222;"
 
 
-def test_semantic_colours_stay_untouched():
-    """Erfolg, Gefahr und Warnung tragen Bedeutung, nicht die Rolle einer Flaeche."""
-    from ui.host_theme import PALETTE_ROLES
+def test_semantic_colours_keep_their_meaning():
+    """Erfolg, Gefahr und Warnung tragen Bedeutung, nicht die Rolle einer Flaeche.
+
+    Sie folgen dem Profil trotzdem - aber ueber die Bedeutungsrollen. Sonst
+    waere ein sattes Rot auf dunklem Grund kaum zu lesen.
+    """
+    from ui.host_theme import PALETTE_ROLES, SEMANTIC_ROLES
 
     for semantic in ("#27ae60", "#e74c3c", "#c0392b", "#f39c12", "#d35400", "#8e44ad"):
-        assert semantic not in PALETTE_ROLES
+        assert semantic not in PALETTE_ROLES, "Bedeutungsfarbe darf keine Flaechenrolle sein"
+        assert semantic in SEMANTIC_ROLES
+    assert SEMANTIC_ROLES["#e74c3c"] == "gefahr"
+    assert SEMANTIC_ROLES["#27ae60"] == "erfolg"
 
 
 def test_inline_widget_styles_follow_the_host_profile(monkeypatch, tmp_path):
@@ -97,3 +139,6 @@ def test_inline_widget_styles_follow_the_host_profile(monkeypatch, tmp_path):
     # ist ohne gesetzte Umgebungsvariable aber ein No-Op.
     assert "#88c0d0" in button.styleSheet()
     assert "#3498db" not in button.styleSheet()
+    # Und "white" wird jetzt ebenfalls getroffen - frueher blieb die Schrift
+    # weiss, auch wenn die Flaeche darunter hell wurde.
+    assert "white" not in button.styleSheet()

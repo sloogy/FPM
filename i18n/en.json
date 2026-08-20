@@ -2088,7 +2088,16 @@
       "vorhandene_datenbankdatei_offnen_wechseln_96515b61": "Open / switch to an existing database file",
       "vorschau_57ca03ef": "Preview:",
       "wahrung_150ec8df": "Currency",
-      "was_mochtest_du_tun_3c2ef2c3": "What do you want to do?"
+      "was_mochtest_du_tun_3c2ef2c3": "What do you want to do?",
+      "theme_card": "Design profile",
+      "theme_label": "Colour scheme",
+      "theme_default_option": "Program default ({name})",
+      "theme_apply": "Apply design",
+      "theme_follow_shared": "Follow the shared design of the LifePlanner",
+      "theme_follow_hint": "When FPM runs inside the LifePlanner, the profile chosen there applies. Without the tick your own choice stays.",
+      "theme_applied": "Design “{name}” applied.",
+      "theme_page_body": "Colour scheme, font and UI size. Changes apply immediately to all open windows.",
+      "theme_broken": "{count} profile(s) were skipped because they are faulty."
     },
     "statistics_widget": {
       "all_categories": "All categories",

@@ -1,14 +1,17 @@
-"""Designprofil des LifePlanner-Hosts.
+"""Farbersetzung fuer die noch nicht migrierten Inline-Stylesheets.
 
-Der Host legt das zentral gewaehlte Profil im Format ``lifeplanner.theme.v1``
-ab und nennt den Pfad in ``LIFEPLANNER_THEME_FILE``. Ohne Host ist die Variable
-leer und alles hier ist ein No-Op - der Standalone-Betrieb bleibt unveraendert.
+FPM setzt an rund 150 Stellen ``setStyleSheet`` mit eigenen Farbliteralen.
+Solche lokalen Stylesheets schlagen das globale - die betroffenen Widgets
+blieben also hell, waehrend der Rest dem Profil folgt. Genau das war der Grund
+fuer weisse Karten und weisse Schrift auf hellem Grund im dunklen Profil.
 
-FPMs Stylesheet fuehrt seine Farben als Literale. Statt es vollstaendig auf
-Tokens umzubauen, ordnet ``PALETTE_ROLES`` jedem Literal die Rolle zu, die es
-im Stylesheet tatsaechlich hat, und ersetzt es durch den Wert des Hostprofils.
-Das deckt Hauptfenster, Seitenleiste, Tabellen, Eingaben und Schriftgroessen
-ab. Inline-Styles einzelner Widgets bleiben unberuehrt.
+Bis jede Stelle auf ``ui.theme`` umgestellt ist, laeuft hier jeder
+Widget-Stylesheet durch eine Zuordnung: Literal -> Rolle -> Farbe des aktiven
+Profils. Anders als frueher haengt das **nicht** mehr am LifePlanner-Host -
+es wirkt auch im eigenstaendigen Betrieb, weil FPM jetzt selbst Profile hat.
+
+``load_host_theme`` bleibt bestehen: der Host liefert weiterhin das gemeinsame
+Profil, das der ThemeManager als Quelle bevorzugt.
 """
 from __future__ import annotations
 
@@ -53,14 +56,46 @@ PALETTE_ROLES: dict[str, str] = {
     "#1d4ed8": "auswahl_hintergrund",
     # Weitere Grautoene aus den Widget-Inlinestyles.
     "#64748b": "text_gedimmt",
-    "#7f8c8d": "text_gedimmt",
+    "#7f8c8d": "gedaempft",
     "#34495e": "hintergrund_seitenleiste",
+    # Ohne diese blieben Flaechen und Schriften hell: "white" ist kein
+    # Hexliteral und wurde vom alten Muster nie erfasst.
+    "white": "hintergrund_panel",
+    "#fff": "hintergrund_panel",
+    "#bdc3c7": "rand",
+    "#95a5a6": "text_gedimmt",
+    "#eee": "tabelle_alt",
+    "#555": "text_gedimmt",
+    "#475569": "tabelle_header_text",
+    "#4a5568": "tabelle_header_text",
+    "#2980b9": "akzent_hover",
+    "#eff6ff": "hover_hintergrund",
+    "#dbeafe": "auswahl_hintergrund",
+    "#f1f5f9": "hintergrund_app",
+    "#e2e8f0": "rand",
+    "#111827": "hintergrund_seitenleiste",
+    "#020617": "hintergrund_seitenleiste",
 }
 
-# Bewusst NICHT zugeordnet: #27ae60, #e74c3c, #c0392b, #f39c12, #d35400 und
-# #8e44ad. Diese Farben tragen Bedeutung - Erfolg, Gefahr, Warnung, Kategorie -
-# und nicht die Rolle einer Flaeche. Sie an ein Designprofil zu koppeln wuerde
-# eine Loeschen-Schaltflaeche gruen faerben, wenn das Profil es so vorgibt.
+# Literale, die ihre Bedeutung tragen und deshalb NICHT auf Flaechenrollen
+# zeigen, sondern auf die Bedeutungsrollen des Profils. Im dunklen Profil sind
+# deren Werte aufgehellt, damit sie lesbar bleiben.
+SEMANTIC_ROLES: dict[str, str] = {
+    "#27ae60": "erfolg",
+    "#219a52": "erfolg",
+    "#e74c3c": "gefahr",
+    "#c0392b": "gefahr",
+    "#f39c12": "warnung",
+    "#e67e22": "warnung",
+    "#d68910": "warnung",
+    "#8e44ad": "bereich_sammlung",
+    "#d35400": "bereich_rotation",
+    "#16a085": "bereich_aktivitaet",
+}
+
+# Bedeutungsfarben werden ueber SEMANTIC_ROLES gefuehrt, nicht ueber
+# Flaechenrollen: Eine Loeschen-Schaltflaeche bleibt rot, aber im dunklen
+# Profil in dessen hellerem Rot - sonst waere sie kaum zu lesen.
 
 
 def load_host_theme() -> dict[str, Any] | None:
@@ -93,22 +128,32 @@ def host_scale_factor(theme: dict[str, Any] | None) -> float:
     return max(0.85, min(1.50, size / _REFERENCE_FONT_SIZE))
 
 
-def build_color_map(theme: dict[str, Any] | None) -> dict[str, str]:
-    """Literal -> Zielfarbe fuer genau dieses Profil."""
-    if not theme:
-        return {}
-    colors = theme.get("farben")
-    if not isinstance(colors, dict):
-        return {}
+def build_color_map(theme: dict[str, Any] | None = None) -> dict[str, str]:
+    """Literal -> Farbe des aktiven Profils.
+
+    ``theme`` ist nur noch fuer Aufrufer da, die ausdruecklich ein rohes
+    Hostprofil abbilden wollen; ohne Argument gilt das aktive Profil.
+    """
+    if theme is not None:
+        colors = theme.get("farben")
+        if not isinstance(colors, dict):
+            return {}
+        lookup = lambda role: str(colors.get(role, "") or "").strip()  # noqa: E731
+    else:
+        from ui.theme_manager import ThemeManager
+        profile = ThemeManager.instance().current_profile()
+        lookup = profile.color
+
     mapping: dict[str, str] = {}
-    for literal, role in PALETTE_ROLES.items():
-        value = str(colors.get(role, "") or "").strip()
-        if _HEX.fullmatch(value):
-            mapping[literal.lower()] = value
+    for source in (PALETTE_ROLES, SEMANTIC_ROLES):
+        for literal, role in source.items():
+            value = lookup(role)
+            if _HEX.fullmatch(value or ""):
+                mapping[literal.lower()] = value
     return mapping
 
 
-def recolor(css: str, theme: dict[str, Any] | None) -> str:
+def recolor(css: str, theme: dict[str, Any] | None = None) -> str:
     """Ersetzt die Stylesheet-Literale durch die Farben des Hostprofils.
 
     Ein einziger Durchgang ueber alle Literale gleichzeitig. Nacheinander
@@ -121,7 +166,11 @@ def recolor(css: str, theme: dict[str, Any] | None) -> str:
     mapping = build_color_map(theme)
     if not mapping:
         return css
-    pattern = re.compile("|".join(re.escape(k) for k in mapping), re.IGNORECASE)
+    # Laengste Literale zuerst, sonst schluckt "#fff" den Anfang von "#ffffff".
+    # Wortgrenzen halten "white" von "whitesmoke" fern.
+    keys = sorted(mapping, key=len, reverse=True)
+    pattern = re.compile("|".join(rf"\b{re.escape(k)}\b" if k.isalpha() else re.escape(k)
+                                 for k in keys), re.IGNORECASE)
     return pattern.sub(lambda m: mapping[m.group(0).lower()], css)
 
 
@@ -137,17 +186,18 @@ def install_inline_theme() -> bool:
     Aufruf einzeln umzuschreiben, laeuft hier jeder Widget-Stylesheet durch
     dieselbe Farbzuordnung wie das globale.
 
-    Ohne Hostprofil passiert nichts. Nur einmal wirksam.
+    Nur einmal wirksam. Eine Uebergangsloesung: Jede Stelle, die auf
+    ``ui.theme`` umgestellt ist, braucht sie nicht mehr.
     """
     global _PATCHED
-    if _PATCHED or not load_host_theme():
+    if _PATCHED:
         return False
     from PySide6.QtWidgets import QWidget
 
     original = QWidget.setStyleSheet
 
     def themed_set_stylesheet(self, sheet):  # noqa: ANN001 - Qt-Signatur
-        return original(self, recolor(sheet, load_host_theme()))
+        return original(self, recolor(sheet))
 
     QWidget.setStyleSheet = themed_set_stylesheet
     _PATCHED = True

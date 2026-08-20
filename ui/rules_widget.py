@@ -45,6 +45,7 @@ from database.db import get_session
 from database.models import AppSettings, Rule
 from i18n.translator import t
 from ui.common import ResponsiveDialog
+from ui import theme
 
 CONDITION_KEYS = [
     "fill_system_ink_prop",
@@ -150,7 +151,7 @@ class RulesWidget(QWidget):
         overview.setWordWrap(True)
         overview.setStyleSheet(
             "background:#f8fafc; border:1px solid #dbe4ef; border-radius:8px;"
-            "padding:10px 12px; color:#334155; font-size:13px;"
+            f"padding:10px 12px; color:{theme.color('text')}; font-size:13px;"
         )
         root.addWidget(overview)
 

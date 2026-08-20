@@ -38,7 +38,7 @@ from ui.nib_widget import NibDialog
 from ui.role_prefs_dialog import RolePrefsDialog
 from ui.pen_common import (TAG_KEYS, _fill_system_label,
                            _fill_systems, _rotation_roles, _rotation_themes, _tag_label)
-from ui.theme import BTN_MUTED, BTN_SUCCESS
+from ui.theme import btn_muted, btn_success
 from ui.ui_scale import scale_px
 
 
@@ -799,10 +799,10 @@ class PenDialog(ResponsiveDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         cancel = QPushButton(t('ui.pen_widget.abbrechen_bbc8a352'))
-        cancel.setStyleSheet(BTN_MUTED)
+        cancel.setStyleSheet(btn_muted())
         cancel.clicked.connect(self.reject)
         save = QPushButton(t('ui.pen_widget.speichern_26cb5264'))
-        save.setStyleSheet(BTN_SUCCESS)
+        save.setStyleSheet(btn_success())
         save.clicked.connect(self._save)
         btn_row.addWidget(cancel)
         btn_row.addWidget(save)
@@ -1281,10 +1281,10 @@ class LoadInkDialog(ResponsiveDialog):
         br = QHBoxLayout()
         br.addStretch()
         cancel = QPushButton(t('ui.pen_widget.abbrechen_bbc8a352'))
-        cancel.setStyleSheet(BTN_MUTED)
+        cancel.setStyleSheet(btn_muted())
         cancel.clicked.connect(self.reject)
         self.ok_btn = QPushButton(t('ui.pen_widget.einfullen_da7f3141'))
-        self.ok_btn.setStyleSheet(BTN_SUCCESS)
+        self.ok_btn.setStyleSheet(btn_success())
         self.ok_btn.clicked.connect(self._do_load)
         br.addWidget(cancel)
         br.addWidget(self.ok_btn)

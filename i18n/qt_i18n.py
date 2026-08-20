@@ -782,6 +782,25 @@ def _strip_hotkeys(text: str) -> str:
     return _HOTKEY_RE.sub("", text)
 
 
+# "&" before whitespace is never a keyboard mnemonic - it is the word "and".
+# Qt would still swallow it and underline the next word, turning
+# "Darstellung speichern & sofort anwenden" into "... speichern _sofort ...".
+# The "&&" branch comes first so an already escaped ampersand is matched as a
+# whole and left alone - otherwise escaping would compound on every pass.
+_AMPERSAND_AS_WORD = re.compile(r"&&|&(?=\s)")
+
+
+def mnemonic_safe(text: str) -> str:
+    """Escape a literal ampersand so Qt renders it instead of eating it.
+
+    Deliberate mnemonics like "&Save" are left alone: they have no space
+    after the ampersand.
+    """
+    if not text or "&" not in text:
+        return text
+    return _AMPERSAND_AS_WORD.sub(lambda m: m.group(0) if m.group(0) == "&&" else "&&", text)
+
+
 def _translate_plain(text: str, lang: str) -> str:
     if not text or lang == "de":
         return text
@@ -996,9 +1015,13 @@ def apply_widget_tree(root) -> None:
         if isinstance(widget, QLabel):
             _set_translated(widget, "_fpm_i18n_text", widget.text, widget.setText)
         elif isinstance(widget, QAbstractButton):
-            _set_translated(widget, "_fpm_i18n_text", widget.text, widget.setText)
+            # Buttons and group boxes read "&" as a mnemonic marker; labels
+            # do not. Only these two need the escape.
+            _set_translated(widget, "_fpm_i18n_text", widget.text,
+                            lambda value, w=widget: w.setText(mnemonic_safe(value)))
         elif isinstance(widget, QGroupBox):
-            _set_translated(widget, "_fpm_i18n_title", widget.title, widget.setTitle)
+            _set_translated(widget, "_fpm_i18n_title", widget.title,
+                            lambda value, w=widget: w.setTitle(mnemonic_safe(value)))
         elif isinstance(widget, QLineEdit):
             try:
                 ph = widget.placeholderText()

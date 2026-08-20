@@ -16,7 +16,7 @@ from database.models import Nib, NibFormat
 from ui.common import EmptyStateWidget, ResponsiveDialog
 from logic.event_bus import AppEventBus
 from i18n.translator import t
-from ui.theme import BTN_MUTED, BTN_PRIMARY, BTN_SUCCESS
+from ui.theme import btn_muted, btn_primary, btn_success
 
 NIB_SIZES = ["EF", "F", "M", "B", "BB", "Stub 1.1", "Stub 1.5", "Stub 1.9", "Flex", t("paper.types.other")]
 
@@ -46,7 +46,7 @@ class NibWidget(QWidget):
         hdr.addWidget(self.search_edit)
 
         add_btn = QPushButton(t('ui.nib_widget.feder_hinzufugen_f3956c58'))
-        add_btn.setStyleSheet(BTN_PRIMARY)
+        add_btn.setStyleSheet(btn_primary())
         add_btn.clicked.connect(self._add)
         hdr.addWidget(add_btn)
         root.addLayout(hdr)
@@ -310,9 +310,9 @@ class NibDialog(ResponsiveDialog):
         root.addWidget(scroll, 1)
 
         br = QHBoxLayout(); br.addStretch()
-        cancel = QPushButton(t('ui.nib_widget.abbrechen_b583cee4')); cancel.setStyleSheet(BTN_MUTED)
+        cancel = QPushButton(t('ui.nib_widget.abbrechen_b583cee4')); cancel.setStyleSheet(btn_muted())
         cancel.clicked.connect(self.reject)
-        save = QPushButton(t('ui.nib_widget.speichern_4f68f6cc')); save.setStyleSheet(BTN_SUCCESS)
+        save = QPushButton(t('ui.nib_widget.speichern_4f68f6cc')); save.setStyleSheet(btn_success())
         save.clicked.connect(self.accept)
         br.addWidget(cancel); br.addWidget(save); root.addLayout(br)
 

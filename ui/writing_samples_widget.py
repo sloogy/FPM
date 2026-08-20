@@ -26,7 +26,7 @@ from logic.writing_sample_service import (
     BinderNode,
 )
 from ui.common import EmptyStateWidget, ResponsiveDialog
-from ui.theme import BTN_PRIMARY
+from ui.theme import btn_primary
 from ui.ui_scale import scale_px
 from ui.localized_inputs import LocalizedDoubleSpinBox
 
@@ -87,7 +87,7 @@ class WritingSamplesWidget(QWidget):
         header.addWidget(self.search_edit)
 
         add_btn = QPushButton(t("writing_samples.add"))
-        add_btn.setStyleSheet(BTN_PRIMARY)
+        add_btn.setStyleSheet(btn_primary())
         add_btn.clicked.connect(self._add)
         header.addWidget(add_btn)
         root.addLayout(header)

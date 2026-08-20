@@ -30,11 +30,21 @@ def test_edit_status_bought_uses_transfer_workflow_not_silent_status_only():
 
 
 def test_wishlist_widget_imports_all_button_styles_it_uses():
+    """Ein benutzter, aber nicht importierter Stil waere ein NameError im Klick.
+
+    Geprueft wird der Namensraum des Moduls, nicht der Wortlaut der
+    Importzeile - sonst bricht der Test bei jeder Umbenennung, ohne dass etwas
+    kaputt waere.
+    """
+    import re
+
+    import ui.wishlist_widget as widget
+
     src = (ROOT / "ui" / "wishlist_widget.py").read_text(encoding="utf-8")
-    assert "BTN_SECONDARY" in src
-    assert "BTN_SUCCESS" in src
-    assert "BTN_DANGER" in src
-    assert "from ui.theme import BTN_PRIMARY, BTN_SECONDARY, BTN_SUCCESS, BTN_DANGER" in src
+    used = set(re.findall(r"\bbtn_[a-z_]+(?=\()", src))
+    assert used, "Das Widget nutzt keine Stilfunktion mehr - Test veraltet?"
+    missing = sorted(name for name in used if not hasattr(widget, name))
+    assert not missing, f"nicht importiert: {missing}"
 
 
 def test_wishlist_purchase_refreshes_budgetmanager_bridge_outbox():

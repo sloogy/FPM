@@ -2088,7 +2088,16 @@
       "vorhandene_datenbankdatei_offnen_wechseln_96515b61": "Ouvrir / utiliser une base de données existante",
       "vorschau_57ca03ef": "Aperçu:",
       "wahrung_150ec8df": "Devise",
-      "was_mochtest_du_tun_3c2ef2c3": "Que veux-tu faire ?"
+      "was_mochtest_du_tun_3c2ef2c3": "Que veux-tu faire ?",
+      "theme_card": "Profil de design",
+      "theme_label": "Palette de couleurs",
+      "theme_default_option": "Réglage d'origine ({name})",
+      "theme_apply": "Appliquer le design",
+      "theme_follow_shared": "Suivre le design commun du LifePlanner",
+      "theme_follow_hint": "Lorsque FPM tourne dans le LifePlanner, le profil défini là-bas s'applique. Sans la coche, votre choix est conservé.",
+      "theme_applied": "Design « {name} » appliqué.",
+      "theme_page_body": "Palette de couleurs, taille de police et d'interface. Les modifications s'appliquent immédiatement à toutes les fenêtres ouvertes.",
+      "theme_broken": "{count} profil(s) ont été ignorés car défectueux."
     },
     "statistics_widget": {
       "all_categories": "Toutes les catégories",

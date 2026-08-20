@@ -36,7 +36,28 @@ from logic.app_mode import APP_MODE_KEY, EXPERT_MODE, SIMPLE_MODE, get_app_mode,
 from logic.log_utils import create_diagnostics_bundle, diagnostics_dir
 from ui.locale_widgets import LocalizedDoubleSpinBox as QDoubleSpinBox, set_money_affix
 from ui.ui_scale import PRESETS, apply_ui_scaling, scale_px
+from ui import theme
+from ui.theme_manager import DEFAULT_PROFILE, ThemeManager
 from ui.common import ResponsiveDialog
+
+def _restyle_application():
+    """Stylesheet neu aufbauen und jede Seite neu zeichnen lassen.
+
+    Qt wendet ein geaendertes Anwendungs-Stylesheet zwar sofort an, aber die
+    Inline-Stylesheets einzelner Widgets stehen darueber: Sie tragen noch die
+    Farben des alten Profils, bis das Widget sie neu setzt. Deshalb wird nach
+    dem Stylesheet auch refresh() angestossen.
+    """
+    from ui.styles import get_stylesheet
+
+    app = QApplication.instance()
+    if app is None:
+        return
+    app.setStyleSheet(get_stylesheet())
+    _refresh_all_widgets()
+    for widget in QApplication.allWidgets():
+        widget.update()
+
 
 def _refresh_all_widgets():
     """Ruft refresh() auf allen Stack-Seiten des MainWindow auf."""
@@ -236,7 +257,19 @@ class SettingsWidget(QWidget):
         self.settings_nav.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         self.settings_nav.setSpacing(4)
         self.settings_nav.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.settings_nav.setStyleSheet('QListWidget#settingsNav { background:#ffffff; border:1px solid #d5dce6; border-radius:10px; padding:8px; outline:none; }QListWidget#settingsNav::item { padding:10px 12px; border-radius:7px; color:#334155; min-height:24px; }QListWidget#settingsNav::item:hover { background:#eef6ff; }QListWidget#settingsNav::item:selected { background:#2563eb; color:white; font-weight:700; }')
+        self.settings_nav.setStyleSheet(
+            'QListWidget#settingsNav {{ background:{panel}; border:1px solid {border}; '
+            'border-radius:10px; padding:8px; outline:none; }}'
+            'QListWidget#settingsNav::item {{ padding:10px 12px; border-radius:7px; '
+            'color:{text}; min-height:24px; }}'
+            'QListWidget#settingsNav::item:hover {{ background:{hover}; color:{hover_text}; }}'
+            'QListWidget#settingsNav::item:selected {{ background:{selected}; '
+            'color:{selected_text}; font-weight:700; }}'.format(
+                panel=theme.color('karte_hintergrund'), border=theme.color('karte_rand'),
+                text=theme.color('text'), hover=theme.color('hover_hintergrund'),
+                hover_text=theme.color('hover_text'),
+                selected=theme.color('auswahl_hintergrund'),
+                selected_text=theme.color('auswahl_text')))
         self.settings_stack = QStackedWidget()
         self.settings_stack.setStyleSheet('QStackedWidget { background: transparent; }')
         shell.addWidget(self.settings_nav)
@@ -301,12 +334,15 @@ class SettingsWidget(QWidget):
         layout.setSpacing(14)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         h = QLabel(translate_source_text(heading))
-        h.setStyleSheet('font-size:18px; font-weight:800; color:#1e293b;')
+        h.setStyleSheet(f'font-size:18px; font-weight:800; {theme.value_text()}')
         layout.addWidget(h)
         if text:
             sub = QLabel(translate_source_text(text))
             sub.setWordWrap(True)
-            sub.setStyleSheet('color:#64748b; font-size:13px;')
+            # Einleitungstext: gedimmte Schrift des Profils, kein eigener
+            # Hintergrund. Ein gesetzter Hintergrund ergab im dunklen Profil
+            # den Balken quer durch die helle Karte.
+            sub.setStyleSheet(f'font-size:13px; {theme.hint_text()}')
             layout.addWidget(sub)
         return (page, layout)
 
@@ -328,18 +364,33 @@ class SettingsWidget(QWidget):
         return (grp, layout)
 
     def _note(self, text: str, kind: str='info') -> QLabel:
-        colors = {'info': ('#eff6ff', '#bfdbfe', '#1d4ed8'), 'warn': ('#fffbeb', '#fde68a', '#92400e'), 'danger': ('#fef2f2', '#fecaca', '#991b1b'), 'ok': ('#ecfdf5', '#bbf7d0', '#166534')}
-        bg, border, fg = colors.get(kind, colors['info'])
+        """Hinweiskasten in der Bedeutungsfarbe des aktiven Profils.
+
+        Frueher standen hier vier Pastelltoene fest. Auf dunklem Grund waren
+        sie grelle Flecken mit fast unlesbarer Schrift; jetzt entstehen
+        Flaeche und Rand aus der Bedeutungsfarbe selbst.
+        """
+        role = {'info': 'akzent', 'warn': 'warnung', 'danger': 'gefahr', 'ok': 'erfolg'}.get(kind, 'akzent')
+        accent = theme.color(role)
+        dark = theme.is_dark()
+        bg = theme.shade(accent, 0.35 if dark else 1.85)
+        border = theme.shade(accent, 0.6 if dark else 1.5)
+        fg = theme.shade(accent, 1.5 if dark else 0.65)
         lbl = QLabel(translate_source_text(text))
         lbl.setWordWrap(True)
         lbl.setStyleSheet(f'background:{bg}; border:1px solid {border}; color:{fg}; border-radius:8px; padding:10px 12px; font-size:13px;')
         return lbl
 
     def _styled_button(self, text: str, kind: str='primary') -> QPushButton:
-        palette = {'primary': '#2563eb', 'success': '#27ae60', 'secondary': '#7f8c8d', 'warning': '#f39c12', 'purple': '#8e44ad', 'danger': '#c0392b'}
-        color = palette.get(kind, palette['primary'])
+        # Vordergrund kommt aus dem Profil, nicht als festes Weiss: auf einer
+        # hellen Warnfarbe war weisse Schrift kaum zu lesen.
+        roles = {'primary': ('akzent', 'akzent_text'), 'success': ('erfolg', 'erfolg_text'),
+                 'secondary': ('gedaempft', 'gedaempft_text'), 'warning': ('warnung', 'warnung_text'),
+                 'purple': ('bereich_sammlung', 'akzent_text'), 'danger': ('gefahr', 'gefahr_text')}
+        background, foreground = roles.get(kind, roles['primary'])
         b = QPushButton(translate_source_text(text))
-        b.setStyleSheet(f'background:{color}; color:white; border:none; padding:8px 16px; border-radius:6px; font-weight:bold;')
+        b.setStyleSheet(f'background:{theme.color(background)}; color:{theme.color(foreground)}; '
+                        'border:none; padding:8px 16px; border-radius:6px; font-weight:bold;')
         b.setMinimumHeight(scale_px(34))
         b.setMinimumWidth(0)
         b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -426,7 +477,8 @@ class SettingsWidget(QWidget):
             session.close()
 
     def _build_appearance_page(self) -> QWidget:
-        page, root = self._new_page(t('ui.settings_widget.legacy_exact.text_002'), t('ui.settings_widget.appearance_page_body'))
+        page, root = self._new_page(t('ui.settings_widget.legacy_exact.text_002'), t('ui.settings_widget.theme_page_body'))
+        root.addWidget(self._build_theme_card())
         ui_grp, ui_fl = self._form_card(t('ui.settings_widget.legacy_exact.text_011'))
         self.ui_scale_combo = QComboBox()
         for preset in PRESETS:
@@ -442,6 +494,59 @@ class SettingsWidget(QWidget):
         root.addWidget(self._note(t('ui.settings_widget.rules_density_note'), 'info'))
         root.addStretch(1)
         return page
+
+    def _build_theme_card(self) -> QGroupBox:
+        """Auswahl des Farbschemas.
+
+        Der erste Eintrag ist ausdruecklich der Programmstandard: Wer sich
+        verklickt hat, findet den Auslieferungszustand wieder, ohne zu wissen,
+        wie das Profil heisst.
+        """
+        manager = ThemeManager.instance()
+        grp, fl = self._form_card(t('ui.settings_widget.theme_card'))
+
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItem(
+            t('ui.settings_widget.theme_default_option', name=DEFAULT_PROFILE),
+            DEFAULT_PROFILE)
+        for name in manager.available_profiles():
+            if name != DEFAULT_PROFILE:
+                self.theme_combo.addItem(name, name)
+        current = manager.current_name()
+        index = self.theme_combo.findData(current)
+        self.theme_combo.setCurrentIndex(index if index >= 0 else 0)
+        fl.addRow(t('ui.settings_widget.theme_label'), self.theme_combo)
+
+        self.theme_follow_check = QCheckBox(t('ui.settings_widget.theme_follow_shared'))
+        self.theme_follow_check.setChecked(manager.follows_shared())
+        fl.addRow('', self.theme_follow_check)
+
+        hint = QLabel(t('ui.settings_widget.theme_follow_hint'))
+        hint.setWordWrap(True)
+        hint.setStyleSheet(theme.hint_text())
+        fl.addRow('', hint)
+
+        apply_theme = self._styled_button(t('ui.settings_widget.theme_apply'), 'primary')
+        apply_theme.clicked.connect(self._save_theme)
+        fl.addRow('', apply_theme)
+
+        # Fehlerhafte Profile werden uebersprungen - aber nicht verschwiegen.
+        broken = manager.get_load_errors()
+        if broken:
+            fl.addRow('', self._note(
+                t('ui.settings_widget.theme_broken', count=len(broken)), 'warn'))
+        return grp
+
+    def _save_theme(self):
+        """Profil uebernehmen und die Oberflaeche sofort neu einfaerben."""
+        manager = ThemeManager.instance()
+        name = self.theme_combo.currentData() or DEFAULT_PROFILE
+        manager.set_follows_shared(self.theme_follow_check.isChecked())
+        profile = manager.set_current(name)
+        _restyle_application()
+        QMessageBox.information(
+            self, t('ui.settings_widget.theme_card'),
+            t('ui.settings_widget.theme_applied', name=profile.name))
 
     def _build_currency_page(self) -> QWidget:
         page, root = self._new_page(t('ui.settings_widget.legacy_exact.text_003'), t('ui.settings_widget.currency_region_page_body'))

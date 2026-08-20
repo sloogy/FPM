@@ -25,7 +25,7 @@ from logic.event_bus import AppEventBus
 from logic.budget_export_service import sync_default_outbox_from_session
 from logic.media_storage_service import import_pen_image
 from ui.ui_scale import scale_px
-from ui.theme import BTN_ACCENT, BTN_PRIMARY, BTN_SECONDARY
+from ui.theme import btn_accent, btn_primary, btn_secondary
 # v0.3.02: Gemeinsame Helfer liegen in ui/pen_common (Re-Export für
 # bestehende Nutzer und statische Guards).
 from ui.pen_common import (  # noqa: F401
@@ -100,7 +100,7 @@ class PenWidget(QWidget):
         hdr.addWidget(self.search_edit)
         add_btn = QPushButton(t('ui.pen_widget.fuller_0c6e26b0'))
         add_btn.setProperty('class', 'primary')
-        add_btn.setStyleSheet(BTN_PRIMARY)
+        add_btn.setStyleSheet(btn_primary())
         add_btn.clicked.connect(self._add)
         hdr.addWidget(add_btn)
         import_btn = QPushButton(t('ui.pen_widget.import_e7ffd6f8'))
@@ -108,19 +108,19 @@ class PenWidget(QWidget):
         import_btn.clicked.connect(self._import_pens)
         hdr.addWidget(import_btn)
         copy_btn = QPushButton(t('ui.pen_widget.fuller_kopieren_0fb5ffd0'))
-        copy_btn.setStyleSheet(BTN_ACCENT)
+        copy_btn.setStyleSheet(btn_accent())
         copy_btn.clicked.connect(self._copy_pen)
         hdr.addWidget(copy_btn)
         help_btn = QPushButton(t('ui.pen_widget.service_hilfe_26a2c650'))
-        help_btn.setStyleSheet(BTN_ACCENT)
+        help_btn.setStyleSheet(btn_accent())
         help_btn.clicked.connect(self._show_service_help)
         hdr.addWidget(help_btn)
         size_btn = QPushButton(t('ui.pen_widget.groenvergleich_4de65487'))
-        size_btn.setStyleSheet(BTN_SECONDARY)
+        size_btn.setStyleSheet(btn_secondary())
         size_btn.clicked.connect(self._show_size_compare)
         hdr.addWidget(size_btn)
         export_btn = QPushButton(t('ui.pen_widget.fuller_exportieren_d7b5b88d'))
-        export_btn.setStyleSheet(BTN_SECONDARY)
+        export_btn.setStyleSheet(btn_secondary())
         export_btn.clicked.connect(self._export_pens)
         hdr.addWidget(export_btn)
         from PySide6.QtWidgets import QCheckBox as _QCB

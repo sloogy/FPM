@@ -26,7 +26,7 @@ from logic.enthusiast_lab_service import (
     cleaning_stats_rows,
 )
 from logic.event_bus import AppEventBus
-from ui.theme import BTN_PRIMARY
+from ui.theme import btn_primary
 from ui.ui_scale import scale_px
 from ui.localized_inputs import LocalizedDoubleSpinBox
 from ui.common import ResponsiveDialog
@@ -121,7 +121,7 @@ class EnthusiastLabWidget(QWidget):
         cleaning_layout.setSpacing(10)
         btn_row = QHBoxLayout()
         add_cleaning = QPushButton(t("enthusiast_lab.cleaning.add"))
-        add_cleaning.setStyleSheet(BTN_PRIMARY)
+        add_cleaning.setStyleSheet(btn_primary())
         add_cleaning.clicked.connect(self._add_cleaning_log)
         btn_row.addWidget(add_cleaning)
         btn_row.addStretch()
@@ -147,7 +147,7 @@ class EnthusiastLabWidget(QWidget):
             for key, slot, primary in actions:
                 btn = QPushButton(t(key))
                 if primary:
-                    btn.setStyleSheet(BTN_PRIMARY)
+                    btn.setStyleSheet(btn_primary())
                 btn.clicked.connect(slot)
                 row.addWidget(btn)
             row.addStretch()

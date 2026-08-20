@@ -2088,7 +2088,16 @@
       "vorhandene_datenbankdatei_offnen_wechseln_96515b61": "Vorhandene Datenbankdatei öffnen / wechseln",
       "vorschau_57ca03ef": "Vorschau:",
       "wahrung_150ec8df": "Währung",
-      "was_mochtest_du_tun_3c2ef2c3": "Was möchtest du tun?"
+      "was_mochtest_du_tun_3c2ef2c3": "Was möchtest du tun?",
+      "theme_card": "Designprofil",
+      "theme_label": "Farbschema",
+      "theme_default_option": "Programmstandard ({name})",
+      "theme_apply": "Design übernehmen",
+      "theme_follow_shared": "Dem gemeinsamen Design des LifePlanners folgen",
+      "theme_follow_hint": "Läuft FPM im LifePlanner, gilt das dort zentral gewählte Profil. Ohne Häkchen bleibt die eigene Wahl bestehen.",
+      "theme_applied": "Design „{name}“ übernommen.",
+      "theme_page_body": "Farbschema, Schrift- und UI-Größe. Änderungen wirken sofort auf alle geöffneten Fenster.",
+      "theme_broken": "{count} Profil(e) wurden übersprungen, weil sie fehlerhaft sind."
     },
     "statistics_widget": {
       "all_categories": "Alle Kategorien",

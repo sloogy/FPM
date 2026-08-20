@@ -33,7 +33,7 @@ from database.repositories import InkRepository
 from database.models import Ink
 from i18n.translator import LocaleService, format_money, format_date, t
 from logic.color_family_service import normalize_color_family
-from ui.theme import BTN_ACCENT, BTN_MUTED, BTN_PRIMARY, BTN_SECONDARY, BTN_SUCCESS
+from ui.theme import btn_accent, btn_muted, btn_primary, btn_secondary, btn_success
 
 COLOR_FAMILY_KEYS = [
     "blue", "black", "red", "green", "purple", "brown",
@@ -110,12 +110,12 @@ class InkWidget(QWidget):
         hdr.addWidget(self.search_edit)
 
         add_btn = QPushButton(t('ui.ink_widget.tinte_hinzufugen_988b4827'))
-        add_btn.setStyleSheet(BTN_PRIMARY)
+        add_btn.setStyleSheet(btn_primary())
         add_btn.clicked.connect(self._add)
         hdr.addWidget(add_btn)
 
         copy_btn = QPushButton(t('ui.ink_widget.tinte_kopieren_refill_5292695d'))
-        copy_btn.setStyleSheet(BTN_ACCENT)
+        copy_btn.setStyleSheet(btn_accent())
         copy_btn.clicked.connect(self._copy_refill)
         hdr.addWidget(copy_btn)
 
@@ -125,7 +125,7 @@ class InkWidget(QWidget):
         hdr.addWidget(import_btn)
 
         export_btn = QPushButton(t('ui.ink_widget.tinten_exportieren_a2cdc8a8'))
-        export_btn.setStyleSheet(BTN_SECONDARY)
+        export_btn.setStyleSheet(btn_secondary())
         export_btn.clicked.connect(self._export_inks)
         hdr.addWidget(export_btn)
         root.addLayout(hdr)
@@ -827,9 +827,9 @@ class InkDialog(ResponsiveDialog):
         root.addWidget(scroll)
 
         br = QHBoxLayout(); br.addStretch()
-        cancel = QPushButton(t('ui.ink_widget.abbrechen_049af5c4')); cancel.setStyleSheet(BTN_MUTED)
+        cancel = QPushButton(t('ui.ink_widget.abbrechen_049af5c4')); cancel.setStyleSheet(btn_muted())
         cancel.clicked.connect(self.reject)
-        save = QPushButton(t('ui.ink_widget.speichern_1bd284ab')); save.setStyleSheet(BTN_SUCCESS)
+        save = QPushButton(t('ui.ink_widget.speichern_1bd284ab')); save.setStyleSheet(btn_success())
         save.clicked.connect(self._save)
         br.addWidget(cancel); br.addWidget(save); root.addLayout(br)
 
