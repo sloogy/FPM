@@ -1,3 +1,11 @@
+# v1.0.1 – ZENTRALE DARSTELLUNG IM LIFEPLANNER
+
+- FPM folgt im LifePlanner dem dort zentral gewählten Designprofil: Hauptfenster, Seitenleiste, Toolbar, Tabellen, Eingabefelder, Karten und Dialoge übernehmen dessen Farben.
+- Die Schriftgröße des Profils wirkt als Skalierungsfaktor auf das bestehende UI-Scaling. Der Standardwert 10 ergibt exakt das bisherige Schriftbild.
+- Neu: `ui/host_theme.py` liest das Profil aus `LIFEPLANNER_THEME_FILE` (Format `lifeplanner.theme.v1`). `PALETTE_ROLES` ordnet jedem Farbliteral des Stylesheets die Rolle zu, die es dort tatsächlich hat, statt das Stylesheet vollständig umzubauen.
+- **Ohne LifePlanner ändert sich nichts.** Ist die Variable leer, liefert `get_stylesheet()` unverändert die bisherigen Farben; ein Regressionstest sichert das ab.
+- Nicht enthalten: Inline-`setStyleSheet`-Aufrufe einzelner Widgets führen weiterhin eigene Farben und folgen dem Profil noch nicht.
+
 # v1.0.0 – EXECUTE-BIT-FIX UND ERSTER STABILER RELEASE
 
 - Das veröffentlichte Linux-`.lpmodule` speicherte die Programmdatei nur als `0644`. Im LifePlanner installiert, scheiterte der Modulstart mit `[Errno 13] Keine Berechtigung`.
@@ -259,6 +267,15 @@ Historische Daten aus fehlerhaften EN/FR-Builds (CHF als USD/EUR gespeichert) la
 ---
 
 # Changelog
+
+## 1.0.1 – 20. August 2026
+
+### Zentrale Darstellung im LifePlanner
+- FPM folgt im LifePlanner dem dort zentral gewählten Designprofil: Hauptfenster, Seitenleiste, Toolbar, Tabellen, Eingabefelder, Karten und Dialoge übernehmen dessen Farben.
+- Die Schriftgröße des Profils wirkt als Skalierungsfaktor auf das bestehende UI-Scaling. Der Standardwert 10 ergibt exakt das bisherige Schriftbild.
+- Neu: `ui/host_theme.py` liest das Profil aus `LIFEPLANNER_THEME_FILE` (Format `lifeplanner.theme.v1`). `PALETTE_ROLES` ordnet dabei jedem Farbliteral des Stylesheets die Rolle zu, die es tatsächlich hat.
+- **Ohne LifePlanner ändert sich nichts.** Ist die Variable leer, liefert `get_stylesheet()` unverändert die bisherigen Farben; ein Regressionstest sichert das ab.
+- Nicht enthalten: Inline-`setStyleSheet`-Aufrufe einzelner Widgets führen weiterhin eigene Farben. Sie folgen dem Profil noch nicht.
 
 ## v0.2.91 — Cross-Platform Release Hardening
 
