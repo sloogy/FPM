@@ -1,8 +1,8 @@
-# FountainPen Manager v0.3.05
+# FountainPen Manager v1.0.0
 
 FountainPen Manager ist eine lokale Desktop-App zur Verwaltung von Füllern, Tinten, Federn, Papier, Schreibproben, Rotation, Pflege, Ausgaben, Wishlist und Sammlerwert.
 
-## Release-Fokus v0.3.05
+## Release-Fokus v1.0.0
 
 - Zentraler SSRF-Schutz für Bildimport, Online-Referenzsuche und Updater; private, lokale und link-lokale Netze sowie unsichere Redirects werden blockiert.
 - Aktive Downloads lassen sich tatsächlich abbrechen; Größenlimits und atomare Update-Downloads verhindern unvollständige Dateien.

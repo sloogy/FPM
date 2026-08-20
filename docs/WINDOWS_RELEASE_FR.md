@@ -4,12 +4,12 @@
 
 Cette version crée deux artefacts Windows, selon le modèle du BudgetTool :
 
-- `FountainPenManager-v0.3.05-portable-windows.zip`
-- `FountainPenManager_Setup_0.3.05.exe`
+- `FountainPenManager-v1.0.0-portable-windows.zip`
+- `FountainPenManager_Setup_1.0.0.exe`
 
 Elle crée aussi :
 
-- `FountainPenManager_Setup_0.3.05.zip`
+- `FountainPenManager_Setup_1.0.0.zip`
 - `latest.json`
 - `SHA256SUMS.txt`
 
@@ -54,8 +54,8 @@ Le workflow `.github/workflows/windows-release.yml` compile sur `windows-latest`
 5. SHA256SUMS et `latest.json`
 6. Upload comme artefact et, pour les tags, comme asset GitHub Release
 
-Un tag numéroté tel que `v0.3.05-rc.2` exécute les véritables builds Windows/Linux, l’installeur et les deux modules LifePlanner/LiveManager sans clés de signature. Les résultats sont publiés comme GitHub Prerelease clairement non signée, sans `latest.json`. Le tag final exact `v0.3.05` publie après les mêmes contrôles une version normale non signée avec `latest.json` et `UNSIGNED_RELEASE.txt`. L’installation locale des fichiers `.lpmodule` exige une confirmation explicite de confiance.
+Un tag numéroté tel que `v1.0.0-rc.2` exécute les véritables builds Windows/Linux, l’installeur et les deux modules LifePlanner/LiveManager sans clés de signature. Les résultats sont publiés comme GitHub Prerelease clairement non signée, sans `latest.json`. Le tag final exact `v1.0.0` publie après les mêmes contrôles une version normale non signée avec `latest.json` et `UNSIGNED_RELEASE.txt`. L’installation locale des fichiers `.lpmodule` exige une confirmation explicite de confiance.
 
-## Validation Enterprise v0.3.05
+## Validation Enterprise v1.0.0
 
 Les versions officielles étiquetées sont construites uniquement avec les verrous hachés séparés `constraints-windows.lock` et `constraints-linux.lock`. L’application Windows, l’installeur et les fichiers `.lpmodule` sont explicitement non signés pour cette version ; aucun secret de signature n’est requis. L’absence d’un verrou, d’un contrôle CI, de sommes de contrôle, d’un avertissement ou d’une installation de test par l’hôte bloque le workflow.

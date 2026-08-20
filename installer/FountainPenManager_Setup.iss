@@ -2,7 +2,7 @@
 ; Inno Setup 6.x
 
 #define MyAppName "FountainPen Manager"
-#define MyAppVersion "0.3.05"
+#define MyAppVersion "1.0.0"
 #define MyAppPublisher "FountainPen Community"
 #define MyAppURL "https://github.com/sloogy/FPM/releases"
 #define MyAppExeName "FountainPenManager.exe"

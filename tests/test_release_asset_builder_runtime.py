@@ -33,8 +33,8 @@ def test_combined_asset_builder_creates_verified_cross_platform_release(tmp_path
     installer.mkdir()
     (installer / "FountainPenManager_Setup.exe").write_bytes(b"installer")
 
-    module_windows = tmp_path / "fpm_0.3.05_Windows_x86_64.lpmodule"
-    module_linux = tmp_path / "fpm_0.3.05_Linux_x86_64.lpmodule"
+    module_windows = tmp_path / "fpm_1.0.0_Windows_x86_64.lpmodule"
+    module_linux = tmp_path / "fpm_1.0.0_Linux_x86_64.lpmodule"
     for module in (module_windows, module_linux):
         with zipfile.ZipFile(module, "w") as archive:
             archive.writestr("component.json", b"{}")
@@ -45,11 +45,11 @@ def test_combined_asset_builder_creates_verified_cross_platform_release(tmp_path
             sys.executable,
             str(ROOT / "tools" / "build_release_assets.py"),
             "--version",
-            "0.3.05",
+            "1.0.0",
             "--release-tag",
-            "v0.3.05",
+            "v1.0.0",
             "--base-url",
-            "https://example.invalid/v0.3.05",
+            "https://example.invalid/v1.0.0",
             "--windows-build-dir",
             str(windows),
             "--linux-build-dir",
@@ -67,12 +67,12 @@ def test_combined_asset_builder_creates_verified_cross_platform_release(tmp_path
     )
 
     expected = {
-        "FountainPenManager-v0.3.05-portable-windows.zip",
-        "FountainPenManager-v0.3.05-portable-linux.zip",
-        "FountainPenManager_Setup_0.3.05.exe",
-        "FountainPenManager_Setup_0.3.05.zip",
-        "fpm_0.3.05_Windows_x86_64.lpmodule",
-        "fpm_0.3.05_Linux_x86_64.lpmodule",
+        "FountainPenManager-v1.0.0-portable-windows.zip",
+        "FountainPenManager-v1.0.0-portable-linux.zip",
+        "FountainPenManager_Setup_1.0.0.exe",
+        "FountainPenManager_Setup_1.0.0.zip",
+        "fpm_1.0.0_Windows_x86_64.lpmodule",
+        "fpm_1.0.0_Linux_x86_64.lpmodule",
         "latest.json",
         "UNSIGNED_RELEASE.txt",
         "SHA256SUMS.txt",
@@ -80,8 +80,8 @@ def test_combined_asset_builder_creates_verified_cross_platform_release(tmp_path
     assert expected <= {path.name for path in out.iterdir() if path.is_file()}
 
     manifest = json.loads((out / "latest.json").read_text(encoding="utf-8"))
-    assert manifest["version"] == "0.3.05"
-    assert manifest["release_tag"] == "v0.3.05"
+    assert manifest["version"] == "1.0.0"
+    assert manifest["release_tag"] == "v1.0.0"
     assert manifest["signature_policy"] == "allow-unsigned"
 
     for key in (
@@ -97,18 +97,18 @@ def test_combined_asset_builder_creates_verified_cross_platform_release(tmp_path
         assert asset_path.is_file()
         assert hashlib.sha256(asset_path.read_bytes()).hexdigest() == info["sha256"]
 
-    with zipfile.ZipFile(out / "FountainPenManager-v0.3.05-portable-linux.zip") as archive:
+    with zipfile.ZipFile(out / "FountainPenManager-v1.0.0-portable-linux.zip") as archive:
         names = set(archive.namelist())
         assert {"FountainPenManager", "start-linux.sh", "data/.keep"} <= names
         for name in ("FountainPenManager", "start-linux.sh"):
             mode = archive.getinfo(name).external_attr >> 16
             assert mode & stat.S_IXUSR
 
-    with zipfile.ZipFile(out / "FountainPenManager-v0.3.05-portable-windows.zip") as archive:
+    with zipfile.ZipFile(out / "FountainPenManager-v1.0.0-portable-windows.zip") as archive:
         names = set(archive.namelist())
         assert {"FountainPenManager.exe", "start-windows.cmd", "data/.keep"} <= names
 
-    with zipfile.ZipFile(out / "FountainPenManager_Setup_0.3.05.zip") as archive:
+    with zipfile.ZipFile(out / "FountainPenManager_Setup_1.0.0.zip") as archive:
         notice = archive.read("WINDOWS_DOWNLOAD_HINWEIS.txt").decode("utf-8")
         assert "nicht digital signiert" in notice
 
@@ -135,8 +135,8 @@ def test_prerelease_asset_builder_creates_unsigned_rc_without_update_manifest(tm
     (linux / "_internal" / "runtime.so").write_bytes(b"so")
     installer.mkdir()
     (installer / "FountainPenManager_Setup.exe").write_bytes(b"installer")
-    module_windows = tmp_path / "fpm_0.3.05_Windows_x86_64.lpmodule"
-    module_linux = tmp_path / "fpm_0.3.05_Linux_x86_64.lpmodule"
+    module_windows = tmp_path / "fpm_1.0.0_Windows_x86_64.lpmodule"
+    module_linux = tmp_path / "fpm_1.0.0_Linux_x86_64.lpmodule"
     for module in (module_windows, module_linux):
         with zipfile.ZipFile(module, "w") as archive:
             archive.writestr("component.json", b"{}")
@@ -148,9 +148,9 @@ def test_prerelease_asset_builder_creates_unsigned_rc_without_update_manifest(tm
             str(ROOT / "tools" / "build_release_assets.py"),
             "--prerelease",
             "--version",
-            "0.3.05",
+            "1.0.0",
             "--release-tag",
-            "v0.3.05-rc.1",
+            "v1.0.0-rc.1",
             "--windows-build-dir",
             str(windows),
             "--linux-build-dir",
@@ -168,12 +168,12 @@ def test_prerelease_asset_builder_creates_unsigned_rc_without_update_manifest(tm
     )
 
     expected = {
-        "FountainPenManager-v0.3.05-rc.1-portable-windows.zip",
-        "FountainPenManager-v0.3.05-rc.1-portable-linux.zip",
-        "FountainPenManager_Setup_0.3.05-rc.1.exe",
-        "FountainPenManager_Setup_0.3.05-rc.1.zip",
-        "fpm_0.3.05_Windows_x86_64.lpmodule",
-        "fpm_0.3.05_Linux_x86_64.lpmodule",
+        "FountainPenManager-v1.0.0-rc.1-portable-windows.zip",
+        "FountainPenManager-v1.0.0-rc.1-portable-linux.zip",
+        "FountainPenManager_Setup_1.0.0-rc.1.exe",
+        "FountainPenManager_Setup_1.0.0-rc.1.zip",
+        "fpm_1.0.0_Windows_x86_64.lpmodule",
+        "fpm_1.0.0_Linux_x86_64.lpmodule",
         "UNSIGNED_PRERELEASE.txt",
         "SHA256SUMS.txt",
     }
@@ -185,7 +185,7 @@ def test_prerelease_asset_builder_creates_unsigned_rc_without_update_manifest(tm
     for module in (module_windows.name, module_linux.name):
         with zipfile.ZipFile(out / module) as archive:
             assert "component.json.sig" not in archive.namelist()
-    with zipfile.ZipFile(out / "FountainPenManager_Setup_0.3.05-rc.1.zip") as archive:
+    with zipfile.ZipFile(out / "FountainPenManager_Setup_1.0.0-rc.1.zip") as archive:
         notice = archive.read("WINDOWS_DOWNLOAD_HINWEIS.txt").decode("utf-8")
         assert "nicht digital signiert" in notice
 

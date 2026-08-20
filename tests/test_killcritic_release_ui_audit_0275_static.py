@@ -1,4 +1,4 @@
-"""v0.3.05: KILLCRITIC release/UI audit hardening guards."""
+"""v1.0.0: KILLCRITIC release/UI audit hardening guards."""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,12 +24,12 @@ def test_event_bus_has_headless_fallback_for_logic_imports():
 
 
 def test_release_version_0275_is_consistent_in_primary_files():
-    assert 'APP_VERSION = "0.3.05"' in read("app_info.py")
-    assert "FountainPen Manager Version 0.3.05" in read("VERSION_INFO.txt")
-    assert "# FountainPen Manager v0.3.05" in read("README.md")
-    assert '"version": "0.3.05"' in read("version.json")
-    assert "v0.3.05" in read("latest.json.template")
-    assert "v0.3.05" in read("docs/latest.json.template")
+    assert 'APP_VERSION = "1.0.0"' in read("app_info.py")
+    assert "FountainPen Manager Version 1.0.0" in read("VERSION_INFO.txt")
+    assert "# FountainPen Manager v1.0.0" in read("README.md")
+    assert '"version": "1.0.0"' in read("version.json")
+    assert "v1.0.0" in read("latest.json.template")
+    assert "v1.0.0" in read("docs/latest.json.template")
 
 
 def test_no_owner_placeholder_in_release_files():

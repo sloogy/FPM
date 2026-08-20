@@ -264,7 +264,10 @@ jobs:
             --platform linux-x86_64 --id fpm --version "$FPM_APP_VERSION" \
             --install-root host_install/linux
           test -f "host_install/windows/fpm/${FPM_APP_VERSION}/FountainPenManager/FountainPenManager.exe"
-          test -f "host_install/linux/fpm/${FPM_APP_VERSION}/FountainPenManager/FountainPenManager"
+          test -x "host_install/linux/fpm/${FPM_APP_VERSION}/FountainPenManager/FountainPenManager"
+          # download-artifact drops Unix permissions; a 0644 runtime installs
+          # fine and then fails to start with "[Errno 13]".
+          python -c "import os,stat,sys,zipfile; p='modules/'+os.environ['FPM_MODULE_LINUX']; m=stat.S_IMODE((zipfile.ZipFile(p).getinfo('payload/FountainPenManager/FountainPenManager').external_attr>>16)&0xFFFF); sys.exit(f'{p}: runtime not executable ({oct(m)})') if not m&0o111 else print(f'{p}: runtime mode {oct(m)}')"
 
       - name: Build one complete release asset set and updater manifest
         if: ${{ !contains(github.ref_name, '-') }}

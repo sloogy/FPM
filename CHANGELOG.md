@@ -1,3 +1,12 @@
+# v1.0.0 – EXECUTE-BIT-FIX UND ERSTER STABILER RELEASE
+
+- Das veröffentlichte Linux-`.lpmodule` speicherte die Programmdatei nur als `0644`. Im LifePlanner installiert, scheiterte der Modulstart mit `[Errno 13] Keine Berechtigung`.
+- Ursache: CI holt die geprüfte Runtime über `actions/download-artifact`, das keine Unix-Rechte erhält. Das Paket übernahm diesen Modus unverändert.
+- `build_lifeplanner_module.py` setzt das Execute-Bit der in `module.json` deklarierten Programmdatei jetzt vor dem Packen. Die Leserechte werden in die Ausführrechte gespiegelt, die umask bleibt wirksam, setuid/setgid/sticky werden nie eingeführt.
+- Fehlt die deklarierte Programmdatei im Payload, bricht der Build ab, statt ein unstartbares Paket zu veröffentlichen.
+- Der Releaseworkflow prüft die Ausführbarkeit jetzt echt: `test -x` auf die Hostinstallation und eine Modusprüfung im gebauten `.lpmodule`. Bisher wurde nur `test -f` geprüft, weshalb der Fehler nie auffiel.
+- Version auf 1.0.0 angehoben.
+
 # v0.3.05 – ENTERPRISE + LIFEPLANNER RELEASE PIPELINE
 
 - LifePlanner-Modulbau in die vollständige Enterprise-Release-Pipeline integriert.

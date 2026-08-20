@@ -1,4 +1,5 @@
 """v0.3.05 end-to-end LifePlanner release-chain tests."""
+
 from __future__ import annotations
 
 import base64
@@ -38,7 +39,11 @@ def _keypair() -> tuple[str, str]:
 def _runtime(tmp_path: Path, platform: str) -> Path:
     root = tmp_path / platform / "FountainPenManager"
     (root / "_internal").mkdir(parents=True)
-    binary = root / ("FountainPenManager.exe" if platform == "windows-x86_64" else "FountainPenManager")
+    binary = root / (
+        "FountainPenManager.exe"
+        if platform == "windows-x86_64"
+        else "FountainPenManager"
+    )
     binary.write_bytes(b"verified runtime binary\n")
     if platform == "linux-x86_64":
         binary.chmod(binary.stat().st_mode | stat.S_IXUSR)
@@ -61,7 +66,9 @@ def _attest(tmp_path: Path, runtime: Path, platform: str, private_b64: str):
 
 def _build(tmp_path: Path, platform: str, private_b64: str, public_b64: str) -> Path:
     runtime = _runtime(tmp_path, platform)
-    manifest, signature, attested_public = _attest(tmp_path, runtime, platform, private_b64)
+    manifest, signature, attested_public = _attest(
+        tmp_path, runtime, platform, private_b64
+    )
     assert attested_public == public_b64
     output = tmp_path / "modules" / module_asset_name("fpm", APP_VERSION, platform)
     return build_module(
@@ -102,8 +109,14 @@ def test_real_module_build_signature_and_host_install(tmp_path, platform):
         expected_version=APP_VERSION,
         expected_platform=platform,
     )
-    executable = target / "FountainPenManager" / (
-        "FountainPenManager.exe" if platform == "windows-x86_64" else "FountainPenManager"
+    executable = (
+        target
+        / "FountainPenManager"
+        / (
+            "FountainPenManager.exe"
+            if platform == "windows-x86_64"
+            else "FountainPenManager"
+        )
     )
     assert executable.is_file()
 
@@ -147,17 +160,21 @@ def test_unsigned_release_module_matches_lifeplanner_manual_install_contract(
         expected_version=APP_VERSION,
         expected_platform=platform,
     )
-    executable = target / "FountainPenManager" / (
-        "FountainPenManager.exe"
-        if platform == "windows-x86_64"
-        else "FountainPenManager"
+    executable = (
+        target
+        / "FountainPenManager"
+        / (
+            "FountainPenManager.exe"
+            if platform == "windows-x86_64"
+            else "FountainPenManager"
+        )
     )
     assert executable.is_file()
 
 
 def test_unsigned_module_builder_rejects_unversioned_tag(tmp_path):
     runtime = _runtime(tmp_path, "linux-x86_64")
-    with pytest.raises(ValueError, match="require.*v0.3.05"):
+    with pytest.raises(ValueError, match="require.*v1.0.0"):
         build_unsigned_release_module(
             runtime_dir=runtime,
             runtime_name="FountainPenManager",
@@ -190,7 +207,9 @@ def test_module_build_refuses_runtime_modified_after_attestation(tmp_path):
 
 
 def _rewrite_zip(source: Path, target: Path, mutate_name: str, mutate) -> None:
-    with zipfile.ZipFile(source) as src, zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as dst:
+    with zipfile.ZipFile(source) as src, zipfile.ZipFile(
+        target, "w", zipfile.ZIP_DEFLATED
+    ) as dst:
         for info in src.infolist():
             data = src.read(info.filename)
             if info.filename == mutate_name:
@@ -213,7 +232,9 @@ def test_host_rejects_component_metadata_tampering(tmp_path):
         verify_module(tampered, public_key_b64=public_b64)
 
 
-def test_host_rejects_payload_tampering_even_with_untouched_metadata_signature(tmp_path):
+def test_host_rejects_payload_tampering_even_with_untouched_metadata_signature(
+    tmp_path,
+):
     private_b64, public_b64 = _keypair()
     module = _build(tmp_path, "linux-x86_64", private_b64, public_b64)
     tampered = tmp_path / "tampered-payload.lpmodule"
@@ -229,7 +250,9 @@ def test_host_rejects_payload_tampering_even_with_untouched_metadata_signature(t
 
 def test_release_workflow_has_one_publisher_and_no_parallel_module_release():
     root = Path(__file__).resolve().parents[1]
-    workflow = (root / ".github/workflows/windows-release.yml").read_text(encoding="utf-8")
+    workflow = (root / ".github/workflows/windows-release.yml").read_text(
+        encoding="utf-8"
+    )
     all_workflows = "\n".join(
         path.read_text(encoding="utf-8")
         for path in (root / ".github" / "workflows").glob("*.yml")
@@ -239,7 +262,9 @@ def test_release_workflow_has_one_publisher_and_no_parallel_module_release():
     assert "lifeplanner_host_contract.py" in workflow
     assert "--output-dir modules" in workflow
     assert "--allow-unsigned" in workflow
-    assert "v0.3.05" not in workflow  # tag and asset names must be derived, never hard-coded here
+    assert (
+        "v1.0.0" not in workflow
+    )  # tag and asset names must be derived, never hard-coded here
     assert not (root / ".github/workflows/lifeplanner-module-release.yml").exists()
 
 
@@ -265,7 +290,9 @@ def test_host_rejects_path_traversal_and_windows_separator_entries(tmp_path):
     private_b64, public_b64 = _keypair()
     module = _build(tmp_path, "linux-x86_64", private_b64, public_b64)
     hostile = tmp_path / "hostile-path.lpmodule"
-    with zipfile.ZipFile(module) as src, zipfile.ZipFile(hostile, "w", zipfile.ZIP_DEFLATED) as dst:
+    with zipfile.ZipFile(module) as src, zipfile.ZipFile(
+        hostile, "w", zipfile.ZIP_DEFLATED
+    ) as dst:
         for info in src.infolist():
             dst.writestr(info, src.read(info.filename))
         dst.writestr("payload/../escape.txt", b"escape")
@@ -273,7 +300,9 @@ def test_host_rejects_path_traversal_and_windows_separator_entries(tmp_path):
         verify_module(hostile, public_key_b64=public_b64)
 
     hostile_windows = tmp_path / "hostile-windows-path.lpmodule"
-    with zipfile.ZipFile(module) as src, zipfile.ZipFile(hostile_windows, "w", zipfile.ZIP_DEFLATED) as dst:
+    with zipfile.ZipFile(module) as src, zipfile.ZipFile(
+        hostile_windows, "w", zipfile.ZIP_DEFLATED
+    ) as dst:
         for info in src.infolist():
             dst.writestr(info, src.read(info.filename))
         dst.writestr("payload\\..\\escape.txt", b"escape")
@@ -328,8 +357,7 @@ def test_release_candidate_publishes_unsigned_modules_without_update_manifest():
     assert 'assert "component.json.sig" not in names' in workflow
     assert "test ! -f prerelease_assets/latest.json" in workflow
     production_only = (
-        "startsWith(github.ref, 'refs/tags/') && "
-        "!contains(github.ref_name, '-')"
+        "startsWith(github.ref, 'refs/tags/') && " "!contains(github.ref_name, '-')"
     )
     assert workflow.count(production_only) == 0
     assert workflow.count("if: ${{ !contains(github.ref_name, '-') }}") == 3
@@ -347,3 +375,49 @@ def test_stable_release_is_explicitly_unsigned_and_keyless():
     assert "WINDOWS_SIGNING_CERT_PASSWORD" not in workflow
     assert "LIFEPLANNER_UPDATE_PRIVATE_KEY_B64" not in workflow
     assert "signtool" not in workflow.lower()
+
+
+def test_packaged_linux_runtime_is_recorded_executable(tmp_path):
+    """End-to-end: the built .lpmodule must record the runtime as executable.
+
+    CI fetches the gated runtime via actions/download-artifact, which drops Unix
+    permissions. A 0644 runtime installs fine and then fails to start with
+    "[Errno 13] Keine Berechtigung".
+    """
+    import stat as _stat
+
+    runtime = _runtime(tmp_path, "linux-x86_64")
+    (runtime / "FountainPenManager").chmod(0o644)  # what download-artifact delivers
+
+    module = build_unsigned_release_module(
+        runtime_dir=runtime,
+        runtime_name="FountainPenManager",
+        platform="linux-x86_64",
+        release_tag=f"v{APP_VERSION}",
+        output=tmp_path
+        / "modules"
+        / module_asset_name("fpm", APP_VERSION, "linux-x86_64"),
+        requires_host=">=0.5.0",
+    )
+
+    with zipfile.ZipFile(module) as archive:
+        info = archive.getinfo("payload/FountainPenManager/FountainPenManager")
+    mode = _stat.S_IMODE((info.external_attr >> 16) & 0xFFFF)
+    assert mode & 0o111, f"runtime packaged without execute bit: {oct(mode)}"
+    assert not mode & 0o7000, "setuid/setgid/sticky must never be introduced"
+
+
+def test_module_build_rejects_missing_declared_runtime(tmp_path):
+    import json
+
+    from tools.build_lifeplanner_module import _grant_runtime_execute_bit
+
+    payload = tmp_path / "payload"
+    payload.mkdir()
+    manifest = json.loads(
+        (Path(__file__).resolve().parents[1] / "module.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    with pytest.raises(ValueError, match="missing in payload"):
+        _grant_runtime_execute_bit(payload, manifest, "linux-x86_64")
