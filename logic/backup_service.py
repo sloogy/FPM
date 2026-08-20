@@ -8,6 +8,7 @@ import shutil
 import sqlite3
 import tempfile
 import zipfile
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -43,10 +44,13 @@ def _sha256(path: Path) -> str:
 
 def _sqlite_snapshot(source_path: Path, destination_path: Path) -> None:
     destination_path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(f"file:{source_path}?mode=ro", uri=True) as source:
-        with sqlite3.connect(destination_path) as destination:
+    with closing(
+        sqlite3.connect(f"file:{source_path}?mode=ro", uri=True)
+    ) as source:
+        with closing(sqlite3.connect(destination_path)) as destination:
             source.backup(destination)
-    with sqlite3.connect(destination_path) as check:
+            destination.commit()
+    with closing(sqlite3.connect(destination_path)) as check:
         integrity = check.execute("PRAGMA integrity_check").fetchone()
         if not integrity or str(integrity[0]).lower() != "ok":
             raise ValueError(f"SQLite-Snapshot ist beschädigt: {integrity}")
@@ -173,7 +177,7 @@ def inspect_backup(archive_path: str | Path) -> dict:
         with tempfile.TemporaryDirectory(prefix="fpm_backup_check_") as temp_name:
             db_copy = Path(temp_name) / "fpm.db"
             db_copy.write_bytes(archive.read(DB_ARCHIVE_PATH))
-            with sqlite3.connect(db_copy) as connection:
+            with closing(sqlite3.connect(db_copy)) as connection:
                 integrity = connection.execute("PRAGMA integrity_check").fetchone()
                 if not integrity or str(integrity[0]).lower() != "ok":
                     raise ValueError(f"Datenbank im Backup ist beschädigt: {integrity}")

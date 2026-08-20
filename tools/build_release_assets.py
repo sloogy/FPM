@@ -107,14 +107,28 @@ def copy_bundle(binary: Path, destination: Path) -> None:
         die(f"PyInstaller-onedir-Bundle ohne _internal/: {destination}")
 
 
-def write_zip(zip_path: Path, source_dir: Path) -> None:
+def write_zip(
+    zip_path: Path,
+    source_dir: Path,
+    *,
+    executable_names: frozenset[str] = frozenset(),
+) -> None:
     zip_path.parent.mkdir(parents=True, exist_ok=True)
     zip_path.unlink(missing_ok=True)
 
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(source_dir.rglob("*")):
             if path.is_file():
-                archive.write(path, path.relative_to(source_dir).as_posix())
+                archive_name = path.relative_to(source_dir).as_posix()
+                info = zipfile.ZipInfo.from_file(path, archive_name)
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.create_system = 3
+                mode = path.stat().st_mode
+                if archive_name in executable_names:
+                    mode |= stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+                info.external_attr = (mode & 0xFFFF) << 16
+                with path.open("rb") as source, archive.open(info, "w") as target:
+                    shutil.copyfileobj(source, target, length=1024 * 1024)
 
 
 def write_windows_starter(path: Path) -> None:
@@ -202,7 +216,12 @@ def create_portable_zip(
     zip_path = output_dir / (
         f"FountainPenManager-v{version}-portable-{platform_name}.zip"
     )
-    write_zip(zip_path, work)
+    executable_names = (
+        frozenset({LINUX_BINARY, "start-linux.sh"})
+        if platform_name == "linux"
+        else frozenset()
+    )
+    write_zip(zip_path, work, executable_names=executable_names)
     shutil.rmtree(work)
     return zip_path
 

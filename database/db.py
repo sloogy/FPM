@@ -12,6 +12,7 @@ import logging
 import sqlite3
 import os
 import re
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 from sqlalchemy import create_engine, event, text
@@ -203,7 +204,7 @@ def _run_migration(name: str, migration) -> None:
 def _database_needs_migration(db_path: Path) -> bool:
     """Prüft ohne SQLAlchemy-Start, ob ein Vor-Migrationsbackup nötig ist."""
     try:
-        with sqlite3.connect(db_path) as connection:
+        with closing(sqlite3.connect(db_path)) as connection:
             table = connection.execute(
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name='app_settings'"
             ).fetchone()
@@ -500,7 +501,9 @@ def verify_sqlite_integrity(path: Path, *, full: bool = True) -> None:
     if not path.is_file():
         raise FileNotFoundError(path)
     pragma = "integrity_check" if full else "quick_check"
-    with sqlite3.connect(_sqlite_readonly_uri(path), uri=True) as connection:
+    with closing(
+        sqlite3.connect(_sqlite_readonly_uri(path), uri=True)
+    ) as connection:
         rows = [str(row[0]).strip().lower() for row in connection.execute(f"PRAGMA {pragma}")]
     if rows != ["ok"]:
         raise RuntimeError(f"SQLite-{pragma} fehlgeschlagen: {rows or ['kein Ergebnis']}")
@@ -517,10 +520,10 @@ def create_consistent_backup(source: Path, target: Path) -> Path:
     temporary.unlink(missing_ok=True)
 
     try:
-        with sqlite3.connect(str(source)) as source_db:
+        with closing(sqlite3.connect(str(source))) as source_db:
             # Flush pending WAL frames without requiring exclusive access.
             source_db.execute("PRAGMA wal_checkpoint(PASSIVE)")
-            with sqlite3.connect(str(temporary)) as backup_db:
+            with closing(sqlite3.connect(str(temporary))) as backup_db:
                 source_db.backup(backup_db, pages=256, sleep=0.02)
                 backup_db.commit()
         verify_sqlite_integrity(temporary, full=True)
