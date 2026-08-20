@@ -66,6 +66,9 @@ def test_parser_accepts_comma_and_point_without_factor_error():
     assert parse("12,34,56", ".", "'") is None
     assert parse("12.34,56", ",", ".") is None
     assert parse("1.234.567,89", ",", ".") == 1234567.89
+    assert parse("12'34", ".", "'") is None
+    assert parse("12 34,56", ",", " ") is None
+    assert parse("1 234 56,78", ",", " ") is None
     assert parse("not a number", ".", "'") is None
 
 
@@ -172,7 +175,7 @@ def test_iso_currency_translation_keys_never_change_codes():
 def test_all_ui_decimal_spinboxes_use_app_locale_wrapper():
     direct_imports = []
     for path in (ROOT / "ui").glob("*.py"):
-        if path.name == "locale_widgets.py":
+        if path.name in {"locale_widgets.py", "localized_inputs.py"}:
             continue
         src = path.read_text(encoding="utf-8")
         if "from PySide6.QtWidgets" in src and "QDoubleSpinBox" in src:

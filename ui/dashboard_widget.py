@@ -8,16 +8,16 @@ FIX v0.2.3:
   da kein Marktwert für Tinten vorhanden ist.
 """
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QWidget, QVBoxLayout, QLabel,
     QTableWidget, QTableWidgetItem, QHeaderView,
-    QGroupBox, QMenu, QApplication, QPushButton,
+    QGroupBox, QScrollArea, QMenu, QApplication, QPushButton,
+    QGridLayout, QSizePolicy, QFrame,
 )
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtGui import QColor, QFont, QKeyEvent, QMouseEvent
 
 from database.db import get_session
-from database.models import Pen, Ink, InkLoad, Expense, Paper
-from i18n.translator import LocaleService, format_money, format_date, t
+from i18n.translator import LocaleService, format_money, t
 from logic.event_bus import AppEventBus
 from logic.rule_engine import RuleEngine
 from logic.collection_health_service import build_collection_health
@@ -27,39 +27,142 @@ from logic.budget_export_service import load_budgetmanager_savings_goals
 # ---------------------------------------------------------------------------
 # Statistik-Karte
 # ---------------------------------------------------------------------------
-def _card(value: str, label: str, color: str = "#2c3e50") -> QWidget:
-    w = QWidget()
-    w.setStyleSheet("background:white; border-radius:8px; border:1px solid #d5dce6;")
-    lay = QVBoxLayout(w)
-    lay.setContentsMargins(18, 16, 18, 16)
+class DashboardTile(QFrame):
+    """Kompakte Dashboard-Kachel mit getrenntem Einfach- und Doppelklick.
 
-    val_lbl = QLabel(value)
-    val_lbl.setObjectName("card_value")
-    val_lbl.setStyleSheet(f"font-size:30px; font-weight:bold; color:{color}; border:none;")
-    val_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    Ein einfacher Klick wird kurz verzögert, damit ein Doppelklick nicht zuerst
+    die Tabelle öffnet und unmittelbar danach die Seite wechselt.
+    """
 
-    txt_lbl = QLabel(label)
-    txt_lbl.setStyleSheet("font-size:12px; color:#7f8c8d; letter-spacing:1px; border:none;")
-    txt_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    clicked = Signal(str)
+    double_clicked = Signal(int)
 
-    lay.addWidget(val_lbl)
-    lay.addWidget(txt_lbl)
-    return w
+    def __init__(self, key: str, title: str, page: int, accent: str, parent=None):
+        super().__init__(parent)
+        self.key = key
+        self.page = page
+        self.accent = accent
+        self._selected = False
+        self.setObjectName("dashboardTile")
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.setMinimumHeight(104)
 
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(5)
 
-def _set_card_value(card_widget: QWidget, text: str) -> None:
-    """Setzt den Hauptwert-Label einer Statistik-Karte."""
-    lbl = card_widget.findChild(QLabel, "card_value")
-    if lbl:
-        lbl.setText(text)
+        self.title_label = QLabel(title)
+        self.title_label.setObjectName("dashboardTileTitle")
+        self.primary_label = QLabel("–")
+        self.primary_label.setObjectName("dashboardTilePrimary")
+        self.primary_label.setWordWrap(True)
+        self.detail_label = QLabel("")
+        self.detail_label.setObjectName("dashboardTileDetail")
+        self.detail_label.setWordWrap(True)
+        self.open_button = QPushButton(t("dashboard.tiles.open_tab"))
+        self.open_button.setObjectName("dashboardTileOpenButton")
+        self.open_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.open_button.setToolTip(t("dashboard.tiles.open_tab_tooltip"))
+        self.open_button.clicked.connect(lambda: self.double_clicked.emit(self.page))
 
+        for label in (self.title_label, self.primary_label, self.detail_label):
+            label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
 
-BLOCKING_STATUSES = {"problem", "service", "blocked", "dry_risk"}
-def _status_label(key: str | None) -> str:
-    return t(f"dashboard.status_labels.{key}") if key else ""
+        layout.addWidget(self.title_label)
+        layout.addWidget(self.primary_label)
+        layout.addWidget(self.detail_label)
+        layout.addStretch(1)
+        layout.addWidget(self.open_button, 0, Qt.AlignmentFlag.AlignRight)
 
-def _pen_name(pen: Pen) -> str:
-    return f"{pen.brand} {pen.model}".strip()
+        self._single_click_timer = QTimer(self)
+        self._single_click_timer.setSingleShot(True)
+        self._single_click_timer.timeout.connect(lambda: self.clicked.emit(self.key))
+        self._apply_style()
+
+    def set_summary(self, primary: str, detail: str = "") -> None:
+        self.primary_label.setText(primary or "–")
+        self.detail_label.setText(detail or "")
+
+    def set_selected(self, selected: bool) -> None:
+        selected = bool(selected)
+        if self._selected == selected:
+            return
+        self._selected = selected
+        self._apply_style()
+
+    def _apply_style(self) -> None:
+        border = self.accent if self._selected else "#d5dce6"
+        background = "#eff6ff" if self._selected else "#ffffff"
+        self.setStyleSheet(f"""
+            QFrame#dashboardTile {{
+                background: {background};
+                border: 2px solid {border};
+                border-radius: 9px;
+            }}
+            QFrame#dashboardTile:hover {{
+                background: #f8fbff;
+                border-color: {self.accent};
+            }}
+            QLabel#dashboardTileTitle {{
+                color: {self.accent};
+                border: none;
+                font-size: 12px;
+                font-weight: 800;
+            }}
+            QLabel#dashboardTilePrimary {{
+                color: #1e2a38;
+                border: none;
+                font-size: 17px;
+                font-weight: 800;
+            }}
+            QLabel#dashboardTileDetail {{
+                color: #5f6f72;
+                border: none;
+                font-size: 12px;
+            }}
+            QPushButton#dashboardTileOpenButton {{
+                color: {self.accent};
+                background: transparent;
+                border: 1px solid {self.accent};
+                border-radius: 5px;
+                padding: 3px 8px;
+                min-height: 22px;
+                font-size: 11px;
+                font-weight: 700;
+            }}
+            QPushButton#dashboardTileOpenButton:hover {{
+                color: white;
+                background: {self.accent};
+            }}
+        """)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            interval = max(180, int(QApplication.doubleClickInterval()))
+            self._single_click_timer.start(interval)
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._single_click_timer.stop()
+            self.double_clicked.emit(self.page)
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                self.double_clicked.emit(self.page)
+            else:
+                self.clicked.emit(self.key)
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
 
 # ---------------------------------------------------------------------------
@@ -82,16 +185,33 @@ class DashboardWidget(QWidget):
         bus.expenses_changed.connect(self.refresh)
 
     def _setup_ui(self):
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(24, 24, 24, 24)
-        outer.setSpacing(20)
+        # Das Dashboard ist eine kompakte Kachelübersicht. Detailtabellen werden
+        # erst nach einem Klick eingeblendet; dadurch bleibt die Laptopansicht
+        # ruhig und kurz, ohne Informationen zu verstecken.
+        host = QVBoxLayout(self)
+        host.setContentsMargins(0, 0, 0, 0)
+        host.setSpacing(0)
 
-        # Titel
+        self._scroll = QScrollArea(self)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        host.addWidget(self._scroll)
+
+        content = QWidget()
+        content.setObjectName("dashboardScrollContent")
+        content.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self._scroll.setWidget(content)
+
+        outer = QVBoxLayout(content)
+        outer.setContentsMargins(18, 16, 18, 18)
+        outer.setSpacing(12)
+        self._content_layout = outer
+
         title = QLabel(t('ui.dashboard_widget.dashboard_25b5cd12'))
         title.setObjectName("page_title")
         outer.addWidget(title)
 
-        # ── Onboarding (erscheint nur bei leerer DB) ────────────────────
         self._onboarding = QGroupBox(t("tour.quickstart.title"))
         self._onboarding.setStyleSheet(
             "QGroupBox { background:#eff6ff; border:2px solid #3b82f6; border-radius:8px; }"
@@ -101,17 +221,19 @@ class DashboardWidget(QWidget):
         ob_text.setWordWrap(True)
         ob_text.setStyleSheet("border:none; color:#1e3a5f; font-size:13px;")
         ob_layout.addWidget(ob_text)
-        self._onboarding.setVisible(False)  # initial ausgeblendet
+        self._onboarding.setVisible(False)
         outer.addWidget(self._onboarding)
 
-        # ── DAU-Schnellstart: genau die vier häufigsten Alltagsaktionen ──
         quick_group = QGroupBox(t("dashboard.quick_actions.title"))
         quick_layout = QVBoxLayout(quick_group)
         quick_hint = QLabel(t("dashboard.quick_actions.hint"))
         quick_hint.setWordWrap(True)
         quick_hint.setStyleSheet("border:none; color:#475569; font-size:13px;")
         quick_layout.addWidget(quick_hint)
-        quick_buttons = QHBoxLayout()
+        self._quick_buttons_layout = QGridLayout()
+        self._quick_buttons_layout.setHorizontalSpacing(8)
+        self._quick_buttons_layout.setVerticalSpacing(8)
+        self._quick_buttons = []
         for label_key, page, method in (
             ("dashboard.quick_actions.add_pen", 1, "_add"),
             ("dashboard.quick_actions.add_ink", 2, "_add"),
@@ -121,43 +243,60 @@ class DashboardWidget(QWidget):
             btn = QPushButton(t(label_key))
             btn.setObjectName("dashboardPrimaryAction")
             btn.clicked.connect(lambda checked=False, p=page, m=method: self.action_requested.emit(p, m))
-            quick_buttons.addWidget(btn)
-        quick_buttons.addStretch(1)
-        quick_layout.addLayout(quick_buttons)
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            self._quick_buttons.append(btn)
+        quick_layout.addLayout(self._quick_buttons_layout)
         outer.addWidget(quick_group)
 
-        # ── Stat-Karten ──────────────────────────────────────────────
-        # v0.2.79: Entlastet – nur noch die vier Alltagswerte als grosse
-        # Karten. Bestand/Service/Archiv wandern in eine kompakte Textzeile
-        # darunter (Details weiterhin per Tooltip).
-        cards_row = QHBoxLayout()
-        cards_row.setSpacing(14)
+        tile_hint = QLabel(t("dashboard.tiles.interaction_hint"))
+        tile_hint.setWordWrap(True)
+        tile_hint.setStyleSheet("color:#64748b; border:none; padding:0 2px;")
+        outer.addWidget(tile_hint)
 
-        self._card_active = _card("–", t("dashboard.active_pens"),     "#27ae60")
-        self._card_inks   = _card("–", t("dashboard.total_inks"),        "#3498db")
-        self._card_warn   = _card("–", t("dashboard.ink_timer"),  "#e74c3c")
-        self._card_value  = _card("–", t("dashboard.collection_value"), "#9b59b6")
-
-        for c in (self._card_active, self._card_inks, self._card_warn, self._card_value):
-            cards_row.addWidget(c)
-        outer.addLayout(cards_row)
-
-        self._inventory_line = QLabel("")
-        self._inventory_line.setWordWrap(True)
-        self._inventory_line.setStyleSheet(
-            "color:#64748b; font-size:12px; border:none; padding:0 4px;"
+        self._tiles_grid = QGridLayout()
+        self._tiles_grid.setHorizontalSpacing(10)
+        self._tiles_grid.setVerticalSpacing(10)
+        self._tile_collection = DashboardTile(
+            "collection", t("dashboard.tiles.collection.title"), 11, "#8e44ad", content
         )
-        outer.addWidget(self._inventory_line)
+        self._tile_rotation = DashboardTile(
+            "rotation", t("dashboard.tiles.rotation.title"), 5, "#d35400", content
+        )
+        self._tile_service = DashboardTile(
+            "service", t("dashboard.tiles.service.title"), 1, "#c0392b", content
+        )
+        self._tile_activity = DashboardTile(
+            "activity", t("dashboard.tiles.activity.title"), 5, "#2471a3", content
+        )
+        self._tile_budget = DashboardTile(
+            "budget", t("dashboard.tiles.budget.title"), 6, "#168f6a", content
+        )
+        self._tiles = (
+            self._tile_collection,
+            self._tile_rotation,
+            self._tile_service,
+            self._tile_activity,
+            self._tile_budget,
+        )
+        self._tiles_by_key = {tile.key: tile for tile in self._tiles}
+        for tile in self._tiles:
+            tile.clicked.connect(self._toggle_detail)
+            tile.double_clicked.connect(self.navigate_to.emit)
+        self._tile_budget.setVisible(False)
+        outer.addLayout(self._tiles_grid)
 
-        # ── BudgetManager-Sparziele ─────────────────────────────────
+        self._detail_groups: dict[str, QGroupBox] = {}
+        self._detail_tables: dict[str, QTableWidget] = {}
+        self._expanded_detail: str | None = None
+
         self.bm_goals_group = QGroupBox(t("budget_goals.title"))
         bm_goals_layout = QVBoxLayout(self.bm_goals_group)
         bm_goals_hint = QLabel(t("budget_goals.hint"))
         bm_goals_hint.setWordWrap(True)
-        bm_goals_hint.setStyleSheet("color:#7f8c8d; border:none; padding:2px;")
+        bm_goals_hint.setStyleSheet("color:#5f6f72; border:none; padding:2px;")
         bm_goals_layout.addWidget(bm_goals_hint)
-
         self.bm_goals_table = QTableWidget()
+        self._prepare_table(self.bm_goals_table)
         self.bm_goals_table.setColumnCount(5)
         self.bm_goals_table.setHorizontalHeaderLabels([
             t("budget_goals.headers.goal"),
@@ -169,66 +308,70 @@ class DashboardWidget(QWidget):
         self.bm_goals_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.bm_goals_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.bm_goals_table.setAlternatingRowColors(True)
-        self.bm_goals_table.setMaximumHeight(170)
         bm_goals_layout.addWidget(self.bm_goals_table)
-        self.bm_goals_group.setVisible(False)
         outer.addWidget(self.bm_goals_group)
+        self._register_detail("budget", self.bm_goals_group, self.bm_goals_table, 6)
 
-        # ── Safety-Timer ────────────────────────────────────────────
-        # ── Ink Safety Timer ─────────────────────────────────────────
-        timer_group = QGroupBox(t('ui.dashboard_widget.ink_safety_timer_tinten_mit_langer_standzeit_d2a1f605'))
-        self._timer_group = timer_group
-        timer_layout = QVBoxLayout(timer_group)
-
-        self.timer_table = QTableWidget()
-        self.timer_table.setColumnCount(5)
-        self.timer_table.setHorizontalHeaderLabels(
-            [t('ui.dashboard_widget.fuller_f8544bb5'), t('ui.dashboard_widget.tinte_67575656'), t('ui.dashboard_widget.eingefullt_tage_84b9bdb1'), t('ui.dashboard_widget.max_tage_fd6d6777'), t('ui.dashboard_widget.status_b9296686')]
+        self._timer_group = QGroupBox(
+            t('ui.dashboard_widget.ink_safety_timer_tinten_mit_langer_standzeit_d2a1f605')
         )
+        timer_layout = QVBoxLayout(self._timer_group)
+        self.timer_table = QTableWidget()
+        self._prepare_table(self.timer_table)
+        self.timer_table.setColumnCount(5)
+        self.timer_table.setHorizontalHeaderLabels([
+            t('ui.dashboard_widget.fuller_f8544bb5'),
+            t('ui.dashboard_widget.tinte_67575656'),
+            t('ui.dashboard_widget.eingefullt_tage_84b9bdb1'),
+            t('ui.dashboard_widget.max_tage_fd6d6777'),
+            t('ui.dashboard_widget.status_b9296686'),
+        ])
         self.timer_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.timer_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.timer_table.setAlternatingRowColors(True)
-        self.timer_table.setMaximumHeight(150)
         self.timer_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.timer_table.customContextMenuRequested.connect(
             lambda pos: self._table_menu(self.timer_table, pos, pen_col=0, ink_col=1)
         )
         timer_layout.addWidget(self.timer_table)
-        outer.addWidget(timer_group)
+        outer.addWidget(self._timer_group)
+        self._register_detail("rotation", self._timer_group, self.timer_table, 5)
 
-        # ── Service & Sperren ───────────────────────────────────────
-        lock_group = QGroupBox(t('ui.dashboard_widget.service_sperren_e9cbcd0b'))
-        self._lock_group = lock_group
-        lock_layout = QVBoxLayout(lock_group)
+        self._lock_group = QGroupBox(t('ui.dashboard_widget.service_sperren_e9cbcd0b'))
+        lock_layout = QVBoxLayout(self._lock_group)
         lock_hint = QLabel(t('ui.dashboard_widget.zeigt_fuller_im_service_manuelle_sperren_und_kri_affc2843'))
         lock_hint.setWordWrap(True)
-        lock_hint.setStyleSheet("color:#7f8c8d; border:none; padding:2px;")
+        lock_hint.setStyleSheet("color:#5f6f72; border:none; padding:2px;")
         lock_layout.addWidget(lock_hint)
-
         self.service_table = QTableWidget()
+        self._prepare_table(self.service_table)
         self.service_table.setColumnCount(5)
-        self.service_table.setHorizontalHeaderLabels([t('ui.dashboard_widget.fuller_f8544bb5'), t('ui.dashboard_widget.status_b9296686'), t('ui.dashboard_widget.grund_f6662f1d'), t('ui.dashboard_widget.bis_tage_a2f3c21a'), t('ui.dashboard_widget.aktion_4256e9e9')])
+        self.service_table.setHorizontalHeaderLabels([
+            t('ui.dashboard_widget.fuller_f8544bb5'),
+            t('ui.dashboard_widget.status_b9296686'),
+            t('ui.dashboard_widget.grund_f6662f1d'),
+            t('ui.dashboard_widget.bis_tage_a2f3c21a'),
+            t('ui.dashboard_widget.aktion_4256e9e9'),
+        ])
         self.service_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.service_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.service_table.setAlternatingRowColors(True)
-        self.service_table.setMaximumHeight(150)
         self.service_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.service_table.customContextMenuRequested.connect(
             lambda pos: self._table_menu(self.service_table, pos, pen_col=0, ink_col=None)
         )
         lock_layout.addWidget(self.service_table)
-        outer.addWidget(lock_group)
+        outer.addWidget(self._lock_group)
+        self._register_detail("service", self._lock_group, self.service_table, 1)
 
-        # ── Sammlungs-Advisor ─────────────────────────────────────
-        health_group = QGroupBox(t("collector_health.title"))
-        self._health_group = health_group
-        health_layout = QVBoxLayout(health_group)
+        self._health_group = QGroupBox(t("collector_health.title"))
+        health_layout = QVBoxLayout(self._health_group)
         health_hint = QLabel(t("collector_health.hint"))
         health_hint.setWordWrap(True)
-        health_hint.setStyleSheet("color:#7f8c8d; border:none; padding:2px;")
+        health_hint.setStyleSheet("color:#5f6f72; border:none; padding:2px;")
         health_layout.addWidget(health_hint)
-
         self.health_table = QTableWidget()
+        self._prepare_table(self.health_table)
         self.health_table.setColumnCount(5)
         self.health_table.setHorizontalHeaderLabels([
             t("collector_health.headers.area"),
@@ -240,36 +383,36 @@ class DashboardWidget(QWidget):
         self.health_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.health_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.health_table.setAlternatingRowColors(True)
-        self.health_table.setMaximumHeight(165)
         self.health_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.health_table.customContextMenuRequested.connect(
             lambda pos: self._table_menu(self.health_table, pos, pen_col=None, ink_col=None)
         )
         health_layout.addWidget(self.health_table)
-        outer.addWidget(health_group)
+        outer.addWidget(self._health_group)
+        self._register_detail("collection", self._health_group, self.health_table, 11)
 
-        # ── Letzte Aktivität ─────────────────────────────────────────
-        activity_group = QGroupBox(t('ui.dashboard_widget.letzte_einfullungen_60912e9a'))
-        self._activity_group = activity_group
-        act_layout = QVBoxLayout(activity_group)
-
+        self._activity_group = QGroupBox(t('ui.dashboard_widget.letzte_einfullungen_60912e9a'))
+        act_layout = QVBoxLayout(self._activity_group)
         self.activity_table = QTableWidget()
+        self._prepare_table(self.activity_table)
         self.activity_table.setColumnCount(4)
-        self.activity_table.setHorizontalHeaderLabels(
-            [t('ui.dashboard_widget.fuller_f8544bb5'), t('ui.dashboard_widget.tinte_67575656'), t('ui.dashboard_widget.eingefullt_am_3cf01df9'), t('ui.dashboard_widget.gereinigt_am_a37d0d93')]
-        )
+        self.activity_table.setHorizontalHeaderLabels([
+            t('ui.dashboard_widget.fuller_f8544bb5'),
+            t('ui.dashboard_widget.tinte_67575656'),
+            t('ui.dashboard_widget.eingefullt_am_3cf01df9'),
+            t('ui.dashboard_widget.gereinigt_am_a37d0d93'),
+        ])
         self.activity_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.activity_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.activity_table.setAlternatingRowColors(True)
-        self.activity_table.setMaximumHeight(150)
         self.activity_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.activity_table.customContextMenuRequested.connect(
             lambda pos: self._table_menu(self.activity_table, pos, pen_col=0, ink_col=1)
         )
         act_layout.addWidget(self.activity_table)
-        outer.addWidget(activity_group)
+        outer.addWidget(self._activity_group)
+        self._register_detail("activity", self._activity_group, self.activity_table, 5)
 
-        # ── „Alles im grünen Bereich"-Hinweis (nur wenn nichts ansteht) ──
         self._all_clear = QLabel(t("dashboard.all_clear"))
         self._all_clear.setWordWrap(True)
         self._all_clear.setStyleSheet(
@@ -278,8 +421,107 @@ class DashboardWidget(QWidget):
         )
         self._all_clear.setVisible(False)
         outer.addWidget(self._all_clear)
-
         outer.addStretch()
+
+        self._sync_detail_visibility()
+        self._apply_responsive_layout(900)
+
+
+    def _prepare_table(self, table: QTableWidget) -> None:
+        """Bereitet eine Tabelle für die jeweils einzige geöffnete Detailfläche vor."""
+        table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        table.setHorizontalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
+        table.setVerticalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
+        table.verticalHeader().setVisible(False)
+        table.setWordWrap(False)
+        table.setMinimumHeight(220)
+        table.setMaximumHeight(420)
+
+    def _register_detail(
+        self,
+        key: str,
+        group: QGroupBox,
+        table: QTableWidget,
+        page: int,
+    ) -> None:
+        self._detail_groups[key] = group
+        self._detail_tables[key] = table
+        group.setVisible(False)
+        table.cellDoubleClicked.connect(
+            lambda _row, _column, target=page: self.navigate_to.emit(target)
+        )
+
+    def _toggle_detail(self, key: str) -> None:
+        """Öffnet exklusiv die gewählte Tabelle; erneuter Klick klappt sie ein."""
+        if key not in self._detail_groups:
+            return
+        tile = self._tiles_by_key.get(key)
+        if tile is None or tile.isHidden():
+            return
+        self._expanded_detail = None if self._expanded_detail == key else key
+        self._sync_detail_visibility()
+        if self._expanded_detail:
+            group = self._detail_groups[self._expanded_detail]
+            table = self._detail_tables[self._expanded_detail]
+            table.setFocus(Qt.FocusReason.OtherFocusReason)
+            QTimer.singleShot(0, lambda target=group: self._scroll.ensureWidgetVisible(target, 0, 24))
+
+    def _sync_detail_visibility(self) -> None:
+        if self._expanded_detail:
+            tile = self._tiles_by_key.get(self._expanded_detail)
+            if tile is None or tile.isHidden():
+                self._expanded_detail = None
+        for key, group in self._detail_groups.items():
+            selected = key == self._expanded_detail
+            group.setVisible(selected)
+            tile = self._tiles_by_key.get(key)
+            if tile is not None:
+                tile.set_selected(selected)
+
+    @staticmethod
+    def _clear_grid(layout: QGridLayout) -> None:
+        while layout.count():
+            layout.takeAt(0)
+
+    def _apply_responsive_layout(self, width: int) -> None:
+        """Ordnet Schnellaktionen und sichtbare Kacheln passend zur Breite neu an."""
+        if width < 560:
+            tile_columns, action_columns = 1, 1
+        elif width < 1020:
+            tile_columns, action_columns = 2, 2
+        else:
+            tile_columns, action_columns = 3, 4
+
+        self._clear_grid(self._tiles_grid)
+        visible_tiles = [tile for tile in self._tiles if not tile.isHidden()]
+        for index, tile in enumerate(visible_tiles):
+            self._tiles_grid.addWidget(tile, index // tile_columns, index % tile_columns)
+        for column in range(tile_columns):
+            self._tiles_grid.setColumnStretch(column, 1)
+
+        self._clear_grid(self._quick_buttons_layout)
+        for index, button in enumerate(self._quick_buttons):
+            self._quick_buttons_layout.addWidget(
+                button, index // action_columns, index % action_columns
+            )
+        for column in range(action_columns):
+            self._quick_buttons_layout.setColumnStretch(column, 1)
+
+    def _sync_responsive_layout(self) -> None:
+        viewport_width = self._scroll.viewport().width() if hasattr(self, "_scroll") else self.width()
+        self._apply_responsive_layout(max(320, viewport_width - 36))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._sync_responsive_layout()
+        # QScrollArea berechnet seine Viewport-Breite erst nach dem ersten
+        # Layoutdurchlauf zuverlässig. Der verzögerte zweite Lauf verhindert,
+        # dass das Dashboard nach dem Öffnen fälschlich im Einspaltenmodus bleibt.
+        QTimer.singleShot(0, self._sync_responsive_layout)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(0, self._sync_responsive_layout)
 
     # ------------------------------------------------------------------ #
     # Rechtsklick-Menü für die Dashboard-Tabellen                          #
@@ -317,283 +559,173 @@ class DashboardWidget(QWidget):
             self.refresh()
 
     def refresh(self):
+        """Dashboard neu aufbauen.
+
+        v0.3.01 (Enterprise-Audit P1): Die frühere 309-Zeilen-Methode ist in
+        den Qt-freien ``logic.dashboard_service`` (Datenbeschaffung,
+        Klassifikation, Schwellwerte, Texte) und kleine Renderer unten
+        zerlegt. Dieses Widget enthält keine direkten ``session.query``-
+        Aufrufe mehr; der Service arbeitet über die Repository-Schicht.
+        """
+        from logic.dashboard_service import collect_dashboard_data
         session = get_session()
         try:
-            pens_all = session.query(Pen).all()
-            pens  = session.query(Pen).filter_by(is_active=True).all()
-            archived_pens = [p for p in pens_all if not getattr(p, "is_active", True)]
-            archived_inks_count = session.query(Ink).filter_by(is_archived=True).count()
-            inks  = session.query(Ink).filter_by(is_archived=False).all()
-            papers = session.query(Paper).all()
-            expenses = session.query(Expense).all()
-            loads = (
-                session.query(InkLoad)
-                .order_by(InkLoad.loaded_date.desc())
-                .limit(8)
-                .all()
-            )
-
-            total_pens   = len(pens)
-            active_loads = [
-                p.current_ink_load for p in pens
-                if p.current_ink_load
-                and getattr(p, "availability_status", "available") == "available"
-                and not getattr(p, "rotation_blocked", False)
-            ]
-
-            # Sammlungswert: Währungsumrechnung via LocaleService
             lc = LocaleService.instance()
-            currencies_used = set()
-            total_value = 0.0
-            missing_currency = 0
-            for p in pens:
-                if p.current_market_value:
-                    raw = p.current_market_value or 0
-                    pen_cur = getattr(p, "market_currency", None) or getattr(p, "purchase_currency", None)
-                else:
-                    raw = p.purchase_price or 0
-                    pen_cur = getattr(p, "purchase_currency", None)
-                if raw and not pen_cur:
-                    missing_currency += 1
-                    pen_cur = lc.currency
-                pen_cur = pen_cur or lc.currency
-                currencies_used.add(pen_cur)
-                total_value += lc.convert_to_default(raw, pen_cur)
-            for i in inks:
-                raw = i.purchase_price or 0
-                cur = getattr(i, "purchase_currency", None) or lc.currency
-                if raw and not getattr(i, "purchase_currency", None):
-                    missing_currency += 1
-                currencies_used.add(cur)
-                total_value += lc.convert_to_default(raw, cur)
-
-            has_mixed = len(currencies_used) > 1
-            value_str = format_money(total_value)
-            if has_mixed:
-                value_str += " ~"   # Tilde = umgerechnet/angenähert
-
-            # Karten aktualisieren
-            # Onboarding-Panel anzeigen wenn weder Füller noch Tinten vorhanden
-            self._onboarding.setVisible(total_pens == 0 or len(inks) == 0)
-            _set_card_value(self._card_active,  str(len(active_loads)))
-            self._card_active.setToolTip(t('ui.dashboard_widget.pen_archive_tooltip', active=total_pens, archived=len(archived_pens)))
-            _set_card_value(self._card_inks,    str(len(inks)))
-            _set_card_value(self._card_value,   value_str)
-            if has_mixed or missing_currency:
-                extra = t('ui.dashboard_widget.value_missing_currency_hint', count=missing_currency) if missing_currency else ""
-                self._card_value.setToolTip(
-                    t('ui.dashboard_widget.value_mixed_tooltip', currency=lc.currency, currencies=', '.join(sorted(currencies_used)), extra=extra)
-                )
-            else:
-                self._card_value.setToolTip("")
-
-            # ── BudgetManager-Sparziele anzeigen ───────────────────
-            try:
-                bm_goals = load_budgetmanager_savings_goals()
-            except Exception:
-                bm_goals = []
-            self.bm_goals_group.setVisible(bool(bm_goals))
-            self.bm_goals_table.setRowCount(len(bm_goals))
-            for row, goal in enumerate(bm_goals):
-                goal_title = goal.label
-                if goal.goal_name and goal.goal_name != goal.label:
-                    goal_title = f"{goal.label} — {goal.goal_name}"
-                values = [
-                    goal_title,
-                    f"{goal.progress_percent:.1f}%",
-                    f"{format_money(goal.current_amount, goal.currency)} / {format_money(goal.target_amount, goal.currency)}",
-                    format_money(goal.remaining_amount, goal.currency),
-                    f"{goal.deadline or '—'} · {goal.status}",
-                ]
-                for col, value in enumerate(values):
-                    item = QTableWidgetItem(value)
-                    if col == 1 and goal.progress_percent >= 100:
-                        item.setForeground(QColor("#27ae60"))
-                        item.setFont(QFont("", -1, QFont.Weight.Bold))
-                    elif col == 3 and goal.remaining_amount > 0:
-                        item.setForeground(QColor("#d35400"))
-                    self.bm_goals_table.setItem(row, col, item)
-
-            # ── Service/Sperren sammeln ─────────────────────────────
-            service_rows = []
-            for pen in pens:
-                status = getattr(pen, "availability_status", "available") or "available"
-                if getattr(pen, "rotation_blocked", False) or status in BLOCKING_STATUSES:
-                    until = getattr(pen, "blocked_until", None)
-                    notes = getattr(pen, "service_notes", None) or t('ui.dashboard_widget.rotation_blocked')
-                    action = t('ui.dashboard_widget.service_unlock_action') if status == "service" else t('ui.dashboard_widget.check_unlock_action')
-                    service_rows.append({
-                        "pen": _pen_name(pen),
-                        "status": _status_label(status) or t('ui.dashboard_widget.blocked_status'),
-                        "reason": notes,
-                        "until": format_date(until) if until else t('ui.dashboard_widget.open_until'),
-                        "action": action,
-                        "severity": "blocked",
-                    })
-
-            # ── Safety-Timer Tabelle ─────────────────────────────────
-            timer_rows = []
-            warnings = 0
-            for pen in pens:
-                load = pen.current_ink_load
-                if not load:
-                    continue
-                ink = session.get(Ink, load.ink_id)
-                if not ink:
-                    continue
-                # Safety Timer nur zentral über RuleEngine berechnen, damit Dashboard
-                # und Rotation dieselben Max-Tage/Warnungen anzeigen.
-                max_days = RuleEngine().max_days_for(pen, ink, session)
-                days    = load.days_loaded
-                overdue = days > max_days
-                if overdue:
-                    warnings += 1
-                timer_rows.append({
-                    "pen":     f"{pen.brand} {pen.model}",
-                    "ink":     f"{ink.brand} {ink.name}",
-                    "days":    days,
-                    "max":     max_days,
-                    "overdue": overdue,
-                })
-                if overdue:
-                    level = "critical" if days >= max_days + 7 else "warning"
-                    service_rows.append({
-                        "pen": _pen_name(pen),
-                        "status": t('ui.dashboard_widget.dry_risk_status'),
-                        "reason": t('ui.dashboard_widget.days_in_pen_reason', ink=f"{ink.brand} {ink.name}", days=days, max_days=max_days),
-                        "until": t('ui.dashboard_widget.days_value', days=days),
-                        "action": t('ui.dashboard_widget.clean_or_change_action'),
-                        "severity": level,
-                    })
-
-            _set_card_value(self._card_warn, str(warnings))
-            self._card_warn.setToolTip(t('ui.dashboard_widget.uberfallige_safety_timer_regelverstoe_erscheinen_40cc9f1a'))
-            # v0.2.79: Bestand/Service/Archiv als kompakte Zeile statt Karten.
-            self._inventory_line.setText(t(
-                'dashboard.inventory_line',
-                pens=total_pens,
-                archived_pens=len(archived_pens),
-                archived_inks=archived_inks_count,
-                service=len(service_rows),
-            ))
-            self._inventory_line.setToolTip(
-                t('ui.dashboard_widget.archived_tooltip', pens=len(archived_pens), inks=archived_inks_count)
-                + "\n" + t('ui.dashboard_widget.service_tooltip', count=len(service_rows), warnings=warnings)
+            rule_engine = RuleEngine()
+            data = collect_dashboard_data(
+                session,
+                max_days_for=lambda pen, ink: rule_engine.max_days_for(pen, ink, session),
+                convert=lc.convert_to_default,
+                default_currency=lc.currency,
+                budget_goals_loader=load_budgetmanager_savings_goals,
+                health_builder=build_collection_health,
             )
-
-            timer_rows.sort(key=lambda r: r["overdue"], reverse=True)
-            # v0.2.79: Das Dashboard ist eine Alarmzentrale, keine Inventarliste.
-            # Es zeigt nur überfällige und bald fällige Ladungen (≥ 80 % der
-            # Maximaltage). Alles Grüne steht weiterhin auf der Rotationsseite.
-            visible_timer_rows = [
-                r for r in timer_rows
-                if r["overdue"] or (r["max"] > 0 and r["days"] >= 0.8 * r["max"])
-            ]
-            due_soon = sum(1 for r in visible_timer_rows if not r["overdue"])
-            self._timer_group.setTitle(
-                t('dashboard.timer_title_counts', overdue=warnings, soon=due_soon)
-            )
-            self.timer_table.setRowCount(len(visible_timer_rows))
-            for row, data in enumerate(visible_timer_rows):
-                self.timer_table.setItem(row, 0, QTableWidgetItem(data["pen"]))
-                self.timer_table.setItem(row, 1, QTableWidgetItem(data["ink"]))
-
-                days_item = QTableWidgetItem(str(data["days"]))
-                if data["overdue"]:
-                    days_item.setForeground(QColor("#e74c3c"))
-                    days_item.setFont(QFont("", -1, QFont.Weight.Bold))
-                self.timer_table.setItem(row, 2, days_item)
-                self.timer_table.setItem(row, 3, QTableWidgetItem(str(data["max"])))
-
-                status      = t("common.overdue_bang") if data["overdue"] else "🟢 " + t("common.ok")
-                status_item = QTableWidgetItem(status)
-                if data["overdue"]:
-                    status_item.setForeground(QColor("#e74c3c"))
-                self.timer_table.setItem(row, 4, status_item)
-
-            # ── Service/Sperren-Tabelle ─────────────────────────────
-            self._lock_group.setTitle(t('dashboard.lock_title_counts', count=len(service_rows)))
-            service_rows.sort(key=lambda r: {"critical": 0, "blocked": 1, "warning": 2}.get(r.get("severity"), 3))
-            self.service_table.setRowCount(len(service_rows))
-            for row, data in enumerate(service_rows):
-                values = [data["pen"], data["status"], data["reason"], data["until"], data["action"]]
-                for col, value in enumerate(values):
-                    item = QTableWidgetItem(value or "—")
-                    if data.get("severity") in ("critical", "blocked"):
-                        item.setForeground(QColor("#e74c3c" if data.get("severity") == "critical" else "#8e44ad"))
-                        if col in (0, 1):
-                            item.setFont(QFont("", -1, QFont.Weight.Bold))
-                    elif data.get("severity") == "warning":
-                        item.setForeground(QColor("#d35400"))
-                    self.service_table.setItem(row, col, item)
-
-
-            # ── Sammlungs-Advisor ───────────────────────────────────
-            def _max_days_for_health(pen, ink):
-                try:
-                    return RuleEngine().max_days_for(pen, ink, session)
-                except Exception:
-                    return int(getattr(ink, "max_days_in_pen", None) or 28)
-
-            health_rows = build_collection_health(
-                pens=pens,
-                inks=inks,
-                papers=papers,
-                expenses=expenses,
-                max_days_for_load=_max_days_for_health,
-                limit=6,
-            )
-            self.health_table.setRowCount(len(health_rows))
-            severity_icon = {
-                "critical": "🔴",
-                "warning": "🟠",
-                "info": "🔵",
-            }
-            severity_color = {
-                "critical": "#e74c3c",
-                "warning": "#d35400",
-                "info": "#2563eb",
-            }
-            for row, data in enumerate(health_rows):
-                area = t(f"collector_health.area.{data.area}")
-                severity = f"{severity_icon.get(data.severity, '•')} {t(f'collector_health.severity.{data.severity}')}"
-                issue = t(f"collector_health.issue.{data.code}", detail=data.detail)
-                action = t(f"collector_health.action.{data.action}") if data.action else "—"
-                values = [area, severity, data.entity, issue, action]
-                for col, value in enumerate(values):
-                    item = QTableWidgetItem(value or "—")
-                    if col == 1:
-                        item.setForeground(QColor(severity_color.get(data.severity, "#2c3e50")))
-                        if data.severity in ("critical", "warning"):
-                            item.setFont(QFont("", -1, QFont.Weight.Bold))
-                    self.health_table.setItem(row, col, item)
-
-            # ── Aktivitäts-Tabelle ───────────────────────────────────
-            self.activity_table.setRowCount(len(loads))
-            for row, load in enumerate(loads):
-                pen = session.get(Pen, load.pen_id)
-                ink = session.get(Ink, load.ink_id)
-                pen_txt = f"{pen.brand} {pen.model}" if pen else "?"
-                ink_txt = f"{ink.brand} {ink.name}"  if ink else "?"
-                loaded  = format_date(load.loaded_date)
-                cleaned = format_date(load.cleaned_date) if load.cleaned_date else "—"
-
-                self.activity_table.setItem(row, 0, QTableWidgetItem(pen_txt))
-                self.activity_table.setItem(row, 1, QTableWidgetItem(ink_txt))
-                self.activity_table.setItem(row, 2, QTableWidgetItem(loaded))
-                self.activity_table.setItem(row, 3, QTableWidgetItem(cleaned))
-
-            # ── Übersichtlichkeit: leere Abschnitte ausblenden ──────────
-            # Ein aufgeräumtes Dashboard zeigt nur, was gerade relevant ist.
-            self._timer_group.setVisible(bool(visible_timer_rows))
-            self._lock_group.setVisible(bool(service_rows))
-            self._health_group.setVisible(bool(health_rows))
-            self._activity_group.setVisible(bool(loads))
-
-            # „Alles im grünen Bereich" nur, wenn es überhaupt Inventar gibt und
-            # keine Warnungen, kein Service und keine Advisor-Hinweise anstehen.
-            has_inventory = bool(pens or inks)
-            nothing_pending = not service_rows and not health_rows and warnings == 0
-            self._all_clear.setVisible(has_inventory and nothing_pending)
         finally:
             session.close()
+
+        self._onboarding.setVisible(data.show_onboarding)
+        self._render_budget(data)
+        self._render_timer(data)
+        self._render_service(data)
+        self._render_health(data)
+        self._render_activity(data)
+
+        self._sync_detail_visibility()
+        viewport_width = self._scroll.viewport().width() if self._scroll else self.width()
+        self._apply_responsive_layout(max(320, viewport_width - 36))
+        self._all_clear.setVisible(data.all_clear)
+
+    # ── Renderer (nur Qt-Darstellung, keine Datenlogik) ──────────────────
+
+    def _render_budget(self, data) -> None:
+        goals = data.budget_goals
+        self._tile_budget.setVisible(bool(goals))
+        if not goals and self._expanded_detail == "budget":
+            self._expanded_detail = None
+        self.bm_goals_table.setRowCount(len(goals))
+        for row, goal in enumerate(goals):
+            goal_title = goal.label
+            if goal.goal_name and goal.goal_name != goal.label:
+                goal_title = f"{goal.label} — {goal.goal_name}"
+            values = [
+                goal_title,
+                f"{goal.progress_percent:.1f}%",
+                f"{format_money(goal.current_amount, goal.currency)} / {format_money(goal.target_amount, goal.currency)}",
+                format_money(goal.remaining_amount, goal.currency),
+                f"{goal.deadline or '—'} · {goal.status}",
+            ]
+            for col, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                if col == 1 and goal.progress_percent >= 100:
+                    item.setForeground(QColor("#27ae60"))
+                    item.setFont(QFont("", -1, QFont.Weight.Bold))
+                elif col == 3 and goal.remaining_amount > 0:
+                    item.setForeground(QColor("#d35400"))
+                self.bm_goals_table.setItem(row, col, item)
+        if goals:
+            self._tile_budget.set_summary(
+                t("dashboard.tiles.budget.primary", count=len(goals), complete=data.budget_completed),
+                t("dashboard.tiles.budget.detail", remaining=data.budget_remaining_str),
+            )
+
+    def _render_timer(self, data) -> None:
+        self._timer_group.setTitle(
+            t('dashboard.timer_title_counts', overdue=data.timer_overdue, soon=data.timer_due_soon)
+        )
+        self._tile_rotation.set_summary(
+            t("dashboard.tiles.rotation.primary", active=data.active_loads_count, overdue=data.timer_overdue),
+            t("dashboard.tiles.rotation.detail", soon=data.timer_due_soon),
+        )
+        rows = data.timer_rows
+        self.timer_table.setRowCount(len(rows))
+        for row, entry in enumerate(rows):
+            self.timer_table.setItem(row, 0, QTableWidgetItem(entry["pen"]))
+            self.timer_table.setItem(row, 1, QTableWidgetItem(entry["ink"]))
+            days_item = QTableWidgetItem(str(entry["days"]))
+            if entry["overdue"]:
+                days_item.setForeground(QColor("#e74c3c"))
+                days_item.setFont(QFont("", -1, QFont.Weight.Bold))
+            self.timer_table.setItem(row, 2, days_item)
+            self.timer_table.setItem(row, 3, QTableWidgetItem(str(entry["max"])))
+            status = t("common.overdue_bang") if entry["overdue"] else "🟢 " + t("common.ok")
+            status_item = QTableWidgetItem(status)
+            if entry["overdue"]:
+                status_item.setForeground(QColor("#e74c3c"))
+            self.timer_table.setItem(row, 4, status_item)
+
+    def _render_service(self, data) -> None:
+        rows = data.service_rows
+        self._lock_group.setTitle(t('dashboard.lock_title_counts', count=len(rows)))
+        self._tile_service.set_summary(
+            t("dashboard.tiles.service.primary", count=len(rows)),
+            t("dashboard.tiles.service.detail", critical=data.service_critical, blocked=data.service_blocked),
+        )
+        self.service_table.setRowCount(len(rows))
+        for row, entry in enumerate(rows):
+            values = [entry["pen"], entry["status"], entry["reason"], entry["until"], entry["action"]]
+            for col, value in enumerate(values):
+                item = QTableWidgetItem(value or "—")
+                severity = entry.get("severity")
+                if severity in ("critical", "blocked"):
+                    item.setForeground(QColor("#e74c3c" if severity == "critical" else "#8e44ad"))
+                    if col in (0, 1):
+                        item.setFont(QFont("", -1, QFont.Weight.Bold))
+                elif severity == "warning":
+                    item.setForeground(QColor("#d35400"))
+                self.service_table.setItem(row, col, item)
+
+    def _render_health(self, data) -> None:
+        rows = data.health_rows
+        self.health_table.setRowCount(len(rows))
+        severity_icon = {"critical": "🔴", "warning": "🟠", "info": "🔵"}
+        severity_color = {"critical": "#e74c3c", "warning": "#d35400", "info": "#2563eb"}
+        self._tile_collection.set_summary(
+            t("dashboard.tiles.collection.primary", pens=data.pens_total, inks=data.inks_total),
+            t(
+                "dashboard.tiles.collection.detail",
+                value=data.value_str,
+                issues=len(rows),
+                archived=data.archived_total,
+            ),
+        )
+        collection_tip = t(
+            "dashboard.tiles.collection.tooltip",
+            critical=data.health_critical,
+            warning=data.health_warning,
+            missing=data.missing_currency,
+        )
+        if data.has_mixed_currencies:
+            lc = LocaleService.instance()
+            collection_tip += "\n" + t(
+                'ui.dashboard_widget.value_mixed_tooltip',
+                currency=lc.currency,
+                currencies=', '.join(sorted(data.currencies_used)),
+                extra=t('ui.dashboard_widget.value_missing_currency_hint', count=data.missing_currency) if data.missing_currency else "",
+            )
+        self._tile_collection.setToolTip(collection_tip)
+        for row, entry in enumerate(rows):
+            area = t(f"collector_health.area.{entry.area}")
+            severity = f"{severity_icon.get(entry.severity, '•')} {t(f'collector_health.severity.{entry.severity}')}"
+            issue = t(f"collector_health.issue.{entry.code}", detail=entry.detail)
+            action = t(f"collector_health.action.{entry.action}") if entry.action else "—"
+            values = [area, severity, entry.entity, issue, action]
+            for col, value in enumerate(values):
+                item = QTableWidgetItem(value or "—")
+                if col == 1:
+                    item.setForeground(QColor(severity_color.get(entry.severity, "#2c3e50")))
+                    if entry.severity in ("critical", "warning"):
+                        item.setFont(QFont("", -1, QFont.Weight.Bold))
+                self.health_table.setItem(row, col, item)
+
+    def _render_activity(self, data) -> None:
+        rows = data.activity_rows
+        self.activity_table.setRowCount(len(rows))
+        for row, entry in enumerate(rows):
+            self.activity_table.setItem(row, 0, QTableWidgetItem(entry["pen"]))
+            self.activity_table.setItem(row, 1, QTableWidgetItem(entry["ink"]))
+            self.activity_table.setItem(row, 2, QTableWidgetItem(entry["loaded"]))
+            self.activity_table.setItem(row, 3, QTableWidgetItem(entry["cleaned"]))
+        self._tile_activity.set_summary(
+            t("dashboard.tiles.activity.primary", count=len(rows)),
+            t("dashboard.tiles.activity.detail", last=data.last_activity),
+        )

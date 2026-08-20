@@ -11,6 +11,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANUAL = ROOT / "docs" / "BENUTZERHANDBUCH_DE.md"
+MANUALS = {
+    "de": MANUAL,
+    "en": ROOT / "docs" / "USER_MANUAL_EN.md",
+    "fr": ROOT / "docs" / "MANUEL_UTILISATEUR_FR.md",
+}
 
 
 def _manual() -> str:
@@ -40,12 +45,34 @@ def test_manual_exists_and_is_substantial():
         assert heading in text, f"Kapitel fehlt: {heading}"
 
 
-def test_manual_is_linked_from_readme_and_help():
-    assert "docs/BENUTZERHANDBUCH_DE.md" in _src("README.md")
+def test_manuals_are_linked_from_readme_help_and_packaging():
+    readme = _src("README.md")
+    spec = _src("FPM.spec")
+    expected = {
+        "de": "BENUTZERHANDBUCH_DE.md",
+        "en": "USER_MANUAL_EN.md",
+        "fr": "MANUEL_UTILISATEUR_FR.md",
+    }
     assert "help.manual_title" in _src("ui/help_widget.py")
-    for lang in ("de", "en", "fr"):
+    for lang, filename in expected.items():
         data = json.loads((ROOT / "i18n" / f"{lang}.json").read_text(encoding="utf-8"))
-        assert "BENUTZERHANDBUCH_DE.md" in data["help"]["manual_body"]
+        assert filename in data["help"]["manual_body"]
+        assert filename in readme
+        assert filename in spec
+
+
+def test_all_language_manuals_exist_and_cover_current_release():
+    minimum_size = {"de": 20_000, "en": 18_000, "fr": 20_000}
+    markers = {
+        "de": ("Stand: v0.3.05", "## 5. Dashboard", "## 22. Fehlerbehebung"),
+        "en": ("Version: v0.3.05", "## 5. Dashboard", "## 22. Troubleshooting"),
+        "fr": ("Version : v0.3.05", "## 5. Tableau de bord", "## 22. Dépannage"),
+    }
+    for lang, manual in MANUALS.items():
+        text = manual.read_text(encoding="utf-8")
+        assert len(text) >= minimum_size[lang], f"{lang} manual is too thin"
+        for marker in markers[lang]:
+            assert marker in text, f"{lang}: {marker}"
 
 
 def test_manual_cleaning_days_match_code_defaults():
@@ -112,7 +139,9 @@ def test_manual_selection_layer_matches_engine():
 
 def test_manual_timer_threshold_and_early_stop_match_code():
     manual = _manual()
-    assert '0.8 * r["max"]' in _src("ui/dashboard_widget.py")
+    # v0.3.05: 80%-Schwelle wanderte in den Qt-freien logic.dashboard_service.
+    assert 'soon_ratio * r["max"]' in _src("logic/dashboard_service.py")
+    assert "TIMER_SOON_RATIO = 0.8" in _src("logic/dashboard_service.py")
     assert "80 %" in manual
     assert "confidence >= 0.65" in _src("logic/pen_dimensions_service.py")
     assert "0.65" in manual

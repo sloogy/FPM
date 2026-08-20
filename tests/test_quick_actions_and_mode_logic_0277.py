@@ -78,7 +78,11 @@ def test_quick_actions_use_quick_pen_helper():
     # Beide Aktionen laufen über den Helfer statt still zu returnen.
     assert src.count("pen_id = self._quick_pen_id()") == 2
     # Autowahl bei genau einem aktiven Füller + freundlicher Hinweis sonst.
-    assert "filter_by(is_active=True).all()" in src
+    # v0.3.02: Die Aktiv-Abfrage liegt im Service (single_active_pen_id),
+    # der Helfer im Widget delegiert dorthin.
+    assert "single = single_active_pen_id(session)" in src
+    assert "def single_active_pen_id" in _read("logic/pen_service.py")
+    assert "if len(active) == 1 else None" in _read("logic/pen_service.py")
     assert "ui.pen_widget.quick_select_pen_hint" in src
 
 

@@ -6,6 +6,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# ── v0.3.01: SQLAlchemy-Stub NUR bei fehlender Installation ──────────────────
+# In der Prüf-Sandbox ohne pip macht dieser Minimal-Stub database.models,
+# rule_engine, rotation_engine und dashboard_service importierbar. In der
+# echten CI ist SQLAlchemy installiert; der Stub wird dann NIE aktiviert und
+# alle Tests laufen gegen das echte ORM.
+from tests._stub_env import install_sqlalchemy_stub
+install_sqlalchemy_stub()
 
 class FakeInk:
     """Minimaler Ink-Stub für reine Logik-Tests (kein SQLAlchemy)."""
@@ -25,3 +32,17 @@ class FakeInk:
         self.id              = kw.get("id", 1)
         self.brand           = kw.get("brand", "TestBrand")
         self.name            = kw.get("name", "TestInk")
+
+
+import pytest
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _close_database_after_suite():
+    """Keine SQLite-/SQLAlchemy-Verbindungen über das Testende hinaus halten."""
+    yield
+    try:
+        from database.db import close_db
+        close_db()
+    except Exception:
+        pass

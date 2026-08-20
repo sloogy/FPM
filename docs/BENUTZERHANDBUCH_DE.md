@@ -1,6 +1,6 @@
 # FountainPen Manager – Benutzerhandbuch (Leitfaden)
 
-**Stand: v0.2.88 · Sprache: Deutsch**
+**Stand: v0.3.05 · Sprache: Deutsch**
 
 Dieses Handbuch ist der ausführliche Leitfaden zum FountainPen Manager. Es ergänzt die In-App-Hilfe (das „Wiki“ im Hilfe-Bereich): Das Wiki beantwortet Fragen kurz am Ort des Geschehens – dieses Handbuch erklärt die Funktionen **im Detail**, inklusive der konkreten Zahlen, Formeln und Dateien dahinter. Alle Zahlenangaben sind Werkseinstellungen des angegebenen Versionsstands; vieles davon ist in der App selbst einstellbar.
 
@@ -24,7 +24,7 @@ Dieses Handbuch ist der ausführliche Leitfaden zum FountainPen Manager. Es erg�
 14. [Wishlist](#14-wishlist)
 15. [Statistiken & Schreibproben](#15-statistiken--schreibproben)
 16. [Enthusiasten-Lab](#16-enthusiasten-lab)
-17. [Recherche & Referenzdaten](#17-recherche--referenzdaten)
+17. [Recherche & Referenzdaten (Hersteller zuerst)](#17-recherche--referenzdaten-hersteller-zuerst)
 18. [Einstellungen – alle Seiten](#18-einstellungen--alle-seiten)
 19. [Mehrsprachigkeit](#19-mehrsprachigkeit)
 20. [Updates](#20-updates)
@@ -68,17 +68,7 @@ Ein Backup des Datenverzeichnisses sichert **alles** (siehe Kap. 21).
 
 ### 2.3 Erststart
 
-Beim ersten Start legt die App eine **leere Sammlung** mit Standard-Einstellungen und Standard-Regeln (Kap. 23.2) an. Es werden bewusst keine Beispiel-Tinten und keine Beispiel-Füller mehr eingespielt.
-
-Die geführte Einrichtung beginnt mit einer vollständigen **Modulrunde**:
-
-1. Dashboard, Füller, Tinten, Rotation, Hilfe und Einstellungen kennenlernen;
-2. am Schluss der Runde vorübergehend die Expertenmodule öffnen: Federn, Papier, Schreibproben, Wishlist, Ausgaben, Statistik, Regeln und Enthusiasten-Labor;
-3. anschließend gemeinsam die **erste Tinte** anlegen;
-4. den **ersten Füller** und optional einen zweiten Füller anlegen;
-5. einen echten Rotationsvorschlag erzeugen, dessen Score lesen und den Vorschlag bewusst als erste Befüllung übernehmen.
-
-Der ursprüngliche Einfach-/Expertenmodus wird nach der Führung automatisch wiederhergestellt. Wird ein Erfassungsdialog abgebrochen, bleibt die Führung am aktuellen Schritt. Der optionale zweite Füller kann übersprungen werden. Die gesamte Führung lässt sich abbrechen und später über Hilfe oder Einstellungen erneut starten.
+Beim ersten Start legt die App die Datenbank an, seedet die Standard-Einstellungen, die Standard-Regeln (Kap. 23.2) und einen kleinen Satz Beispiel-Tinten (12 bekannte Tinten mit vollständigen Eigenschaften), damit Rotation und Regeln sofort demonstrierbar sind. Beispiel-Tinten kannst du jederzeit löschen oder archivieren.
 
 ---
 
@@ -86,15 +76,13 @@ Der ursprüngliche Einfach-/Expertenmodus wird nach der Führung automatisch wie
 
 Die empfohlene Reihenfolge, damit alle Systeme sinnvoll arbeiten:
 
-1. **Tinte anlegen**. Wichtig für gute Vorschläge: Farbfamilie, Shimmer/Pigment/Wasserfest-Flags und Reinigungsaufwand ehrlich pflegen.
+1. **Tinten anlegen** (oder die Beispieltinten nutzen). Wichtig für gute Vorschläge: Farbfamilie, Shimmer/Pigment/Wasserfest-Flags und Reinigungsaufwand ehrlich pflegen.
 2. **Federn** optional als eigene Objekte anlegen oder direkt am Füller hinterlegen.
 3. **Füller anlegen**, Feder zuweisen, Füllsystem wählen, ggf. Tags (Grail, Vintage …) setzen.
 4. **Einen Füller befüllen** – ab jetzt laufen Safety Timer und Regelprüfung.
 5. **Rotationsseite öffnen → „💡 Vorschläge“ klicken** und per Klick auf eine Zeile befüllen. Ab hier arbeitet die App *für* dich.
 
-Solange noch eine Tinte **oder** ein Füller fehlt, zeigt das Dashboard ein Onboarding-Panel mit passenden Schnellaktionen. Zusätzlich startet beim ersten Programmstart die geführte Einrichtung. Für den Expertenteil schaltet sie den Modus kontrolliert und nur vorübergehend um; danach wird der vorherige Modus wiederhergestellt.
-
-Die Schnellaktion **„Rotation vorschlagen“** erzeugt direkt neue Vorschläge. Sie öffnet nicht mehr nur die Rotationsseite.
+Beim allerersten Start ohne Daten zeigt das Dashboard ein Onboarding-Panel mit genau diesen Schnellaktionen; zusätzlich bietet die Hilfe eine geführte **Tour** an. Unter **Einstellungen → Zurücksetzen** können die Tour sofort gestartet, für den nächsten Programmstart erzwungen oder der vierstufige **Einrichtungsassistent** jederzeit erneut geöffnet werden. Vorhandene Sammlungsdaten bleiben dabei unverändert.
 
 ---
 
@@ -123,39 +111,52 @@ Der **Einfachmodus** (Standard) zeigt die sechs Kernbereiche: Dashboard, Füller
 | 13 | Schreibproben | Proben je Füller/Tinte/Papier dokumentieren (Kap. 15) |
 | 14 | Enthusiasten-Lab | Bestands-, Lücken- und Pflege-Analysen (Kap. 16) |
 
-### 4.3 Globale Suche & Bedienung
+### 4.3 Globale Suche, kontextbezogene Hilfe & Bedienung
 
-Die Werkzeugleiste enthält eine **globale Suche** über die Sammlung. Listen bieten durchgängig **Kontextmenüs** (Rechtsklick) für die häufigsten Aktionen; Dialoge sind auf schnelle Dateneingabe optimiert. Tabellen mit Score-Spalten zeigen per Klick auf den Score eine „Warum“-Erklärung (Kap. 9.4).
+Die Werkzeugleiste enthält eine **globale Suche** über das aktuell geöffnete Modul. Listen bieten durchgängig **Kontextmenüs** (Rechtsklick) für häufige Aktionen; Dialoge sind auf schnelle Dateneingabe optimiert. Tabellen mit Score-Spalten zeigen per Klick auf den Score eine „Warum“-Erklärung (Kap. 9.4).
+
+Der Button **„❔ Hilfe zum Reiter“** öffnet direkt das passende Kapitel im In-App-Wiki. Im Hilfe-Reiter kannst du alle Hilfekarten durchsuchen; mehrere Suchwörter werden gemeinsam berücksichtigt. **„📖 Handbuch öffnen“** startet die zur gewählten Sprache passende Handbuchdatei. `Strg+F` setzt den Fokus auf die Suche.
+
+### 4.4 Laptop- und Fenstermodus
+
+Die Oberfläche arbeitet in logischen Qt-Pixeln und skaliert nicht nochmals künstlich mit dem Betriebssystem-DPI-Faktor. Beim Start wird das Fenster innerhalb der nutzbaren Arbeitsfläche platziert. Auf kleineren Laptop-Displays werden Mindestgröße, Abstände und Dashboard-Spalten begrenzt; Seiten mit vielen Feldern besitzen eigene Scrollbereiche.
+
+Empfehlung unter **Einstellungen → Darstellung**:
+
+- **Auto** für die meisten Laptops und wechselnde Monitore.
+- **Laptop groß** nur, wenn Texte zu klein sind und genügend Arbeitsfläche vorhanden ist.
+- Bei abgeschnittenen Inhalten zuerst die App-Skalierung reduzieren, nicht die Betriebssystemskalierung deaktivieren.
 
 ---
 
 ## 5. Dashboard im Detail
 
-Das Dashboard ist bewusst eine **Alarmzentrale**, keine Inventarliste. Von oben nach unten:
+Das Dashboard ist eine kompakte **Alarm- und Fokuszentrale**, keine vollständige Inventarliste.
 
 **Onboarding-Panel** – nur sichtbar, solange weder Füller noch Tinten existieren.
 
 **Schnellaktionen** – Füller eintragen, Tinte eintragen, Füller befüllen, Reinigung eintragen.
 
-**Vier Karten:**
-- **Aktive Füller**: Anzahl aktuell befüllter Füller. Tooltip zeigt Gesamt-/Archivbestand.
-- **Tinten**: Anzahl aktiver (nicht archivierter, nicht leerer) Tinten.
-- **Warnungen**: Summe aus überfälligen Safety-Timer-Ladungen und aktuellen Regelverstößen der Belegung.
-- **Sammlungswert**: Gesamtwert nach hinterlegten Wertdaten (Kap. 13), in deiner Anzeigewährung.
+**Informationskacheln:**
 
-**Bestandszeile** (grau, unter den Karten): „Bestand: X Füller (Y archiviert) · Z Tinten archiviert · N im Service/gesperrt“ – die Detailzahlen, ohne eigene Karten zu belegen.
+- **Sammlung & Zustand**: Anzahl Füller und Tinten, Sammlungswert, Archivbestand und Advisor-Hinweise. Doppelklick öffnet Statistiken.
+- **Rotation & Standzeit**: aktive Befüllungen, überfällige und bald fällige Ladungen. Doppelklick öffnet Rotation.
+- **Service & Sperren**: offene Problem-, Service- und Sperrfälle. Doppelklick öffnet Füller.
+- **Letzte Aktivität**: Zahl und letzte der acht jüngsten Befüllungen. Doppelklick öffnet Rotation.
+- **Sparziele**: erscheint nur bei importierten BudgetManager-Zielen. Doppelklick öffnet Ausgaben.
 
-**Budget-/Sparziele**: Kompakttabelle der BM-Ziele, falls gepflegt.
+**Bedienung der Kacheln:**
 
-**⏱ Ink Safety Timer**: Zeigt **nur** überfällige und *bald fällige* Ladungen. „Bald fällig“ heißt: erreichte Tage ≥ **80 %** der Maximaltage dieser Ladung (Berechnung der Maximaltage: Kap. 12). Der Abschnittstitel nennt beide Zähler. Alles „Grüne“ steht vollständig auf der Rotationsseite unter „Aktuelle Belegung“ – es *fehlt* nicht, es ist nur kein Alarm.
+- Einmal klicken: Die zugehörige Tabelle wird fokussiert und erweitert.
+- Es ist immer nur **eine** Detailtabelle gleichzeitig geöffnet.
+- Erneut auf dieselbe Kachel klicken: Tabelle wieder einklappen.
+- Die sichtbare Schaltfläche **„Im Reiter öffnen“** wechselt direkt zum passenden Reiter.
+- Doppelklick auf Kachel oder Tabellenzeile bleibt als Schnellweg erhalten.
+- Tastatur: Enter/Leertaste öffnet die Tabelle, Strg+Enter wechselt zum Reiter.
 
-**🔒 Service & Sperren**: Füller im Service, mit Problemstatus oder Rotationssperre; Titel mit Zähler.
+Der **Ink Safety Timer** zeigt in seiner Tabelle weiterhin nur überfällige und *bald fällige* Ladungen. „Bald fällig“ bedeutet: erreichte Tage ≥ **80 %** der Maximaltage dieser Ladung. Alles Grüne steht vollständig auf der Rotationsseite unter „Aktuelle Belegung“.
 
-**Sammlungs-Advisor**: Bis zu 6 Gesundheits-Hinweise zur Sammlung (z. B. lange ungenutzte Füller).
-
-**Letzte Einfüllungen**: Die 8 jüngsten Befüllungen als Aktivitätsprotokoll.
-
-Sind alle Alarmbereiche leer, erscheint stattdessen eine „Alles im grünen Bereich“-Meldung. Leere Abschnitte werden komplett ausgeblendet.
+Sind keine Warnungen, Servicefälle oder Advisor-Hinweise vorhanden, erscheint zusätzlich „Alles im grünen Bereich“.
 
 ---
 
@@ -164,6 +165,10 @@ Sind alle Alarmbereiche leer, erscheint stattdessen eine „Alles im grünen Ber
 ### 6.1 Stammdaten & Felder
 
 Pro Füller: Marke, Modell, Farbe/Finish, Kaufdaten (Datum, Preis, Händler), **Füllsystem** (Kolben, Vakuum, Konverter, Patrone, Eyedropper), Feder (verknüpftes Feder-Objekt oder Direktangabe), Kommentarfelder für Schreibgefühl, Probleme und Reinigung.
+
+Der Dialog ist in **Grunddaten, Feder, Details/Wert und Notizen** gegliedert. Eingaben bleiben beim Wechsel zwischen diesen Seiten im Dialog erhalten. Erst **Speichern** schreibt den Datensatz in SQLite. **Abbrechen** oder das Fenster-X fragt bei geänderten Eingaben nach, bevor der Entwurf verworfen wird.
+
+Zahlenfelder akzeptieren regionale Dezimalzeichen und sichtbare Einheiten, z. B. `143,5 mm`, `24,8 g`, `0,8 ml` oder `CHF 39.95`. Beim Speichern werden Einheit und Währungssymbol sicher entfernt; ein Seitenwechsel setzt den Wert nicht auf `0`.
 
 ### 6.2 Tags & Status
 
@@ -390,11 +395,11 @@ Vier Analyse-Tabs für den Sammlerblick:
 
 ---
 
-## 17. Recherche & Referenzdaten
+## 17. Recherche & Referenzdaten (Hersteller zuerst)
 
 ### 17.1 Grundprinzip
 
-Die Suchreihenfolge ist absichtlich je nach Aufgabe unterschiedlich: Die sichtbare **Maße-Suche startet mit der KI-Suche**, während die sichtbare **Bildersuche beim Hersteller beginnt**. Der automatische Parser für technische Referenzdaten arbeitet weiterhin hersteller-zuerst. Die App kennt dafür ~46 Marken mit ihren offiziellen Domains – teils mehrere pro Marke (z. B. Pilot EU **und** US). Das Marken-Matching ist token-basiert mit Längster-Treffer-Logik („Graf von Faber-Castell“ trifft nie den bloßen „Faber-Castell“-Eintrag; „Crossfield“ trifft nicht „Cross“).
+Referenzdaten (Maße, Gewicht, Füllsystem, Kapazität) und Produktbilder werden **zuerst beim Hersteller** gesucht, erst danach im offenen Netz. Die App kennt dafür ~46 Marken mit ihren offiziellen Domains – teils mehrere pro Marke (z. B. Pilot EU **und** US). Das Marken-Matching ist token-basiert mit Längster-Treffer-Logik („Graf von Faber-Castell“ trifft nie den bloßen „Faber-Castell“-Eintrag; „Crossfield“ trifft nicht „Cross“).
 
 ### 17.2 Ablauf der Maße-Suche (Button „Maße suchen“)
 
@@ -453,32 +458,13 @@ Die Recherche ist **kein Scraper**: Sie liest Textangaben konservativ und verwei
 |---|---|
 | **⚙ Allgemein** | Sprache (DE/EN/FR), Grundverhalten, Modus-Startwahl |
 | **🎲 Rotation & Vorschläge** | Zufälligkeit 0–100 % (Kap. 9.6), „Gleiche Tinte in mehreren Füllern erlauben“ (Kap. 7.5); Erklärnoten zu Sicherheit und Reroll; Änderungen wirken sofort |
-| **🔎 Darstellung** | UI-Skalierung (auto/manuell), Einfach-/Expertenmodus, Darstellungsoptionen |
+| **🔎 Darstellung** | Responsive UI-Skalierung (Auto/manuell), Einfach-/Expertenmodus, Darstellungsoptionen; Auto begrenzt Fenster und Mindestgröße auf die verfügbare Arbeitsfläche |
 | **🌍 Währung & Region** | Anzeigewährung (Standard CHF), Zahlen-/Datumsformat (Standard Schweiz, Apostroph-Tausender), Wechselkurse für Fremdwährungskäufe |
-| **💾 Datenbank & Backup** | Datenpfad, vollständiges `.fpmbackup` erstellen, validiertes Backup wiederherstellen, Datenordner öffnen und Datenbank optimieren |
+| **💾 Datenbank & Backup** | Pfad des Datenverzeichnisses, Backup-Aktionen |
 | **📤 Import / Export** | Datenübernahme; CSV-/PDF-Export ist als Ausbau vorgesehen |
 | **⚠ Reset / Gefahrenzone** | Zurücksetzen einzelner Bereiche oder der ganzen Datenbank – mit Sicherheitsabfragen |
 | **⬆ Updates** | Update-Prüfung gegen GitHub Releases (Kap. 20) |
 | **ℹ Über** | Version, Build, Lizenz-/Projektinfos |
-
-### 18.1 Dezimalzeichen und Währungen
-
-Die App verwendet **nicht ungeprüft die Sprache oder das Betriebssystem**, sondern die unter **Währung & Region** gewählte Region:
-
-| Region | Beispiel |
-|---|---|
-| Schweiz | `CHF 1'234.56` |
-| Deutschland / Österreich | `1.234,56 EUR` |
-| Frankreich | `1 234,56 EUR` |
-| Grossbritannien / USA | `GBP 1,234.56` / `USD 1,234.56` |
-
-In editierbaren Zahlenfeldern werden aus Gründen der sicheren Eingabe keine Tausenderzeichen eingefügt. **Komma und Punkt werden beide akzeptiert.** Dadurch bleibt `39,96` ebenso wie `39.96` der Wert 39,96 und kann nicht versehentlich zu `3996` werden. Nach dem Verlassen des Feldes erscheint der Wert im gewählten Regionalformat.
-
-Sprache und Region sind getrennt: Eine deutsche Oberfläche kann weiterhin die Region Schweiz verwenden und zeigt dann `CHF 39.96`. Dezimal- und Tausendertrennzeichen dürfen nicht identisch sein. Als Tausenderzeichen stehen Apostroph, Punkt, Komma, Leerzeichen oder „keines“ zur Verfügung; „keines“ und das französische Leerzeichen bleiben auch nach einem Neustart erhalten.
-
-Die Währungsauswahl bleibt in jeder Sprache identisch: `CHF`, `EUR`, `USD`, `GBP`. Wechselst du die Währung neben einem Betrag, aktualisiert sich der Währungscode im Betragsfeld sofort. Datenbank und CSV-Export speichern Zahlen technisch mit Dezimalpunkt; das ist absichtlich unabhängig von der Darstellung. Beim CSV-Import versteht die App beide Dezimalzeichen sowie gängige Währungssymbole.
-
-**Hinweis zu älteren Daten:** Frühere englische/französische Builds konnten in einzelnen Auswahlfeldern `CHF` falsch als `USD` bzw. `EUR` anzeigen. Neue und erneut gespeicherte Einträge sind behoben. Bereits historisch falsch gespeicherte Währungen können nicht sicher automatisch erraten werden und sollten bei betroffenen Einträgen einmal kontrolliert werden.
 
 ---
 
@@ -496,29 +482,21 @@ Die App prüft **nur auf Klick** (Einstellungen → Updates) gegen die offiziell
 
 ## 21. Datensicherung & Umzug
 
-### 21.1 Vollbackup in der App
-
-Unter **Einstellungen → Datenbank & Backup → Vollbackup erstellen** erzeugt die App eine Datei mit der Endung `.fpmbackup`. Sie enthält:
-
-- einen konsistenten SQLite-Snapshot der Datenbank;
-- Füllerbilder, Schreibproben und weitere Medien;
-- Cache- und Referenzdateien;
-- Konfiguration und Hersteller-Overlay;
-- ein Manifest mit Dateigrößen und SHA-256-Prüfsummen.
-
-Vor Abschluss prüft die App das Archiv und die SQLite-Integrität. Vor einer Wiederherstellung wird automatisch ein zusätzliches Rückfall-Backup des aktuellen Zustands erstellt. Danach wird das ausgewählte Archiv nochmals validiert und erst dann eingespielt. Der lokale Datenbankpfad des Zielrechners bleibt erhalten.
-
-### 21.2 Manuelle Sicherung und Umzug
-
-Eine Kopie des gesamten Datenverzeichnisses bleibt eine vollständige manuelle Sicherung. Beende die App vorher, damit die SQLite-Datei nicht während des Kopierens verändert wird.
-
-Für einen Umzug kopierst du entweder das Datenverzeichnis oder stellst ein `.fpmbackup` auf dem neuen Rechner wieder her. Bei portablem Betrieb zeigt `FPM_DATA_DIR` auf den gewünschten Ordner.
+- **Backup = Datenverzeichnis kopieren** (Kap. 2.2). Das genügt vollständig: Datenbank, Bilder, Cache, Overlay.
+- **Umzug auf einen anderen Rechner:** Datenverzeichnis kopieren und entweder `FPM_DATA_DIR` darauf zeigen lassen oder den Standardpfad verwenden.
+- Empfehlung: vor jedem Update und in regelmäßigen Abständen sichern; SQLite-Datei nur bei geschlossener App kopieren.
 
 ---
 
 ## 22. Fehlerbehebung & FAQ
 
 **„Meine Befüllungen fehlen auf dem Dashboard.“** Sie fehlen nicht – der Safety Timer zeigt bewusst nur Fälliges/bald Fälliges (≥ 80 %). Vollständige Liste: Rotation → Aktuelle Belegung.
+
+**„Im Füller-Dialog verschwinden Maße oder Preise beim Weitergehen.“** Ab v0.2.95 bleiben alle Felder beim Seitenwechsel erhalten; Einheiten wie `mm`, `g`, `ml` und Währungssymbole werden korrekt ausgewertet. Nutzt du eine ältere Version, aktualisiere zuerst. In v0.2.97 warnt das Fenster zusätzlich vor dem Verwerfen ungespeicherter Änderungen.
+
+**„Auf dem Laptop sehe ich nur einen Teil der Seite.“** Nutze Darstellung → Skalierung **Auto**, maximiere testweise das Fenster und scrolle innerhalb der Seite. Das Dashboard klappt Detailtabellen bewusst einzeln auf; ein zweiter Klick auf dieselbe Kachel schließt sie wieder.
+
+**„Wie finde ich eine Erklärung zur aktuellen Seite?“** Klicke oben auf **❔ Hilfe zum Reiter**. Die Hilfe springt zum passenden Wiki-Kapitel; mit `Strg+F` oder dem Suchfeld kannst du danach weiter eingrenzen.
 
 **„Die Vorschläge zeigen immer dieselbe Tinte.“** Prüfe, ob eine 💍 feste Paarung gesetzt ist (die gewinnt immer). Sonst: einfach erneut klicken – Reroll meidet gezeigte Paare.
 
@@ -571,7 +549,7 @@ Für einen Umzug kopierst du entweder das Datenverzeichnis oder stellst ein `.fp
 
 ### 23.3 Dateien im Datenverzeichnis
 
-Siehe Kap. 21. Merksatz: **Das `.fpmbackup` ist die geprüfte Standardsicherung; eine Kopie des geschlossenen Datenordners bleibt die manuelle Alternative.**
+Siehe Kap. 2.2. Merksatz: **Eine Kopie dieses Ordners ist ein vollständiges Backup.**
 
 ### 23.4 Score-Kurzreferenz
 

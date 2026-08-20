@@ -22,16 +22,16 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QColor
-
+from ui.localized_inputs import LocalizedDoubleSpinBox
 from ui.locale_widgets import (
-    LocalizedDoubleSpinBox as QDoubleSpinBox,
     bind_currency_combo,
     current_currency,
     populate_currency_combo,
     set_combo_currency,
 )
+
 from ui.ui_scale import scale_px
-from ui.common import EmptyStateWidget
+from ui.common import EmptyStateWidget, ResponsiveDialog
 from database.db import get_session
 from database.models import Expense, Pen, Ink, Nib, Paper
 from i18n.translator import LocaleService, format_money, format_date, t
@@ -202,7 +202,7 @@ class ExpensesWidget(QWidget):
             grand_by_cur = defaultdict(float)
 
             for row, exp in enumerate(expenses):
-                currency = exp.currency or LocaleService.instance().currency
+                currency = exp.currency or "CHF"
                 date_str = format_date(exp.purchase_date) if exp.purchase_date else "—"
                 cat_str = _item_type_label(exp.item_type)
                 obj = exp.linked_label if hasattr(exp, "linked_label") else self._linked_label(exp)
@@ -307,10 +307,10 @@ class ExpensesWidget(QWidget):
             row(t("ui.expenses_widget.zahlungsart_b987e44c"), getattr(exp, "payment_method", None))
             row(t("ui.expenses_widget.datum_441afa63"), format_date(exp.purchase_date) if exp.purchase_date else None)
             row(t("ui.expenses_widget.garantie_bis_70e449ef"), format_date(exp.warranty_until) if getattr(exp, "warranty_until", None) else None)
-            row(t("ui.expenses_widget.betrag_4d8517b4"), _money(exp.amount, exp.currency or LocaleService.instance().currency))
-            row(t("ui.expenses_widget.versand_681fd4b2"), _money(exp.shipping, exp.currency or LocaleService.instance().currency) if exp.shipping else None)
-            row(t("ui.expenses_widget.zoll_532508a1"), _money(exp.customs, exp.currency or LocaleService.instance().currency) if exp.customs else None)
-            row(t("ui.expenses_widget.gesamt_edc5a63c"), _money(exp.total, exp.currency or LocaleService.instance().currency))
+            row(t("ui.expenses_widget.betrag_4d8517b4"), _money(exp.amount, exp.currency or "CHF"))
+            row(t("ui.expenses_widget.versand_681fd4b2"), _money(exp.shipping, exp.currency or "CHF") if exp.shipping else None)
+            row(t("ui.expenses_widget.zoll_532508a1"), _money(exp.customs, exp.currency or "CHF") if exp.customs else None)
+            row(t("ui.expenses_widget.gesamt_edc5a63c"), _money(exp.total, exp.currency or "CHF"))
             if exp.notes:
                 note = QLabel(exp.notes); note.setWordWrap(True); note.setStyleSheet("background:#f8fafc;border:1px solid #d5dce6;border-radius:6px;padding:8px;")
                 self._detail_layout.addWidget(note)
@@ -390,7 +390,7 @@ class ExpensesWidget(QWidget):
             session.close()
 
 
-class ExpenseDialog(QDialog):
+class ExpenseDialog(ResponsiveDialog):
     def __init__(self, parent=None, expense: Expense | None = None):
         super().__init__(parent)
         self.expense = expense
@@ -399,6 +399,10 @@ class ExpenseDialog(QDialog):
         self._setup_ui()
         self._load_options()
         if expense: self._fill(expense)
+        self.enable_responsive_layout(
+            680, 640, minimum_width=360, minimum_height=320,
+            scroll=True
+        )
 
     def _setup_ui(self):
         root = QVBoxLayout(self)
@@ -413,11 +417,11 @@ class ExpenseDialog(QDialog):
         self.vendor_edit = QLineEdit(); self.vendor_edit.setPlaceholderText(t('ui.expenses_widget.z_b_landolt_stilo_e_stile_galaxus_bbd279d6'))
         self.order_edit = QLineEdit(); self.order_edit.setPlaceholderText(t('ui.expenses_widget.bestellnr_rechnung_tracking_cb8960b2'))
         self.payment_combo = QComboBox(); self.payment_combo.addItems(_payment_methods())
-        self.currency_combo = QComboBox(); populate_currency_combo(self.currency_combo, LocaleService.instance().currency, CURRENCIES)
+        self.currency_combo = QComboBox(); populate_currency_combo(self.currency_combo, currencies=CURRENCIES)
         self.date_edit = QDateEdit(QDate.currentDate()); self.date_edit.setCalendarPopup(True); self.date_edit.setDisplayFormat(LocaleService.instance().qt_date_format)
-        self.amt_spin = QDoubleSpinBox(); self.amt_spin.setRange(0, 999999); self.amt_spin.setDecimals(2)
-        self.ship_spin = QDoubleSpinBox(); self.ship_spin.setRange(0, 99999); self.ship_spin.setDecimals(2)
-        self.cust_spin = QDoubleSpinBox(); self.cust_spin.setRange(0, 99999); self.cust_spin.setDecimals(2)
+        self.amt_spin = LocalizedDoubleSpinBox(); self.amt_spin.setRange(0, 999999); self.amt_spin.setDecimals(2)
+        self.ship_spin = LocalizedDoubleSpinBox(); self.ship_spin.setRange(0, 99999); self.ship_spin.setDecimals(2)
+        self.cust_spin = LocalizedDoubleSpinBox(); self.cust_spin.setRange(0, 99999); self.cust_spin.setDecimals(2)
         bind_currency_combo(self.currency_combo, self.amt_spin, self.ship_spin, self.cust_spin)
         self.has_warranty = QCheckBox(t('ui.expenses_widget.garantie_servicefrist_erfassen_cf290f4e'))
         self.warranty_edit = QDateEdit(QDate.currentDate().addYears(2)); self.warranty_edit.setCalendarPopup(True); self.warranty_edit.setDisplayFormat(LocaleService.instance().qt_date_format); self.warranty_edit.setEnabled(False)

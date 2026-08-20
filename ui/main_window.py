@@ -9,10 +9,11 @@ v0.2.25:
 """
 from __future__ import annotations
 
-from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QStackedWidget, QToolBar, QLineEdit
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QStackedWidget, QToolBar, QLineEdit
 
 from ui.navigation import CalibreSidebar, PAGE_SHORTCUTS
-from logic.app_mode import fallback_page
+from logic.app_mode import EXPERT_MODE, fallback_page, page_visible
 from app_info import APP_TITLE
 from ui.ui_scale import scale_px
 from i18n.translator import t
@@ -22,11 +23,41 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(APP_TITLE)
-        self.setMinimumSize(scale_px(1100), scale_px(680))
-        self.resize(scale_px(1360), scale_px(820))
+        self._apply_responsive_window_geometry()
         self._widgets: dict[int, QWidget | None] = {}
         self._setup_ui()
         self._setup_shortcuts()
+
+    def _apply_responsive_window_geometry(self) -> None:
+        """Setzt eine nutzbare Fenstergröße innerhalb der Arbeitsfläche."""
+        app = QApplication.instance()
+        screen = self.screen() or (app.primaryScreen() if app else None)
+        if screen is None:
+            self.setMinimumSize(900, 580)
+            self.resize(1200, 760)
+            return
+
+        available = screen.availableGeometry()
+        margin = scale_px(32)
+        max_width = max(760, available.width() - margin)
+        max_height = max(520, available.height() - margin)
+
+        minimum_width = min(scale_px(980), max_width)
+        minimum_height = min(scale_px(620), max_height)
+        self.setMinimumSize(minimum_width, minimum_height)
+
+        target_width = min(scale_px(1360), round(available.width() * 0.88), max_width)
+        target_height = min(scale_px(820), round(available.height() * 0.88), max_height)
+        self.resize(max(minimum_width, target_width), max(minimum_height, target_height))
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if getattr(self, "_screen_hook_installed", False):
+            return
+        handle = self.windowHandle()
+        if handle is not None:
+            handle.screenChanged.connect(lambda _screen: QTimer.singleShot(0, self._apply_responsive_window_geometry))
+            self._screen_hook_installed = True
 
     def _setup_shortcuts(self):
         """Usability 3.6: Standard-Shortcuts für schnelle Dateneingabe.
@@ -89,16 +120,22 @@ class MainWindow(QMainWindow):
         except Exception:
             # Fallback: alter Wizard, falls Tour-Dateien fehlen oder kaputt sind.
             try:
-                from ui.onboarding_wizard import OnboardingWizard, should_show_wizard
+                from ui.onboarding_wizard import should_show_wizard
                 if not should_show_wizard():
                     return
-                wizard = OnboardingWizard(self)
-                wizard.navigate_to.connect(self._navigate)
-                wizard.open_ink_dialog.connect(self._open_ink_add_dialog)
-                wizard.open_pen_dialog.connect(self._open_pen_add_dialog)
-                wizard.exec()
+                self.start_onboarding_wizard()
             except Exception:
                 return
+
+    def start_onboarding_wizard(self) -> None:
+        """Den vierstufigen Einrichtungsassistenten jederzeit starten."""
+        from ui.onboarding_wizard import OnboardingWizard
+
+        wizard = OnboardingWizard(self)
+        wizard.navigate_to.connect(self._navigate)
+        wizard.open_ink_dialog.connect(self._open_ink_add_dialog)
+        wizard.open_pen_dialog.connect(self._open_pen_add_dialog)
+        wizard.exec()
 
     def start_tour(self) -> None:
         """App-Tour starten (Hilfe, Einstellungen oder erster Start)."""
@@ -139,6 +176,11 @@ class MainWindow(QMainWindow):
         toolbar.addAction(t('ui.main_window.fill'),          lambda: self._run_page_action(1, "_load_ink"))
         toolbar.addAction(t('ui.main_window.cleaned'),          lambda: self._run_page_action(1, "_mark_cleaned"))
         toolbar.addAction(t('ui.main_window.suggest_rotation'), lambda: self._run_page_action(5, "generate_suggestions"))
+        toolbar.addSeparator()
+
+        context_help = toolbar.addAction(t('ui.main_window.context_help'))
+        context_help.setToolTip(t('ui.main_window.context_help_tooltip'))
+        context_help.triggered.connect(self._open_context_help)
         toolbar.addSeparator()
 
         self.global_search = QLineEdit()
@@ -211,11 +253,19 @@ class MainWindow(QMainWindow):
                 sig.connect(self.start_tour)
             except Exception:
                 pass
-        # Dashboard-Rechtsklick „Zum Bereich springen" navigiert zur Zielseite.
+        wizard_sig = getattr(widget, "wizard_requested", None)
+        if wizard_sig is not None:
+            try:
+                wizard_sig.connect(self.start_onboarding_wizard)
+            except Exception:
+                pass
+        # Dashboard-Kacheln dürfen auch Expertentabs direkt öffnen. Bei einem
+        # bewussten Doppelklick wird dafür der Expertenmodus automatisch aktiviert.
         nav_sig = getattr(widget, "navigate_to", None)
         if nav_sig is not None:
             try:
-                nav_sig.connect(self._navigate)
+                target = self._navigate_from_dashboard if index == 0 else self._navigate
+                nav_sig.connect(target)
             except Exception:
                 pass
         action_sig = getattr(widget, "action_requested", None)
@@ -235,12 +285,43 @@ class MainWindow(QMainWindow):
             sc.activated.connect(widget._delete)
         return widget
 
+    def _navigate_from_dashboard(self, index: int) -> None:
+        """Erfüllt die explizite Dashboard-Navigation auch für Expertentabs."""
+        if not page_visible(index):
+            self.sidebar.set_mode(EXPERT_MODE)
+        self._navigate(index)
+
     def _run_page_action(self, index: int, method_name: str):
         self._navigate(index)
         widget = self._ensure_widget(index)
         method = getattr(widget, method_name, None)
         if callable(method):
             method()
+
+    def _open_context_help(self) -> None:
+        """Öffnet aus jedem Modul direkt das passende Wiki-Kapitel."""
+        current = self._stack.currentIndex()
+        topic_by_page = {
+            0: "start",
+            1: "data_entry",
+            2: "data_entry",
+            3: "data_entry",
+            4: "data_entry",
+            5: "rotation",
+            6: "consumption",
+            7: "start",
+            8: "rules",
+            9: "start",
+            10: "start",
+            11: "start",
+            12: "data_entry",
+            13: "service",
+        }
+        self._navigate(9)
+        help_widget = self._ensure_widget(9)
+        show_topic = getattr(help_widget, "show_topic", None)
+        if callable(show_topic):
+            show_topic(topic_by_page.get(current, "start"))
 
     def _global_search_changed(self, text: str):
         widget = self._widgets.get(self._stack.currentIndex())
@@ -257,11 +338,7 @@ class MainWindow(QMainWindow):
             self.sidebar.set_current_page(current)
 
     def set_navigation_mode(self, mode: str) -> str:
-        """Navigationsmodus setzen und Seitenleiste sofort synchronisieren.
-
-        Wird auch von der Tour genutzt, um Expertenmodule vorübergehend zu
-        zeigen. Die Tour stellt den ursprünglichen Modus beim Ende wieder her.
-        """
+        """Navigationsmodus setzen und Seitenleiste sofort synchronisieren."""
         normalized = self.sidebar.set_mode(mode)
         self._navigation_mode_changed(normalized)
         return normalized

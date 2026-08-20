@@ -23,10 +23,12 @@ def test_dashboard_has_navigate_signal_and_context_menus():
     assert "self.navigate_to.emit(2)" in src
 
 
-def test_dashboard_hides_empty_sections():
+def test_dashboard_shows_only_the_selected_detail_section():
     src = _read("ui/dashboard_widget.py")
-    for group in ("_timer_group", "_lock_group", "_health_group", "_activity_group"):
-        assert f"self.{group}.setVisible(" in src, group
+    assert "def _toggle_detail" in src
+    assert "def _sync_detail_visibility" in src
+    assert "group.setVisible(selected)" in src
+    assert "self._expanded_detail" in src
     assert "self._all_clear.setVisible(" in src
 
 
@@ -42,7 +44,8 @@ def test_dashboard_context_menu_guards_dismiss():
 def test_main_window_wires_navigate_to():
     src = _read("ui/main_window.py")
     assert 'getattr(widget, "navigate_to"' in src
-    assert "nav_sig.connect(self._navigate)" in src
+    assert "target = self._navigate_from_dashboard if index == 0 else self._navigate" in src
+    assert "nav_sig.connect(target)" in src
 
 
 # ── Schreibproben: Rechtsklick ────────────────────────────────────

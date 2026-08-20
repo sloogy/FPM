@@ -1,0 +1,63 @@
+name: Generate platform dependency locks
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Generate Linux and Windows locks
+        run: |
+          python tools/gen_lockfile.py --platform linux
+          python tools/gen_lockfile.py --platform windows
+          python tools/gen_lockfile.py --check --platform all
+
+      - name: Validate clean hash-only installation plans
+        run: |
+          uv pip install --system --dry-run --python-platform x86_64-unknown-linux-gnu --require-hashes --only-binary=:all: -r constraints-linux.lock
+          uv pip install --system --dry-run --python-platform x86_64-pc-windows-msvc --require-hashes --only-binary=:all: -r constraints-windows.lock
+
+      - name: Upload locks
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-dependency-locks
+          path: constraints-*.lock
+          if-no-files-found: error
+
+      - name: Open pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          BRANCH="chore/platform-locks-${{ github.run_number }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add constraints-linux.lock constraints-windows.lock
+          if git diff --cached --quiet; then
+            echo "Lock files are already current; no pull request required."
+            exit 0
+          fi
+          git commit -m "chore: platform-specific hash locks"
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "Platform-specific hash-locked dependencies" \
+            --body "Generated for Python 3.12 Linux x86_64 and Windows x86_64. Official releases refuse unpinned fallback installs." \
+            --base "${{ github.ref_name }}" \
+            --head "$BRANCH"

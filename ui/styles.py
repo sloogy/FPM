@@ -83,7 +83,7 @@ QPushButton#modeToggleButton:hover {{ background-color: #1d4ed8; }}
 QLabel#sidebarHint {{ color: #94a3b8; font-size: {tiny}px; padding: {_px(10, scale)}px {_px(14, scale)}px; background-color: #18212d; }}
 
 QLabel#sidebarGroupLabel {{
-    color: #7f8c8d;
+    color: #94a3b8;
     font-size: {tiny}px;
     font-weight: 700;
     letter-spacing: {_px(1, scale)}px;
@@ -227,7 +227,12 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 /* ── Labels ─────────────────────────────────────────────── */
 QLabel#page_title {{ font-size: {title}px; font-weight: bold; color: #1e2a38; }}
 QLabel#stat_value {{ font-size: {stat}px; font-weight: bold; color: #2c3e50; }}
-QLabel#stat_label {{ font-size: {tiny}px; color: #7f8c8d; text-transform: uppercase; }}
+QLabel#stat_label {{ font-size: {tiny}px; color: #5f6f72; text-transform: uppercase; }}
+
+
+QLabel[secondaryText="true"] {{
+    color: #5f6f72;
+}}
 
 /* ── Splitter ────────────────────────────────────────────── */
 QSplitter::handle {{ background-color: #d5dce6; }}
@@ -236,7 +241,7 @@ QSplitter::handle:horizontal {{ width: 1px; }}
 /* ── Ausgaben-Tracker Summary / Details ─────────────────── */
 QWidget#summaryCard {{ background: #ffffff; border: 1px solid #d5dce6; border-radius: {_px(8, scale)}px; }}
 QLabel#summaryValue {{ font-size: {_px(17, scale)}px; font-weight: 800; color: #1e2a38; border: none; }}
-QLabel#summaryLabel {{ font-size: {_px(10, scale)}px; color: #64748b; border: none; }}
+QLabel#summaryLabel {{ font-size: {_px(10, scale)}px; color: #5f6f72; border: none; }}
 QWidget#detailPanel {{ background: #ffffff; border-left: 1px solid #d5dce6; }}
 
 /* ── Tooltip ─────────────────────────────────────────────── */

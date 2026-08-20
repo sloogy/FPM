@@ -27,8 +27,9 @@ from logic.enthusiast_lab_service import (
 )
 from logic.event_bus import AppEventBus
 from ui.theme import BTN_PRIMARY
-from ui.locale_widgets import LocalizedDoubleSpinBox as QDoubleSpinBox
 from ui.ui_scale import scale_px
+from ui.localized_inputs import LocalizedDoubleSpinBox
+from ui.common import ResponsiveDialog
 
 
 def _fmt_num(value, digits: int = 1) -> str:
@@ -87,7 +88,7 @@ class EnthusiastLabWidget(QWidget):
 
         hint = QLabel(t("enthusiast_lab.hint"))
         hint.setWordWrap(True)
-        hint.setStyleSheet("color:#7f8c8d; border:none; padding:2px;")
+        hint.setStyleSheet("color:#5f6f72; border:none; padding:2px;")
         root.addWidget(hint)
 
         self.tabs = QTabWidget()
@@ -354,7 +355,7 @@ class EnthusiastLabWidget(QWidget):
             session.close()
 
 
-class InkStockDialog(QDialog):
+class InkStockDialog(ResponsiveDialog):
     def __init__(self, parent=None, *, ink: Ink):
         super().__init__(parent)
         self.setWindowTitle(t("enthusiast_lab.ink_stock.dialog_title"))
@@ -362,8 +363,8 @@ class InkStockDialog(QDialog):
         root = QVBoxLayout(self)
         form_box = QGroupBox(_label_ink(ink))
         form = QFormLayout(form_box)
-        self.remaining = QDoubleSpinBox(); self.remaining.setRange(0, 10000); self.remaining.setDecimals(1); self.remaining.setSuffix(" ml")
-        self.threshold = QDoubleSpinBox(); self.threshold.setRange(0, 10000); self.threshold.setDecimals(1); self.threshold.setSuffix(" ml")
+        self.remaining = LocalizedDoubleSpinBox(); self.remaining.setRange(0, 10000); self.remaining.setDecimals(1); self.remaining.setSuffix(" ml")
+        self.threshold = LocalizedDoubleSpinBox(); self.threshold.setRange(0, 10000); self.threshold.setDecimals(1); self.threshold.setSuffix(" ml")
         self.url = QLineEdit()
         self.note = QTextEdit(); self.note.setMinimumHeight(scale_px(70))
         self.empty = QComboBox(); self.empty.addItem(t("common.no"), False); self.empty.addItem(t("common.yes"), True)
@@ -382,6 +383,10 @@ class InkStockDialog(QDialog):
         save = QPushButton(t("common.save")); cancel = QPushButton(t("common.cancel"))
         save.clicked.connect(self.accept); cancel.clicked.connect(self.reject)
         buttons.addWidget(save); buttons.addWidget(cancel); root.addLayout(buttons)
+        self.enable_responsive_layout(
+            560, 440, minimum_width=340, minimum_height=280,
+            scroll=True
+        )
 
     def get_data(self) -> dict:
         return {
@@ -393,7 +398,7 @@ class InkStockDialog(QDialog):
         }
 
 
-class CleaningLogDialog(QDialog):
+class CleaningLogDialog(ResponsiveDialog):
     def __init__(self, parent=None, *, session):
         super().__init__(parent)
         self.session = session
@@ -409,7 +414,7 @@ class CleaningLogDialog(QDialog):
         self.ink.addItem(t("enthusiast_lab.optional_none"), None)
         for ink in session.query(Ink).order_by(Ink.brand, Ink.name).all():
             self.ink.addItem(_label_ink(ink), ink.id)
-        self.minutes = QDoubleSpinBox(); self.minutes.setRange(0, 600); self.minutes.setDecimals(1); self.minutes.setSuffix(" min")
+        self.minutes = LocalizedDoubleSpinBox(); self.minutes.setRange(0, 600); self.minutes.setDecimals(1); self.minutes.setSuffix(" min")
         self.difficulty = QSpinBox(); self.difficulty.setRange(1, 5); self.difficulty.setValue(3)
         self.cycles = QSpinBox(); self.cycles.setRange(0, 100); self.cycles.setValue(0)
         self.cleaner = QLineEdit(); self.cleaner.setPlaceholderText(t("enthusiast_lab.cleaning.cleaner_placeholder"))
@@ -431,6 +436,10 @@ class CleaningLogDialog(QDialog):
         save = QPushButton(t("common.save")); cancel = QPushButton(t("common.cancel"))
         save.clicked.connect(self.accept); cancel.clicked.connect(self.reject)
         buttons.addWidget(save); buttons.addWidget(cancel); root.addLayout(buttons)
+        self.enable_responsive_layout(
+            680, 560, minimum_width=360, minimum_height=300,
+            scroll=True
+        )
 
     def get_data(self) -> dict:
         qdate = self.date.date()

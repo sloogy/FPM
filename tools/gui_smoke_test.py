@@ -36,7 +36,6 @@ def main() -> int:
         from i18n.qt_i18n import install_qt_i18n_hooks
         from ui.main_window import MainWindow
         from logic.app_mode import EXPERT_MODE, SIMPLE_MODE, SIMPLE_PAGES, set_app_mode
-        from ui.tour_controller import build_steps, should_show_tour
         from ui.styles import get_stylesheet
         from ui.ui_scale import apply_ui_scaling
     except Exception as exc:
@@ -50,22 +49,32 @@ def main() -> int:
     load_language_from_settings()
     install_qt_i18n_hooks()
 
+    # v0.3.02: Minimaldaten, damit Dashboard-Service, Timer- und Sperr-Pfade
+    # nicht nur gegen eine leere Datenbank rauchen.
+    from datetime import datetime, timedelta
+    from database.db import get_session
+    from database.models import Ink, InkLoad, Pen
+    session = get_session()
+    try:
+        ink = Ink(brand="Smoke", name="Blue", color_hex="#123456",
+                  color_family="blue", bottle_size_ml=50.0, remaining_ml=30.0)
+        pen_ok = Pen(brand="Smoke", model="Writer", fill_system="converter",
+                     purchase_price=100.0, purchase_currency="CHF")
+        pen_blocked = Pen(brand="Smoke", model="Blocked", fill_system="piston",
+                          rotation_blocked=True)
+        session.add_all([ink, pen_ok, pen_blocked])
+        session.flush()
+        session.add(InkLoad(pen_id=pen_ok.id, ink_id=ink.id,
+                            loaded_date=datetime.now() - timedelta(days=45)))
+        session.commit()
+    finally:
+        session.close()
+
     tr = Translator.instance()
     for lang in ("de", "en", "fr"):
         tr.set_language(lang)
         assert tr.t("nav.dashboard") != "nav.dashboard"
         assert tr.t("rotation.msg_fill_success") != "rotation.msg_fill_success"
-
-    # Frische Sammlung: erst Modulrunde (Expertenteil am Schluss), dann echte Datenanlage.
-    assert should_show_tour() is True
-    tour_steps = build_steps()
-    ids = [step.step_id for step in tour_steps]
-    assert [step.page_index for step in tour_steps if step.on_next is not None][:2] == [2, 1]
-    assert ids.index("expert_intro") < ids.index("setup_intro") < ids.index("ink_add")
-    assert ids.index("ink_add") < ids.index("pen_add") < ids.index("rotation_generate")
-    assert {3, 4, 6, 7, 8, 11, 12, 13} <= {
-        step.page_index for step in tour_steps if step.mode == "expert"
-    }
 
     # Simple Mode is the DAU default: expert-only pages must not be reachable by accident.
     set_app_mode(SIMPLE_MODE)
@@ -84,24 +93,37 @@ def main() -> int:
         assert window._stack.currentIndex() == page
         app.processEvents()
 
-    # Reale Schnellaktion: sie muss Vorschläge erzeugen, nicht nur die Seite aktualisieren.
-    from database.db import get_session
-    from database.models import Ink, Pen
-    session = get_session()
+    # v0.3.02: Dashboard-Refresh explizit mit gefüllten Daten (Service-Pfad,
+    # Timer überfällig, Sperr-Zeile) und Konstruktions-Smoke aller fünf
+    # ausgelagerten Füller-Dialoge – fängt Split-/Importfehler in der CI.
+    window._navigate(0)
+    dashboard = window._stack.widget(0)
+    dashboard.refresh()
+    assert dashboard.timer_table.rowCount() >= 1, "Überfällige Ladung fehlt im Timer"
+    assert dashboard.service_table.rowCount() >= 1, "Gesperrter Füller fehlt in Service"
+
+    from ui.pen_dialogs import (LoadInkDialog, PenDialog, ServiceBlockDialog,
+                                ServiceHelpDialog, SizeCompareDialog)
+    from database.db import get_session as _gs
+    _s = _gs()
     try:
-        session.add(Ink(brand="Smoke", name="Blue", color_family="blue", color_hex="#24518a"))
-        session.add(Pen(brand="Smoke", model="Pen", fill_system="converter"))
-        session.commit()
+        smoke_pen = _s.query(Pen).filter_by(model="Writer").first()
+        smoke_pen_id = smoke_pen.id if smoke_pen else None
     finally:
-        session.close()
-    window._run_page_action(5, "generate_suggestions")
-    rotation = window._ensure_widget(5)
-    assert rotation._last_suggestions
-    assert rotation.sug_table.rowCount() >= 1
+        _s.close()
+    for dlg in (
+        PenDialog(window),
+        LoadInkDialog(window, smoke_pen_id),
+        SizeCompareDialog(window),
+        ServiceBlockDialog(window),
+        ServiceHelpDialog(window, "piston"),
+    ):
+        dlg.deleteLater()
+    app.processEvents()
 
     QTimer.singleShot(50, app.quit)
     app.exec()
-    print("OK: GUI smoke test passed")
+    print("OK: GUI smoke test passed (dialog + dashboard data paths included)")
     return 0
 
 

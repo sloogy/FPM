@@ -8,6 +8,7 @@ SQLite database.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -74,6 +75,10 @@ class BudgetManagerSavingsGoal:
 
 
 def default_bridge_dir() -> Path:
+    """Gemeinsamer Bridge-Ordner mit sicherem Standalone-Fallback."""
+    override = os.environ.get("LIFEPLANNER_BRIDGE_DIR", "").strip()
+    if override:
+        return Path(override).expanduser().resolve()
     return Path.home() / BRIDGE_DIR_NAME
 
 
@@ -97,7 +102,7 @@ def _iso_date(value: Any) -> str:
     if value:
         try:
             return datetime.fromisoformat(str(value)).date().isoformat()
-        except Exception:
+        except (ValueError, TypeError):
             pass
     return date.today().isoformat()
 
@@ -105,7 +110,7 @@ def _iso_date(value: Any) -> str:
 def _parse_date(value: Any) -> date:
     try:
         return date.fromisoformat(_iso_date(value))
-    except Exception:
+    except (ValueError, TypeError):
         return date.today()
 
 

@@ -10,18 +10,19 @@ v0.2.4 – Änderbarer Datenbankpfad:
 import json
 import logging
 import sqlite3
+import os
+import re
 from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
 from sqlalchemy import create_engine, event, text
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, Session, close_all_sessions
 from database.models import Base
 
 SCHEMA_VERSION = "0.2.88"
 
+engine = None
+SessionLocal = None
 logger = logging.getLogger(__name__)
-
-_STATE = SimpleNamespace(engine=None, session_factory=None)
 
 
 # ── Config ──────────────────────────────────────────────────────────────────
@@ -104,57 +105,64 @@ def set_db_path(new_path: Path) -> None:
 
 # ── Initialisierung / Reinitialisierung ──────────────────────────────────────
 
-def init_db(db_path: Path = None) -> None:
-    """Initialisiert die Datenbank beim Start."""
-    if db_path is None:
-        db_path = get_db_path()
-    _connect(db_path)
+def close_db() -> None:
+    """Schließt alle Sessions und Verbindungen kontrolliert.
+
+    Das verhindert offene SQLite-Handles bei Tests, Datenbankwechseln und beim
+    regulären Programmende. Die Funktion ist mehrfach gefahrlos aufrufbar.
+    """
+    global engine, SessionLocal
+    try:
+        close_all_sessions()
+    except Exception:
+        pass
+    if engine is not None:
+        engine.dispose()
+    engine = None
+    SessionLocal = None
 
 
 def dispose_db() -> None:
-    """Schließt alle DB-Verbindungen, z.B. vor einer Vollwiederherstellung."""
-    if _STATE.engine is not None:
-        _STATE.engine.dispose()
-    _STATE.engine = None
-    _STATE.session_factory = None
+    """Kompatibilitätsname für das kontrollierte Schließen der Datenbank."""
+    close_db()
+
+
+def init_db(db_path: Path = None) -> None:
+    """Initialisiert die Datenbank beim Start oder für einen neuen Testlauf."""
+    if db_path is None:
+        db_path = get_db_path()
+    close_db()
+    _connect(db_path)
 
 
 def reinit_db(new_path: Path) -> None:
     """
     Schließt die aktuelle Engine, speichert den neuen Pfad und öffnet die DB
-    unter new_path neu. Alle nachfolgenden get_session()-Aufrufe nutzen
+    unter new_path neu.  Alle nachfolgenden get_session()-Aufrufe nutzen
     automatisch die neue Datenbank – kein Neustart nötig.
     """
-    dispose_db()
+    close_db()
     set_db_path(new_path)
     _connect(new_path)
 
 
 def _connect(db_path: Path) -> None:
-    """Baut Engine + SessionFactory auf und führt Migration/Seed durch.
+    """Baut Engine + SessionFactory auf und führt Migrationen fail-fast aus."""
+    global engine, SessionLocal
 
-    Migrationen laufen bewusst fail-fast: Ein teilweise migrierter Datenbestand
-    darf nicht unbemerkt weiterverwendet werden. Vor einer echten Migration wird
-    die vorhandene SQLite-Datei über die SQLite-Backup-API gesichert.
-    """
-
-    # Mehrfachaufrufe aus Tests, Pfadwechseln oder Restore dürfen keine alte
-    # Connection-Pool-Instanz offenlassen.
-    dispose_db()
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     is_new_database = not db_path.exists() or db_path.stat().st_size == 0
-    needs_migration = (not is_new_database) and _database_needs_migration(db_path)
-    if needs_migration:
+    if not is_new_database and _database_needs_migration(db_path):
         _backup_before_schema_migration(db_path)
 
-    _STATE.engine = create_engine(
+    engine = create_engine(
         f"sqlite:///{db_path}",
         connect_args={"check_same_thread": False},
         echo=False,
     )
 
-    @event.listens_for(_STATE.engine, "connect")
+    @event.listens_for(engine, "connect")
     def _set_sqlite_pragmas(dbapi_connection, _connection_record):
         cursor = dbapi_connection.cursor()
         try:
@@ -163,12 +171,11 @@ def _connect(db_path: Path) -> None:
         finally:
             cursor.close()
 
-    Base.metadata.create_all(_STATE.engine)
-    _STATE.session_factory = sessionmaker(
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(
         autocommit=False, autoflush=False,
-        bind=_STATE.engine, expire_on_commit=False,
+        bind=engine, expire_on_commit=False,
     )
-
     migrations = (
         ("schema", _migrate_schema),
         ("legacy writing samples", _migrate_legacy_writing_samples),
@@ -179,12 +186,10 @@ def _connect(db_path: Path) -> None:
     )
     for name, migration in migrations:
         _run_migration(name, migration)
-
     _insert_default_rules()
     _initialize_onboarding_state(is_new_database)
     _apply_initial_config_settings()
     _validate_database_integrity()
-
 
 
 def _run_migration(name: str, migration) -> None:
@@ -198,13 +203,13 @@ def _run_migration(name: str, migration) -> None:
 def _database_needs_migration(db_path: Path) -> bool:
     """Prüft ohne SQLAlchemy-Start, ob ein Vor-Migrationsbackup nötig ist."""
     try:
-        with sqlite3.connect(db_path) as conn:
-            table = conn.execute(
+        with sqlite3.connect(db_path) as connection:
+            table = connection.execute(
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name='app_settings'"
             ).fetchone()
             if not table:
                 return True
-            row = conn.execute(
+            row = connection.execute(
                 "SELECT value FROM app_settings WHERE key='schema_version'"
             ).fetchone()
             return row is None or str(row[0] or "") != SCHEMA_VERSION
@@ -213,24 +218,23 @@ def _database_needs_migration(db_path: Path) -> bool:
 
 
 def _initialize_onboarding_state(is_new_database: bool) -> None:
-    """Initialisiert den Erststart ohne Beispiel-Datensätze.
-
-    Neue Datenbanken starten die geführte Anlage. Bestehende Datenbanken ohne
-    historisches Flag werden nicht überraschend erneut durch die Tour geführt.
-    Ein manueller Reset setzt das Flag später wieder auf ``0``.
-    """
+    """Initialisiert den Erststart, ohne Beispieldaten ungefragt anzulegen."""
     from database.models import AppSettings
 
-    session = _STATE.session_factory()
+    session = SessionLocal()
     try:
         if AppSettings.get(session, "onboarding_completed") is None:
-            AppSettings.set(session, "onboarding_completed", "0" if is_new_database else "1")
+            AppSettings.set(
+                session,
+                "onboarding_completed",
+                "0" if is_new_database else "1",
+            )
     finally:
         session.close()
 
 
 def _ensure_indexes() -> None:
-    """Legt häufig benötigte Filter-/Verknüpfungsindizes idempotent an."""
+    """Legt häufig benötigte Filter- und Verknüpfungsindizes idempotent an."""
     statements = (
         "CREATE INDEX IF NOT EXISTS ix_pens_brand_model ON pens(brand, model)",
         "CREATE INDEX IF NOT EXISTS ix_inks_brand_name ON inks(brand, name)",
@@ -241,24 +245,25 @@ def _ensure_indexes() -> None:
         "CREATE INDEX IF NOT EXISTS ix_writing_samples_date_pen ON writing_samples(written_at, pen_id)",
         "CREATE INDEX IF NOT EXISTS ix_cleaning_logs_date_pen ON cleaning_logs(cleaned_at, pen_id)",
     )
-    with _STATE.engine.begin() as conn:
+    with engine.begin() as connection:
         for statement in statements:
-            conn.execute(text(statement))
+            connection.execute(text(statement))
 
 
 def _validate_database_integrity() -> None:
     """Bricht bei beschädigter DB oder verwaisten Fremdschlüsseln klar ab."""
-    with _STATE.engine.connect() as conn:
-        integrity = conn.execute(text("PRAGMA integrity_check")).scalar()
+    with engine.connect() as connection:
+        integrity = connection.execute(text("PRAGMA integrity_check")).scalar()
         if str(integrity).lower() != "ok":
             raise RuntimeError(f"SQLite-Integritätsprüfung fehlgeschlagen: {integrity}")
-        violations = conn.execute(text("PRAGMA foreign_key_check")).fetchall()
+        violations = connection.execute(text("PRAGMA foreign_key_check")).fetchall()
         if violations:
             sample = ", ".join(str(tuple(row)) for row in violations[:5])
             raise RuntimeError(
                 f"Die Datenbank enthält {len(violations)} ungültige Fremdschlüssel. "
                 f"Beispiele: {sample}"
             )
+
 
 
 def _apply_initial_config_settings() -> None:
@@ -273,7 +278,7 @@ def _apply_initial_config_settings() -> None:
     except Exception:
         return
     initial = cfg.get("initial_settings") if isinstance(cfg, dict) else None
-    if not isinstance(initial, dict) or _STATE.session_factory is None:
+    if not isinstance(initial, dict) or SessionLocal is None:
         return
     allowed = {
         "language",
@@ -285,7 +290,7 @@ def _apply_initial_config_settings() -> None:
     }
     from database.models import AppSettings
 
-    session = _STATE.session_factory()
+    session = SessionLocal()
     try:
         for key, value in initial.items():
             if key not in allowed:
@@ -299,9 +304,9 @@ def _apply_initial_config_settings() -> None:
         session.close()
 
 def get_session() -> Session:
-    if _STATE.session_factory is None:
+    if SessionLocal is None:
         raise RuntimeError("Datenbank nicht initialisiert – init_db() zuerst aufrufen.")
-    return _STATE.session_factory()
+    return SessionLocal()
 
 
 # ── Seed-Daten ───────────────────────────────────────────────────────────────
@@ -311,7 +316,7 @@ def _insert_default_rules():
     import json as _json
     from database.models import Rule, AppSettings
 
-    session = _STATE.session_factory()
+    session = SessionLocal()
     try:
         rules = [
             Rule(
@@ -452,11 +457,11 @@ def _insert_default_rules():
         session.close()
 
 
-def insert_example_inks():
-    """Legt optionale Demonstrations-Tinten an. Wird niemals automatisch aufgerufen."""
+def _insert_default_inks():
+    """Legt die vom Nutzer analysierten Tinten als Startdaten an, ohne Dubletten zu erzeugen."""
     from datetime import datetime
     from database.models import Ink
-    session = _STATE.session_factory()
+    session = SessionLocal()
     try:
         rows = [
             dict(brand="Diamine", name="Skull & Roses", color_type="Sheen-Monster", color_family="blue", color_hex="#1D2C73", wetness_level=4, has_sheen=True, sheen_level=5, sheen_color="rot", has_shimmer=False, feathering_level=4, shading_level=3, flow_level=4, saturation_level=5, cleaning_effort=4, max_days_in_pen=14, notes="Extrem sheen-lastig, ideal auf Tomoe River"),
@@ -483,24 +488,71 @@ def insert_example_inks():
 
 # ── Schema-Migration ──────────────────────────────────────────────────────────
 
-def _backup_before_schema_migration(db_path: Path) -> None:
-    """Sichert den unveränderten Vor-Migrationszustand über SQLite ``backup``."""
+def _sqlite_readonly_uri(path: Path) -> str:
+    resolved = Path(path).resolve()
+    # sqlite URI expects forward slashes on all platforms.
+    return f"file:{resolved.as_posix()}?mode=ro"
+
+
+def verify_sqlite_integrity(path: Path, *, full: bool = True) -> None:
+    """Raise when *path* is not a readable, structurally valid SQLite DB."""
+    path = Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    pragma = "integrity_check" if full else "quick_check"
+    with sqlite3.connect(_sqlite_readonly_uri(path), uri=True) as connection:
+        rows = [str(row[0]).strip().lower() for row in connection.execute(f"PRAGMA {pragma}")]
+    if rows != ["ok"]:
+        raise RuntimeError(f"SQLite-{pragma} fehlgeschlagen: {rows or ['kein Ergebnis']}")
+
+
+def create_consistent_backup(source: Path, target: Path) -> Path:
+    """Create and verify an atomic online backup using SQLite's backup API."""
+    source = Path(source)
+    target = Path(target)
+    if not source.is_file():
+        raise FileNotFoundError(source)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(target.name + ".partial")
+    temporary.unlink(missing_ok=True)
+
+    try:
+        with sqlite3.connect(str(source)) as source_db:
+            # Flush pending WAL frames without requiring exclusive access.
+            source_db.execute("PRAGMA wal_checkpoint(PASSIVE)")
+            with sqlite3.connect(str(temporary)) as backup_db:
+                source_db.backup(backup_db, pages=256, sleep=0.02)
+                backup_db.commit()
+        verify_sqlite_integrity(temporary, full=True)
+        os.replace(temporary, target)
+        verify_sqlite_integrity(target, full=False)
+        return target
+    except (OSError, RuntimeError, sqlite3.Error):
+        temporary.unlink(missing_ok=True)
+        raise
+
+
+def _backup_before_schema_migration(db_path: Path) -> Path | None:
+    """Create a verified safety backup before any schema-changing operation.
+
+    A backup error aborts startup instead of allowing an unprotected migration
+    to continue.
+    """
     db_path = Path(db_path)
-    if not db_path.exists():
-        return
-    configured_db = get_db_path().expanduser().resolve()
-    backup_root = _data_dir() if configured_db == db_path.expanduser().resolve() else db_path.parent
-    backup_dir = backup_root / "migration_backups"
+    if not db_path.exists() or db_path.stat().st_size == 0:
+        return None
+    backup_dir = db_path.parent / "migration_backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    target = backup_dir / f"{db_path.stem}_before_{SCHEMA_VERSION}_{stamp}{db_path.suffix}"
+    schema_tag = re.sub(r"[^A-Za-z0-9_.-]+", "_", SCHEMA_VERSION)
+    target = backup_dir / f"{db_path.stem}_before_{schema_tag}_{stamp}{db_path.suffix}"
     try:
-        with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as source:
-            with sqlite3.connect(target) as destination:
-                source.backup(destination)
-    except sqlite3.Error as exc:
-        logger.exception("Vor-Migrationsbackup fehlgeschlagen: %s", target)
-        raise RuntimeError(f"Vor-Migrationsbackup konnte nicht erstellt werden: {exc}") from exc
+        return create_consistent_backup(db_path, target)
+    except (OSError, RuntimeError, sqlite3.Error) as exc:
+        raise RuntimeError(
+            f"Sicherheitsbackup vor der Datenbankmigration fehlgeschlagen: {exc}"
+        ) from exc
+
 
 def _migrate_schema():
     """Fügt neue Spalten hinzu ohne bestehende DB zu löschen."""
@@ -641,7 +693,7 @@ def _migrate_schema():
         ("wishlist_items", "created_at",         "DATETIME"),
         ("wishlist_items", "updated_at",         "DATETIME"),
     ]
-    with _STATE.engine.begin() as conn:
+    with engine.begin() as conn:
         for table, column, coltype in migrations:
             existing = [row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))]
             if column not in existing:
@@ -686,34 +738,45 @@ def _migrate_legacy_writing_samples() -> None:
     scheitern. Die Migration ist idempotent und bewahrt ``nib_desc`` in den
     Notizen, falls noch kein strukturiertes ``nib_id`` existiert.
     """
-    if _STATE.engine is None:
+    if engine is None:
         return
     now = datetime.now().isoformat(sep=" ", timespec="seconds")
-    with _STATE.engine.begin() as conn:
+    with engine.begin() as conn:
         if not _table_exists(conn, "writing_samples"):
             return
         cols = _table_columns(conn, "writing_samples")
         if "title" not in cols:
             return
 
+        written_at_update = text(
+            "UPDATE writing_samples "
+            "SET written_at = COALESCE(created_at, :now) "
+            "WHERE written_at IS NULL"
+        ) if "created_at" in cols else text(
+            "UPDATE writing_samples SET written_at = :now WHERE written_at IS NULL"
+        )
+        updated_at_update = text(
+            "UPDATE writing_samples "
+            "SET updated_at = COALESCE(created_at, :now) "
+            "WHERE updated_at IS NULL"
+        ) if "created_at" in cols else text(
+            "UPDATE writing_samples SET updated_at = :now WHERE updated_at IS NULL"
+        )
         updates = [
-            ("sample_type", "'regular'"),
-            ("written_at", "COALESCE(created_at, :now)" if "created_at" in cols else ":now"),
-            ("feathering_level", "1"),
-            ("bleedthrough_level", "1"),
-            ("shading_level", "3"),
-            ("sheen_level", "0"),
-            ("flow_level", "3"),
-            ("feedback_level", "3"),
-            ("overall_rating", "3"),
-            ("updated_at", "COALESCE(created_at, :now)" if "created_at" in cols else ":now"),
+            ("sample_type", text("UPDATE writing_samples SET sample_type = 'regular' WHERE sample_type IS NULL")),
+            ("written_at", written_at_update),
+            ("feathering_level", text("UPDATE writing_samples SET feathering_level = 1 WHERE feathering_level IS NULL")),
+            ("bleedthrough_level", text("UPDATE writing_samples SET bleedthrough_level = 1 WHERE bleedthrough_level IS NULL")),
+            ("shading_level", text("UPDATE writing_samples SET shading_level = 3 WHERE shading_level IS NULL")),
+            ("sheen_level", text("UPDATE writing_samples SET sheen_level = 0 WHERE sheen_level IS NULL")),
+            ("flow_level", text("UPDATE writing_samples SET flow_level = 3 WHERE flow_level IS NULL")),
+            ("feedback_level", text("UPDATE writing_samples SET feedback_level = 3 WHERE feedback_level IS NULL")),
+            ("overall_rating", text("UPDATE writing_samples SET overall_rating = 3 WHERE overall_rating IS NULL")),
+            ("updated_at", updated_at_update),
         ]
-        for column, default_sql in updates:
+        for column, statement in updates:
             if column in cols:
-                conn.execute(
-                    text(f"UPDATE writing_samples SET {column} = {default_sql} WHERE {column} IS NULL"),
-                    {"now": now},
-                )
+                conn.execute(statement, {"now": now})
 
         rows = conn.execute(text("""
             SELECT ws.id,
@@ -761,10 +824,10 @@ def _migrate_legacy_nib_change_events() -> None:
     ``nib_id`` bleiben unangetastet, weil die Setup-Tabelle eine echte Feder
     benötigt. Die Migration ist idempotent und erzeugt keine Dubletten.
     """
-    if _STATE.engine is None:
+    if engine is None:
         return
     now = datetime.now().isoformat(sep=" ", timespec="seconds")
-    with _STATE.engine.begin() as conn:
+    with engine.begin() as conn:
         if not _table_exists(conn, "nib_change_events") or not _table_exists(conn, "pen_nib_setups"):
             return
         events = conn.execute(text("""
@@ -821,9 +884,9 @@ def _migrate_nib_formats() -> None:
     - Idempotent: läuft bei jedem Start, ändert aber nichts, wenn alles passt.
     """
     from database.models import Nib, NibFormat
-    if _STATE.session_factory is None:
+    if SessionLocal is None:
         return
-    session = _STATE.session_factory()
+    session = SessionLocal()
     try:
         nibs = session.query(Nib).all()
         if not nibs:
@@ -863,7 +926,6 @@ def _migrate_nib_formats() -> None:
             session.commit()
     except Exception:
         session.rollback()
-        raise
     finally:
         session.close()
 
@@ -875,9 +937,9 @@ def _migrate_pen_nib_setups() -> None:
     erzeugt. Das alte Pen.nib_id bleibt als Backward-Compatible Cache erhalten.
     """
     from database.models import Pen, PenNibSetup
-    if _STATE.session_factory is None:
+    if SessionLocal is None:
         return
-    session = _STATE.session_factory()
+    session = SessionLocal()
     try:
         changed = False
         for pen in session.query(Pen).all():
@@ -908,9 +970,11 @@ def _migrate_pen_nib_setups() -> None:
             session.commit()
     except Exception:
         session.rollback()
-        raise
     finally:
         session.close()
+
+
+
 
 
 # ── Reset-Funktionen ─────────────────────────────────────────────────────────
@@ -923,7 +987,7 @@ def reset_inkloads(keep_history: bool = True) -> int:
     """
     from datetime import datetime
     from database.models import InkLoad
-    session = _STATE.session_factory()
+    session = SessionLocal()
     try:
         now = datetime.now()
         if keep_history:
@@ -946,7 +1010,7 @@ def reset_ink_levels() -> int:
     Gibt Anzahl betroffener Tinten zurück.
     """
     from database.models import Ink
-    session = _STATE.session_factory()
+    session = SessionLocal()
     try:
         inks = session.query(Ink).all()
         for ink in inks:
@@ -967,7 +1031,7 @@ def reset_pen_status() -> int:
     Gibt Anzahl betroffener Füller zurück.
     """
     from database.models import Pen
-    session = _STATE.session_factory()
+    session = SessionLocal()
     try:
         pens = session.query(Pen).all()
         for pen in pens:
@@ -992,7 +1056,7 @@ def factory_reset_userdata() -> None:
     NICHT rückgängig machbar – Backup vorher erstellen!
     """
     from database.models import InkLoad, Expense, OverrideLog, Pen, Ink, Nib, NibFormat, PenNibSetup, Paper, WishlistItem, WritingSample
-    session = _STATE.session_factory()
+    session = SessionLocal()
     try:
         session.query(OverrideLog).delete()
         session.query(InkLoad).delete()
@@ -1036,10 +1100,23 @@ def factory_reset_userdata() -> None:
                     folder.rmdir()
             except Exception:
                 pass
+        # v0.2.88: leere Medienordner rekursiv aufräumen. Vorher scheiterte
+        # rmdir am nicht-leeren Wurzelverzeichnis, weil die Unterordner
+        # (media/<füller>/images/) nach dem Löschen der Dateien leer, aber
+        # vorhanden blieben. Dateien selbst werden weiter ausschließlich über
+        # die oben gesammelten image_path-Werte gelöscht (Containment geprüft).
         media_root = _data_dir() / "media"
         try:
-            if media_root.exists() and not any(media_root.rglob("*")):
-                media_root.rmdir()
+            if media_root.exists():
+                for folder in sorted(
+                    (p for p in media_root.rglob("*") if p.is_dir()),
+                    key=lambda p: len(p.parts),
+                    reverse=True,
+                ):
+                    if not any(folder.iterdir()):
+                        folder.rmdir()
+                if not any(media_root.iterdir()):
+                    media_root.rmdir()
         except Exception:
             pass
     finally:

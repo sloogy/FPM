@@ -11,8 +11,8 @@ from PySide6.QtWidgets import (
     QStackedWidget, QMenu,
 )
 from PySide6.QtCore import Qt, QDate
+from ui.localized_inputs import LocalizedDoubleSpinBox
 from ui.locale_widgets import (
-    LocalizedDoubleSpinBox as QDoubleSpinBox,
     bind_currency_combo,
     current_currency,
     populate_currency_combo,
@@ -22,7 +22,7 @@ from ui.ui_scale import scale_px
 from database.db import get_session
 from database.models import Paper, Expense
 from i18n.translator import LocaleService, t
-from ui.common import EmptyStateWidget
+from ui.common import EmptyStateWidget, ResponsiveDialog
 from logic.event_bus import AppEventBus
 from logic.budget_export_service import sync_default_outbox_from_session
 from ui.theme import BTN_MUTED, BTN_PRIMARY, BTN_SUCCESS
@@ -237,7 +237,7 @@ class PaperWidget(QWidget):
         finally: session.close()
 
 
-class PaperDialog(QDialog):
+class PaperDialog(ResponsiveDialog):
     def __init__(self, parent=None, paper: Optional[Paper]=None):
         super().__init__(parent)
         self.paper=paper
@@ -245,6 +245,10 @@ class PaperDialog(QDialog):
         self.setMinimumWidth(scale_px(500))
         self._setup_ui()
         if paper: self._load()
+        self.enable_responsive_layout(
+            720, 640, minimum_width=360, minimum_height=320,
+            scroll=True
+        )
 
     def _setup_ui(self):
         root=QVBoxLayout(self)
@@ -278,8 +282,9 @@ class PaperDialog(QDialog):
         g3=QGroupBox(t('ui.paper_widget.kauf_seitenstand_770a5f22')); f3=QFormLayout(g3)
         self.date_edit  =QDateEdit(QDate.currentDate()); self.date_edit.setCalendarPopup(True); self.date_edit.setDisplayFormat(LocaleService.instance().qt_date_format)
         default_cur = LocaleService.instance().currency
-        self.price_spin =QDoubleSpinBox(); self.price_spin.setRange(0,999); self.price_spin.setDecimals(2)
-        self.price_currency_combo = QComboBox(); populate_currency_combo(self.price_currency_combo, default_cur); bind_currency_combo(self.price_currency_combo, self.price_spin)
+        self.price_spin =LocalizedDoubleSpinBox(); self.price_spin.setRange(0,999); self.price_spin.setDecimals(2)
+        self.price_currency_combo = QComboBox(); populate_currency_combo(self.price_currency_combo, default_cur)
+        bind_currency_combo(self.price_currency_combo, self.price_spin)
         self.pages_spin =QSpinBox(); self.pages_spin.setRange(0,9999); self.pages_spin.setSuffix(t('ui.paper_widget.seiten_gesamt_20d48e06'))
         self.used_spin  =QSpinBox(); self.used_spin.setRange(0,9999); self.used_spin.setSuffix(t('ui.paper_widget.seiten_verbraucht_c62fff3b'))
         self.notes_edit =QTextEdit(); self.notes_edit.setMaximumHeight(70)

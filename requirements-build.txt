@@ -1,5 +1,8 @@
-# Build-only dependencies for release packaging.
-# Runtime users do not need Python or these packages.
+# Build- und Qualitätssicherungs-Abhängigkeiten.
+# Laufzeitnutzer benötigen diese Pakete nicht.
 pyinstaller>=6.0
-
 pytest>=8.0
+pytest-cov>=6.0,<8.0
+ruff>=0.12,<1.0
+bandit>=1.8,<2.0
+cryptography>=43.0,<47.0

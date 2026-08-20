@@ -13,7 +13,8 @@ from typing import Iterable
 
 from PySide6.QtCore import QDate, QLocale, Qt, Signal
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QDateEdit, QTableWidget, QTableWidgetItem, QHeaderView,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QComboBox, QDateEdit, QTableWidget, QTableWidgetItem, QHeaderView,
     QGroupBox, QSplitter, QScrollArea, QFrame, QFileDialog, QPushButton, QMessageBox,
 )
 
@@ -518,7 +519,7 @@ class StatisticsWidget(QWidget):
             self.budget_label.setStyleSheet(f"font-weight:bold;color:{colors.get(worst, '#2c3e50')};")
         else:
             self.budget_label.setText(t("ui.statistics_widget.budget_unset"))
-            self.budget_label.setStyleSheet("color:#7f8c8d;")
+            self.budget_label.setStyleSheet("color:#5f6f72;")
 
         # Wertentwicklung nach Jahr
         year_rows = value_by_year(pens, convert=locale.convert_to_default)

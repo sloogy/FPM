@@ -13,7 +13,7 @@ from PySide6.QtCore import Qt
 from ui.ui_scale import scale_px
 from database.db import get_session
 from database.models import Nib, NibFormat
-from ui.common import EmptyStateWidget
+from ui.common import EmptyStateWidget, ResponsiveDialog
 from logic.event_bus import AppEventBus
 from i18n.translator import t
 from ui.theme import BTN_MUTED, BTN_PRIMARY, BTN_SUCCESS
@@ -215,7 +215,7 @@ class NibWidget(QWidget):
             session.close()
 
 
-class NibDialog(QDialog):
+class NibDialog(ResponsiveDialog):
     """Dialog für eine Feder-Einheit (Exemplar).
 
     Zwei klar getrennte Bereiche:
@@ -238,6 +238,10 @@ class NibDialog(QDialog):
         self._reload_formats(select_id=getattr(nib, "format_id", None) if nib else None)
         if nib: self._load()
         self._on_format_combo_changed(0)
+        self.enable_responsive_layout(
+            760, 700, minimum_width=360, minimum_height=320,
+            scroll=True
+        )
 
     def _setup_ui(self):
         root = QVBoxLayout(self)

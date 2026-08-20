@@ -8,12 +8,132 @@ Enthält:
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton,
     QDialog, QTableWidget, QTableWidgetItem, QDialogButtonBox,
+    QScrollArea, QApplication, QFrame, QSizePolicy,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
 
-from ui.ui_scale import scale_px
 from i18n.translator import t
+
+
+
+
+class ResponsiveDialog(QDialog):
+    """QDialog-Basis mit bildschirmbegrenzter Geometrie und optionalem Scrollinhalt.
+
+    Qt-Geometrien liegen bereits in logischen Pixeln vor. Die Klasse begrenzt
+    Mindest-, Maximal- und Startgröße deshalb direkt gegen die verfügbare
+    Bildschirmfläche und verhindert, dass Schaltflächen auf Laptop-Displays
+    außerhalb des sichtbaren Bereichs liegen.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._responsive_preferred = (720, 560)
+        self._responsive_minimum = (360, 280)
+        self._responsive_margin = 24
+        self._responsive_wrapped = False
+        self._responsive_scroll = None
+        self._responsive_content = None
+
+    def enable_responsive_layout(
+        self,
+        preferred_width: int = 720,
+        preferred_height: int = 560,
+        *,
+        minimum_width: int = 360,
+        minimum_height: int = 280,
+        scroll: bool = True,
+        sticky_buttons: bool = True,
+        margin: int = 24,
+    ) -> None:
+        self._responsive_preferred = (max(1, preferred_width), max(1, preferred_height))
+        self._responsive_minimum = (max(1, minimum_width), max(1, minimum_height))
+        self._responsive_margin = max(8, margin)
+        if scroll and not self._responsive_wrapped:
+            self._wrap_root_layout(sticky_buttons=sticky_buttons)
+        self._fit_to_available_screen()
+        QTimer.singleShot(0, self._fit_to_available_screen)
+
+    def _wrap_root_layout(self, *, sticky_buttons: bool) -> None:
+        root = self.layout()
+        if root is None or self._responsive_wrapped:
+            return
+
+        margins = root.contentsMargins()
+        spacing = root.spacing()
+        content = QWidget(self)
+        content.setObjectName("responsiveDialogContent")
+        content.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(
+            margins.left(), margins.top(), margins.right(), margins.bottom()
+        )
+        content_layout.setSpacing(max(0, spacing))
+
+        sticky = []
+        while root.count():
+            item = root.takeAt(0)
+            widget = item.widget()
+            if sticky_buttons and isinstance(widget, QDialogButtonBox):
+                sticky.append(widget)
+            elif widget is not None:
+                content_layout.addWidget(widget)
+            elif item.layout() is not None:
+                content_layout.addLayout(item.layout())
+            else:
+                content_layout.addItem(item)
+
+        scroll = QScrollArea(self)
+        scroll.setObjectName("responsiveDialogScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setWidget(content)
+
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(scroll, 1)
+        for button_box in sticky:
+            button_box.setContentsMargins(8, 6, 8, 8)
+            root.addWidget(button_box, 0)
+
+        self._responsive_wrapped = True
+        self._responsive_scroll = scroll
+        self._responsive_content = content
+
+    def _available_geometry(self):
+        screen = self.screen()
+        if screen is None:
+            screen = QApplication.screenAt(self.frameGeometry().center())
+        if screen is None:
+            screen = QApplication.primaryScreen()
+        return screen.availableGeometry() if screen is not None else None
+
+    def _fit_to_available_screen(self) -> None:
+        available = self._available_geometry()
+        pref_w, pref_h = self._responsive_preferred
+        min_w, min_h = self._responsive_minimum
+        if available is None:
+            self.setMinimumSize(min_w, min_h)
+            self.resize(pref_w, pref_h)
+            return
+
+        max_w = max(320, available.width() - 2 * self._responsive_margin)
+        max_h = max(240, available.height() - 2 * self._responsive_margin)
+        bounded_min_w = min(min_w, max_w)
+        bounded_min_h = min(min_h, max_h)
+        target_w = min(max(pref_w, bounded_min_w), max_w)
+        target_h = min(max(pref_h, bounded_min_h), max_h)
+
+        self.setMinimumSize(bounded_min_w, bounded_min_h)
+        self.setMaximumSize(max_w, max_h)
+        self.resize(target_w, target_h)
+
+    def showEvent(self, event) -> None:
+        self._fit_to_available_screen()
+        super().showEvent(event)
 
 
 class EmptyStateWidget(QWidget):
@@ -53,14 +173,14 @@ class EmptyStateWidget(QWidget):
         layout.addWidget(icon_lbl)
 
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet("font-size:16px; font-weight:bold; color:#7f8c8d; border:none;")
+        title_lbl.setStyleSheet("font-size:16px; font-weight:bold; color:#5f6f72; border:none;")
         title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title_lbl)
 
         if subtitle:
             sub_lbl = QLabel(subtitle)
             sub_lbl.setWordWrap(True)
-            sub_lbl.setStyleSheet("font-size:13px; color:#95a5a6; border:none;")
+            sub_lbl.setStyleSheet("font-size:13px; color:#5f6f72; border:none;")
             sub_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(sub_lbl)
 
@@ -75,7 +195,7 @@ class EmptyStateWidget(QWidget):
             layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
 
-class ImportPreviewDialog(QDialog):
+class ImportPreviewDialog(ResponsiveDialog):
     """Zeigt CSV-Import-Vorschau mit Validierungsbericht.
 
     Nutzer sieht gültige Zeilen, Warnungen und Fehler bevor etwas importiert wird.
@@ -102,7 +222,6 @@ class ImportPreviewDialog(QDialog):
     def __init__(self, results: list, title: str | None = None, parent=None):
         super().__init__(parent)
         self.setWindowTitle(title or t("common.import_preview_title"))
-        self.setMinimumSize(scale_px(660), scale_px(440))
         root = QVBoxLayout(self)
         root.setSpacing(10)
 
@@ -162,6 +281,7 @@ class ImportPreviewDialog(QDialog):
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         root.addWidget(bb)
+        self.enable_responsive_layout(760, 560, minimum_width=420, minimum_height=320)
 
 
 class ImageZoomDialog(QDialog):

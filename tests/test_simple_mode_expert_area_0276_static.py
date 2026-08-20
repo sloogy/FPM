@@ -25,13 +25,22 @@ def test_navigation_has_simple_and_expert_group_orders_and_toggle():
     assert "switch_to_expert" in src
     assert "switch_to_simple" in src
     assert "set_app_mode" in src
+    assert "def set_mode" in src
 
 
 def test_main_window_blocks_hidden_expert_pages_in_simple_mode():
     src = read("ui/main_window.py")
-    assert "from logic.app_mode import fallback_page" in src
+    assert "from logic.app_mode import EXPERT_MODE, fallback_page, page_visible" in src
     assert "index = fallback_page(index)" in src
     assert "self.sidebar.modeChanged.connect" in src
+
+
+def test_dashboard_direct_navigation_can_open_expert_tabs():
+    src = read("ui/main_window.py")
+    assert "def _navigate_from_dashboard" in src
+    assert "if not page_visible(index):" in src
+    assert "self.sidebar.set_mode(EXPERT_MODE)" in src
+    assert "self._navigate_from_dashboard if index == 0" in src
 
 
 def test_dashboard_exposes_four_primary_quick_actions():

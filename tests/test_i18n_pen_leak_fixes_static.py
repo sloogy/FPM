@@ -13,7 +13,8 @@ def _read(rel: str) -> str:
 
 
 def test_pen_widget_has_no_hardcoded_german_status():
-    src = _read("ui/pen_widget.py")
+    # v0.3.02: Dialoge liegen in ui/pen_dialogs; Verbote gelten für beide.
+    src = _read("ui/pen_widget.py") + "\n" + _read("ui/pen_dialogs.py")
     # Früher hartcodiert – dürfen nicht zurückkehren.
     assert "'🔧 Service'" not in src
     assert "'🧼 Austrocknung'" not in src

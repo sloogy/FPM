@@ -11,23 +11,27 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QStackedWidget, QWidget, QProgressBar, QFrame,
 )
 
 from database.db import get_session
 from database.models import AppSettings
 from i18n.translator import t
+from ui.common import ResponsiveDialog
 
 
 # ── Hilfsfunktion: Onboarding-Status ─────────────────────────────────────────
 
 def should_show_wizard() -> bool:
-    """True wenn Wizard noch nicht abgeschlossen und DB leer ist."""
+    """True bei erzwungenem Neustart oder leerer, noch nicht eingerichteter Sammlung."""
     session = get_session()
     try:
+        forced = AppSettings.get(session, "onboarding_force_next_start", "0")
+        if str(forced) == "1":
+            return True
         done = AppSettings.get(session, "onboarding_completed", "0")
-        if done == "1":
+        if str(done) == "1":
             return False
         # Zeige Wizard nur wenn wirklich gar nichts angelegt ist
         from database.models import Pen, Ink
@@ -43,6 +47,7 @@ def mark_wizard_done() -> None:
     session = get_session()
     try:
         AppSettings.set(session, "onboarding_completed", "1")
+        AppSettings.set(session, "onboarding_force_next_start", "0")
         session.commit()
     finally:
         session.close()
@@ -66,7 +71,7 @@ def _make_page(
 
     # Schritt-Indikator
     step_lbl = QLabel(t("tour.wizard.step_indicator", step=step, total=total))
-    step_lbl.setStyleSheet("font-size:12px; color:#95a5a6;")
+    step_lbl.setStyleSheet("font-size:12px; color:#5f6f72;")
     vl.addWidget(step_lbl)
 
     # Icon
@@ -113,7 +118,7 @@ def _make_page(
 
 # ── Hauptdialog ───────────────────────────────────────────────────────────────
 
-class OnboardingWizard(QDialog):
+class OnboardingWizard(ResponsiveDialog):
     """
     4-Schritt-Wizard für den ersten Start.
 
@@ -135,6 +140,10 @@ class OnboardingWizard(QDialog):
         self.setModal(True)
         self._setup_ui()
         self._go_to(0)
+        self.enable_responsive_layout(
+            660, 580, minimum_width=340, minimum_height=300,
+            scroll=True
+        )
 
     def _setup_ui(self):
         root = QVBoxLayout(self)
@@ -202,7 +211,7 @@ class OnboardingWizard(QDialog):
         nav.setContentsMargins(24, 12, 24, 20)
 
         self._btn_skip = QPushButton(t("tour.wizard.skip"))
-        self._btn_skip.setStyleSheet("color:#7f8c8d; border:none; padding:8px;")
+        self._btn_skip.setStyleSheet("color:#5f6f72; border:none; padding:8px;")
         self._btn_skip.clicked.connect(self._finish)
         nav.addWidget(self._btn_skip)
 

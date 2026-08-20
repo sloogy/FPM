@@ -15,18 +15,22 @@ import hashlib
 import json
 import os
 import re
+import stat
 import sys
 import time
 import zipfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Dict, Tuple
 
-import requests
 from packaging import version as _version
+
+from logic.network_security import open_public_http_url
 
 
 DEFAULT_MANIFEST_URL = "https://github.com/sloogy/FPM/releases/latest/download/latest.json"
+MAX_MANIFEST_BYTES = 1_000_000
+MAX_UPDATE_BYTES = 1_500_000_000
 
 
 @dataclass(frozen=True)
@@ -141,7 +145,7 @@ def read_install_type() -> str:
         if not marker.is_file():
             return ""
         text = marker.read_text(encoding="utf-8")
-    except Exception as e:
+    except (OSError, UnicodeDecodeError) as e:
         logger.debug("Installationsart konnte nicht gelesen werden: %s", e)
         return ""
 
@@ -279,9 +283,23 @@ def parse_manifest(data: dict) -> Manifest:
 
 
 def fetch_manifest(manifest_url: str = DEFAULT_MANIFEST_URL, timeout_s: int = 10) -> Manifest:
-    r = requests.get(manifest_url, timeout=timeout_s)
-    r.raise_for_status()
-    data = r.json()
+    """Fetch the release manifest through the central public-network policy."""
+    response = open_public_http_url(
+        manifest_url,
+        timeout_s=timeout_s,
+        headers={
+            "User-Agent": "FountainPenManager/updater-manifest",
+            "Accept": "application/json",
+        },
+    )
+    with response:
+        raw = response.read(MAX_MANIFEST_BYTES + 1)
+    if len(raw) > MAX_MANIFEST_BYTES:
+        raise ValueError("Manifest überschreitet das Größenlimit")
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("Manifest ist kein gültiges UTF-8-JSON") from exc
     if not isinstance(data, dict):
         raise ValueError("Manifest ist kein JSON-Objekt")
     return parse_manifest(data)
@@ -314,24 +332,42 @@ def sha256_file(path: Path) -> str:
 
 
 def download_file(url: str, dest: Path, timeout_s: int = 30) -> None:
+    """Download an update atomically through the central public-network policy."""
+    dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    with requests.get(url, stream=True, timeout=timeout_s) as r:
-        r.raise_for_status()
-        with dest.open("wb") as f:
-            for chunk in r.iter_content(chunk_size=1024 * 128):
-                if chunk:
-                    f.write(chunk)
+    temporary = dest.with_name(dest.name + ".partial")
+    temporary.unlink(missing_ok=True)
+    response = open_public_http_url(
+        url,
+        timeout_s=timeout_s,
+        headers={
+            "User-Agent": "FountainPenManager/updater-asset",
+            "Accept": "application/octet-stream,*/*;q=0.5",
+        },
+    )
+    total = 0
+    try:
+        with response, temporary.open("wb") as handle:
+            while True:
+                chunk = response.read(1024 * 256)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_UPDATE_BYTES:
+                    raise ValueError("Update-Datei überschreitet das Größenlimit")
+                handle.write(chunk)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if total == 0:
+            raise ValueError("Leere Update-Datei erhalten")
+        os.replace(temporary, dest)
+    except (OSError, ValueError):
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def safe_extract_zip(zip_path: Path, dest_dir: Path) -> None:
-    """Extrahiert ein ZIP fail-closed ohne Pfad-Traversal oder Symlinks.
-
-    Ein einziges unsicheres Mitglied verwirft das gesamte Update. So entsteht
-    kein scheinbar erfolgreiches, aber unvollständig extrahiertes Staging.
-    """
-    import stat
-    from pathlib import PurePosixPath
-
+    """Extrahiert ZIP ohne ZipSlip (Pfad-Traversal)."""
     destination_root = dest_dir.resolve()
     with zipfile.ZipFile(zip_path, "r") as archive:
         validated: list[tuple[zipfile.ZipInfo, PurePosixPath]] = []
@@ -348,7 +384,10 @@ def safe_extract_zip(zip_path: Path, dest_dir: Path) -> None:
                 or stat.S_ISLNK(unix_mode)
             )
             target = (destination_root / Path(*member_path.parts)).resolve()
-            if unsafe or target != destination_root and destination_root not in target.parents:
+            if unsafe or (
+                target != destination_root
+                and destination_root not in target.parents
+            ):
                 raise ValueError(f"Unsicherer Pfad im Update-Archiv: {member.filename}")
             validated.append((member, member_path))
 
@@ -526,7 +565,7 @@ def read_check_result() -> dict:
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
-    except Exception:
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         return {}
 
 
@@ -561,7 +600,7 @@ def read_startup_check_result() -> dict:
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
-    except Exception:
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         return {}
 
 

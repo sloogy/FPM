@@ -153,6 +153,38 @@
       "problem": "Problemfüller",
       "service": "In Service"
     },
+    "tiles": {
+      "activity": {
+        "detail": "Zuletzt: {last}",
+        "none": "Noch keine Befüllung erfasst",
+        "primary": "Angezeigt: {count}",
+        "title": "Letzte Aktivität"
+      },
+      "budget": {
+        "detail": "Noch offen: {remaining}",
+        "primary": "Ziele: {count} · Erreicht: {complete}",
+        "title": "Sparziele"
+      },
+      "collection": {
+        "detail": "Wert: {value} · Hinweise: {issues} · Archiv: {archived}",
+        "primary": "Füller: {pens} · Tinten: {inks}",
+        "title": "Sammlung & Zustand",
+        "tooltip": "Kritisch: {critical} · Warnungen: {warning} · Einträge ohne Währung: {missing}"
+      },
+      "interaction_hint": "Einmal klicken: Tabelle fokussieren und erweitern. „Im Reiter öffnen“ oder Doppelklick: direkt zum passenden Reiter wechseln.",
+      "open_tab": "Im Reiter öffnen →",
+      "open_tab_tooltip": "Direkt zum zugehörigen Bereich wechseln",
+      "rotation": {
+        "detail": "Bald fällig: {soon}",
+        "primary": "Befüllt: {active} · Überfällig: {overdue}",
+        "title": "Rotation & Standzeit"
+      },
+      "service": {
+        "detail": "Kritisch: {critical} · Gesperrt: {blocked}",
+        "primary": "Offene Fälle: {count}",
+        "title": "Service & Sperren"
+      }
+    },
     "timer_title_counts": "⏱ Ink Safety Timer – {overdue} überfällig · {soon} bald fällig",
     "total_inks": "Tinten",
     "total_pens": "Füller gesamt",
@@ -357,22 +389,53 @@
     "total": "Gesamt"
   },
   "help": {
-    "dashboard_body": "Die vier Karten zeigen den Alltag: <b>Aktive Füller</b> (befüllt), <b>Tinten</b>, <b>Warnungen</b> (überfällige Timer + Regelverstöße) und <b>Sammlungswert</b>. Die graue Zeile darunter fasst den Bestand zusammen (gesamt / archiviert / Service). Wichtig: Der <b>Ink Safety Timer</b> ist eine Alarmzentrale – er zeigt nur überfällige und bald fällige Befüllungen (ab 80 % der Maximaltage). Alles im grünen Bereich steht vollständig auf der Rotationsseite unter „Aktuelle Belegung“.",
+    "auto": {
+      "decision_body": "Full Auto darf riskante Kombinationen ablehnen, bessere Alternativen bevorzugen und gesperrte Füller überspringen – aber nur, wenn du den Modus ausdrücklich aktivierst.",
+      "decision_title": "Full Auto entscheidet nur nach Freigabe",
+      "explain_body": "Jede Auto-Entscheidung nennt Regel, Grund, Score, Risiko und gegebenenfalls die gewählte Alternative. So bleibt nachvollziehbar, warum etwas empfohlen oder abgelehnt wurde.",
+      "explain_title": "Keine stille Entscheidung",
+      "tab": "Auto"
+    },
+    "consumption": {
+      "optional_body": "Nicht jeder möchte Flaschenstände exakt pflegen. Sammlung, Rotation und Pflege funktionieren auch ohne Verbrauchstracking. Die Funktion unterstützt dich, sie verpflichtet dich nicht.",
+      "optional_title": "Warum abschaltbar?",
+      "stock_body": "Die Verbrauchsverfolgung ist optional. Ist sie aktiviert, reduziert Befüllen den Flaschenbestand um das gespeicherte Füllvolumen. Restmengen werden nie negativ; leere Flaschen werden aus Vorschlägen genommen.",
+      "stock_title": "Verbrauch und Restmenge",
+      "tab": "Verbrauch"
+    },
+    "dashboard_body": "Die fünf Kacheln fassen Sammlung, Rotation, Service, Aktivität und optionale Sparziele zusammen. <b>Einmal klicken</b> fokussiert und erweitert genau eine Detailtabelle; ein weiterer Klick klappt sie ein. Die sichtbare Schaltfläche <b>„Im Reiter öffnen“</b> oder ein <b>Doppelklick</b> auf Kachel beziehungsweise Tabellenzeile öffnet direkt den passenden Reiter. Der Ink Safety Timer zeigt weiterhin nur überfällige und bald fällige Befüllungen ab 80 % der Maximaltage.",
     "dashboard_title": "Das Dashboard lesen",
-    "manual_body": "Diese Hilfe ist die Kurzform. Der komplette Leitfaden mit allen Details – Score-Formel, Standzeit-Berechnung, Recherche-Ablauf, Referenztabellen und FAQ – liegt als <b>docs/BENUTZERHANDBUCH_DE.md</b> im Programmordner. Er lässt sich mit jedem Markdown-/Text-Betrachter lesen und eignet sich auch zum Ausdrucken.",
+    "data_entry": {
+      "images_body": "Bilder werden in die verwaltete Medienablage kopiert. Dadurch bleiben sie auch dann verfügbar, wenn die ursprüngliche Datei verschoben oder umbenannt wird. Das Datenverzeichnis sollte zusammen mit der SQLite-Datenbank gesichert werden.",
+      "images_title": "Bilder und verwaltete Medien",
+      "persistence_body": "Marke, Modell, Texte, Maße, Kaufdaten und Zuordnungen werden im Dialogzustand gehalten. Vor dem Schließen mit ungespeicherten Änderungen fragt die App nach. Bei einem unerwarteten Verhalten zuerst prüfen, ob wirklich <b>Speichern</b> und nicht <b>Abbrechen</b> gewählt wurde.",
+      "persistence_title": "Eingaben bleiben beim Weitergehen erhalten",
+      "tab": "Eingabe",
+      "units_body": "Zahlen dürfen mit regionalem Dezimalzeichen eingegeben werden, z. B. <b>143,5 mm</b>, <b>24,8 g</b>, <b>0,8 ml</b> oder <b>CHF 39.95</b>. Sichtbare Einheiten und Währungssymbole werden beim Speichern korrekt entfernt; ein Seitenwechsel setzt den Wert nicht mehr auf 0.",
+      "units_title": "Maße, Gewichte und Währungen",
+      "workflow_body": "Der Füller-Dialog ist in mehrere Seiten gegliedert. Eingaben bleiben beim Wechsel zwischen den Seiten erhalten. Erst <b>Speichern</b> schreibt den Datensatz in die Datenbank; <b>Abbrechen</b> verwirft den gesamten neuen oder geänderten Entwurf.",
+      "workflow_title": "Füller sicher erfassen"
+    },
+    "manual_body": "Diese Hilfe ist die kurze, durchsuchbare Wiki-Version. Das vollständige deutsche Handbuch liegt als <b>docs/BENUTZERHANDBUCH_DE.md</b> bei. Mit <b>„Handbuch öffnen“</b> wird automatisch die passende Sprachfassung geöffnet.",
+    "manual_missing_body": "Die Handbuchdatei fehlt im Programmordner. Bitte installiere oder entpacke das vollständige Programmpaket erneut.",
+    "manual_missing_title": "Handbuch nicht gefunden",
+    "manual_open_error_body": "Die Datei konnte nicht an ein Anzeigeprogramm übergeben werden:\n{path}",
+    "manual_open_error_title": "Handbuch konnte nicht geöffnet werden",
     "manual_title": "📖 Ausführliches Handbuch",
-    "mode_body": "<b>Easy Mode</b> ist der ruhige Sammelmodus: Füller, Tinten, Wishlist und Wertkalkulation. Verbrauch/Restmenge ist bewusst aus.<br><br><b>Expert Mode</b> aktiviert die tieferen Module und erlaubt Verbrauch, komplexere Regeln, Full Auto und mehr Diagnose.",
+    "mode_body": "<b>Einfachmodus</b> zeigt die sechs Kernbereiche: Dashboard, Füller, Tinten, Rotation, Hilfe und Einstellungen. Der <b>Expertenmodus</b> schaltet zusätzlich Federn, Papier, Ausgaben, Wishlist, Regeln, Statistik, Schreibproben und Enthusiasten-Lab frei. Der Modus ändert nur die sichtbare Navigation – deine Daten und Funktionen bleiben erhalten.",
     "mode_title": "Easy Mode vs. Expert Mode",
+    "open_manual_button": "📖 Handbuch öffnen",
+    "open_manual_tooltip": "Öffnet das ausführliche Handbuch in der aktuell gewählten Sprache.",
     "quickstart_body": "<b>Empfohlene Reihenfolge:</b><br>1. Tinten anlegen<br>2. Feder optional anlegen oder am Füller hinterlegen<br>3. Füller anlegen und Feder zuweisen<br>4. Tinte einfüllen<br>5. Auf der Rotationsseite „💡 Vorschläge“ klicken und mit einem Klick auf eine Zeile befüllen<br><br>Danach funktionieren Dashboard, Safety Timer, Rotation und Regelwarnungen sinnvoll.",
     "quickstart_title": "Schnellstart",
     "research": {
-      "lookup_body": "Im Füller-Dialog folgt die <b>Maßsuche</b> der Kaskade <b>KI-/strukturierte Suche → Herstellerseite → offenes Web → lokaler Cache</b>. Vorschläge werden vor der Übernahme angezeigt und füllen nur leere Felder; manuelle Werte werden nie überschrieben. Die <b>Bildersuche</b> beginnt dagegen bewusst auf der Herstellerseite und wechselt erst danach ins offene Netz. Bestätigte Maßtreffer werden lokal zwischengespeichert.",
-      "lookup_title": "Maße: KI zuerst · Bilder: Hersteller zuerst",
+      "lookup_body": "Im Füller-Dialog suchen die Buttons „Maße suchen“ und „Bilder suchen“ zuerst gezielt auf der <b>Website des Herstellers</b> (für ~46 bekannte Marken hinterlegt) und erst danach im offenen Netz. Die Online-Dimensionsabfrage liest Herstellerseiten konservativ aus, zeigt Vorschläge <b>vor</b> der Übernahme an und füllt nur leere Felder – deine manuellen Werte werden nie überschrieben. Bestätigte Treffer landen im lokalen Cache und sind beim nächsten Mal sofort da.",
+      "lookup_title": "Maße & Bilder: Hersteller zuerst",
       "overlay_body": "Fehlt eine Marke oder stimmt eine Domain nicht? Lege im Datenverzeichnis (neben der Datenbank) die Datei <b>manufacturer_domains.json</b> an – ganz ohne Update. Beispiel:<br><code>{ \"Meine Marke\": \"meinemarke.example\",<br>&nbsp;&nbsp;\"Pilot\": [\"pilotpen.eu\", \"pilotpen.com\"] }</code><br>Ein String oder eine Liste von Domains je Marke; Einträge hier überschreiben die eingebaute Liste. Falsche Einträge sind unkritisch – die offene Websuche läuft als letzte Stufe immer.",
       "overlay_title": "Eigene Marken ergänzen (manufacturer_domains.json)",
       "sources_body": "Jeder Vorschlag nennt seine Quelle: <b>manufacturer:&lt;domain&gt;</b> = direkt vom Hersteller (bevorzugt und zuerst sortiert), <b>online:&lt;domain&gt;</b> = offenes Netz, <b>cache</b> = früher bestätigter lokaler Treffer. So siehst du auf einen Blick, wie belastbar ein Wert ist.",
       "sources_title": "Quellen-Kennzeichnung",
-      "tab": "Recherche & Daten"
+      "tab": "Recherche"
     },
     "rotation": {
       "pins_body": "Eine <b>feste Paarung</b> 💍 (im Füller-Dialog gesetzt) bedeutet: dieser Füller bekommt immer genau diese Tinte – Zufall und Reroll überstimmen das nie. Ein <b>Pflicht-Füller</b> ⭐ wird bei den Slots immer zuerst berücksichtigt, seine Tinte bleibt aber frei wählbar. Grundsatz der App: Die Engine empfiehlt – du entscheidest; jede Warnung ist übersteuerbar.",
@@ -383,11 +446,33 @@
       "reroll_title": "Andere Vorschläge? Einfach nochmal klicken",
       "score_body": "Der <b>Score</b> bündelt Rolle, Farbvielfalt, Standzeiten, Feder-/Papier-Passung und Regel-Boni/-Mali: grün ≥ 100 (sehr passend), orange unter 0 (eher ungünstig), rot = blockierende Schutzregel. Die Hinweisspalte zeigt alle Regelwarnungen plus die zwei wichtigsten Infos – „… +N“ bedeutet: mehr Details im Tooltip und per Klick auf den Score (Warum-Erklärung).",
       "score_title": "Score und Hinweise verstehen",
-      "tab": "Rotation & Vorschläge",
+      "tab": "Rotation",
       "workflow_body": "Die Engine schlägt für jeden <b>leeren</b> Füller eine passende Tinte vor. Oben stellst du ein, wie viele Slots du befüllen willst, optional Papier und Thema. Ein Klick auf „💡 Vorschläge“ erzeugt die Liste; ein Klick auf eine Zeile öffnet den Befüll-Dialog. Füller im Service, gesperrte Füller und leere Flaschen werden automatisch ausgelassen.",
       "workflow_title": "So funktionieren Vorschläge"
     },
-    "start_tab": "Schnellstart"
+    "rules": {
+      "levels_body": "<b>Info:</b> Hinweis ohne Risiko.<br><b>Warnung:</b> mögliche Nachteile, aber normal nutzbar.<br><b>Kritisch:</b> hohes Risiko, bewusst prüfen.<br><b>Blockiert:</b> nicht automatisch verwenden; nur manuell mit dokumentiertem Override.",
+      "levels_title": "Warnstufen",
+      "principle_body": "Das Regelsystem bewertet Kombinationen aus Füller, Tinte, Feder, Papier, Service-Status und Sammlerstatus. Jede Regel kann einzeln oder über ihre Regelgruppe deaktiviert werden. Die Engine empfiehlt – du entscheidest.",
+      "principle_title": "Regelsystem-Grundprinzip",
+      "tab": "Regeln",
+      "vac_shimmer_body": "Vakuumfüller sind aufwendiger zu reinigen. Shimmer-Partikel können sich im System absetzen. Darum kann eine harte Regel diese Kombination blockieren oder im Full Auto Mode ablehnen. Ein bewusster manueller Override bleibt möglich und wird protokolliert.",
+      "vac_shimmer_title": "Beispiel: Vac + Shimmer"
+    },
+    "search_no_results": "Keine passende Hilfe gefunden. Versuche einen kürzeren Suchbegriff.",
+    "search_placeholder": "Wiki durchsuchen …",
+    "search_results": "{count} passende Hilfekarte(n)",
+    "search_tooltip": "Durchsucht alle Hilfekarten. Mehrere Wörter werden gemeinsam berücksichtigt.",
+    "service": {
+      "dry_risk_body": "Überschreitet eine Befüllung ihre Safety-Zeit, zeigt das Dashboard eine Warnung. Kritische Füller sollten gereinigt oder bewusst als Austrocknungsrisiko gesperrt werden.",
+      "dry_risk_title": "Austrocknungsrisiko",
+      "end_body": "Beim Sperren kannst du Startdatum, Dauer oder ein geplantes Enddatum setzen. Ohne Enddatum bleibt der Füller gesperrt, bis du ihn manuell freigibst.",
+      "end_title": "Geplantes Service-Ende",
+      "locks_body": "Füller im Service, Problemfüller oder manuell gesperrte Füller werden nicht für neue Rotationen oder Full Auto verwendet. Im Dashboard erscheinen sie unter <b>Service & Sperren</b>.",
+      "locks_title": "Service & Sperren",
+      "tab": "Service"
+    },
+    "start_tab": "Start"
   },
   "ink": {
     "add": "+ Tinte hinzufügen",
@@ -469,6 +554,13 @@
     "region_label": "Schweiz (CH)",
     "thousands_sep": "'"
   },
+  "media": {
+    "download_cancelled": "Der Bild-Download wurde abgebrochen.",
+    "download_progress": "Bild wird geladen …",
+    "download_shutdown_failed": "Der Bilddownload konnte beim Beenden nicht sauber gestoppt werden.",
+    "import_failed_body": "Die Daten wurden gespeichert, aber das Bild konnte nicht in die Medienablage übernommen werden.\n\nGrund: {error}\n\nDer ursprüngliche Pfad bzw. die URL bleibt am Eintrag erhalten. Du kannst das Bild später erneut setzen.",
+    "import_failed_title": "Bild konnte nicht übernommen werden"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "enthusiast_lab": "Enthusiasten-Lab",
@@ -540,6 +632,7 @@
     "days_loaded": "Tage eingefüllt",
     "delete": "Löschen",
     "diameter": "Durchmesser (mm)",
+    "discard_changes": "Änderungen verwerfen",
     "edit": "Bearbeiten",
     "edit_title": "Füller bearbeiten",
     "fill_system": "Füllsystem",
@@ -551,6 +644,7 @@
       "vac": "Vac-Füller"
     },
     "insurance_value": "Versicherungswert",
+    "keep_editing": "Weiter bearbeiten",
     "length": "Länge (mm)",
     "load_ink": "Tinte einfüllen",
     "mark_cleaned": "Als gereinigt markieren",
@@ -568,6 +662,8 @@
       "vintage": "Vintage"
     },
     "title": "Füllerverwaltung",
+    "unsaved_body": "Du hast Eingaben geändert, aber noch nicht gespeichert. Möchtest du weiter bearbeiten oder die Änderungen wirklich verwerfen?",
+    "unsaved_title": "Ungespeicherte Eingaben",
     "weight": "Gewicht (g)",
     "writing_feel": "Schreibgefühl"
   },
@@ -793,9 +889,7 @@
     "theme_work": "Arbeit/Business",
     "title": "Intelligente Rotation",
     "vac_difficult": "Vac + schwierige Tinte",
-    "warning_hard_rule_suffix": " (harte Regel)",
-    "generate_button": "💡 Vorschläge erzeugen",
-    "refresh_button": "↻ Aktualisieren"
+    "warning_hard_rule_suffix": " (harte Regel)"
   },
   "rule_engine": {
     "no_active_violations": "Keine aktiven Regelverletzungen. Score {score}.",
@@ -845,6 +939,7 @@
   "settings": {
     "about": "Über FountainPen Manager",
     "backup": "Backup erstellen",
+    "backup_failed": "Das konsistente Datenbank-Backup konnte nicht erstellt oder geprüft werden: {error}",
     "budget_export_body": "Exportiert alle FPM-Ausgaben als prüfbare JSONL-Datei. Der BudgetManager kann diese später kontrolliert importieren, ohne direkt auf diese Datenbank zuzugreifen.",
     "budget_export_button": "BudgetManager-JSONL exportieren",
     "budget_export_dialog_title": "BudgetManager-Export speichern",
@@ -866,9 +961,21 @@
     "currency": "Standardwährung",
     "db_path": "Datenbankpfad",
     "decimal_sep": "Dezimaltrennzeichen",
+    "diagnostics_body": "Rotierende technische Logs helfen bei Fehlern. Das Supportpaket enthält keine Datenbank, Sammlungsdaten oder Bilder.",
+    "diagnostics_export": "Supportpaket exportieren",
+    "diagnostics_export_done": "Das Supportpaket wurde gespeichert unter:\n{path}",
+    "diagnostics_export_done_title": "Supportpaket erstellt",
+    "diagnostics_export_failed": "Das Supportpaket konnte nicht erstellt werden: {error}",
+    "diagnostics_export_title": "Supportpaket speichern",
+    "diagnostics_file_filter": "ZIP-Archiv (*.zip)",
+    "diagnostics_open": "Diagnoseordner öffnen",
+    "diagnostics_title": "Diagnose und Support",
     "edc_slots": "EDC-Plätze (Standard)",
     "exchange_rates": "Wechselkurse (1 CHF = …)",
     "exchange_rates_hint": "Kurse werden für die Sammlungswert-Umrechnung verwendet.",
+    "invalid_exchange_rate": "Ungültiger Wechselkurs für {currency}. Bitte eine Zahl größer als 0 eingeben.",
+    "separators_must_differ": "Dezimal- und Tausendertrennzeichen müssen unterschiedlich sein.",
+    "thousands_space": "Leerzeichen (1 234)",
     "folder_open_err": "Ordner konnte nicht geöffnet werden:\n{error}",
     "folder_open_title": "Datenordner",
     "language": "Sprache",
@@ -894,9 +1001,7 @@
     "title": "Einstellungen",
     "ui_scale_saved_body": "UI-Skalierung gespeichert und angewendet. Faktor: {factor}×",
     "updates": "Updates",
-    "invalid_exchange_rate": "Ungültiger Wechselkurs für {currency}. Bitte eine Zahl größer als 0 eingeben.",
-    "thousands_space": "Leerzeichen (1 234)",
-    "separators_must_differ": "Dezimal- und Tausendertrennzeichen müssen unterschiedlich sein."
+    "lifeplanner_central_updater": "Updates werden in diesem Startmodus zentral durch LifePlanner verwaltet."
   },
   "tour": {
     "buttons": {
@@ -907,9 +1012,7 @@
       "finish_abort": "Tour beenden",
       "generate": "Vorschläge generieren →",
       "next": "Weiter →",
-      "open_dialog": "Dialog öffnen →",
-      "optional_pen": "Zweiten Füller auswählen →",
-      "apply_suggestion": "Vorschlag übernehmen →"
+      "open_dialog": "Dialog öffnen →"
     },
     "quickstart": {
       "body": "<b>Willkommen beim FountainPen Manager!</b><br><br>Die empfohlene Reihenfolge für den Einstieg:<br><br><b>1.</b> 🖋  <b>Tinten anlegen</b> – Tintenverwaltung → + Tinte<br><b>2.</b> 🔧  <b>Federn anlegen</b> (optional, verbessert die Rotation)<br><b>3.</b> ✒  <b>Füller anlegen</b> – Füllerverwaltung → + Füller → Feder zuweisen<br><b>4.</b> 💧  <b>Tinte einfüllen</b> – Füller auswählen → Tinte einfüllen<br><br>→ Danach zeigt das Dashboard Warnungen, die Rotation macht Vorschläge und der Safety Timer läuft.",
@@ -917,7 +1020,7 @@
     },
     "steps": {
       "dashboard": {
-        "body": "Übersicht über alle aktiven Befüllungen, Safety-Timer für jede Tinte, Service-Karten und Sammlungswerte. Hier siehst du auf einen Blick, was Aufmerksamkeit braucht.",
+        "body": "Kompakte Kacheln zeigen Sammlung, Rotation, Service und Aktivität. Einfachklick öffnet die passende Tabelle, Doppelklick den zugehörigen Reiter.",
         "title": "🏠  Dashboard"
       },
       "expenses": {
@@ -925,8 +1028,8 @@
         "title": "💰  Ausgaben"
       },
       "finished": {
-        "title": "Einrichtung und erste Rotation abgeschlossen 🎉",
-        "body": "Du kennst die Alltags- und Expertenmodule, hast deine ersten Daten angelegt und einen echten Rotationsvorschlag übernommen.<br><br>Die Führung lässt sich jederzeit über <b>Hilfe</b> oder <b>Einstellungen</b> erneut starten."
+        "body": "Du kennst jetzt die wichtigsten Bereiche und hast einen Füller, eine Tinte und einen ersten Vorschlag. Die Tour findest du jederzeit über <b>Hilfe</b> oder <b>Einstellungen → Tour neu starten</b>.<br><br>Viel Spaß mit deinem FountainPen Manager.",
+        "title": "Fertig 🎉"
       },
       "first_purchase": {
         "body": "Du kennst die Bereiche – jetzt legen wir gemeinsam deinen ersten Füller an. Wir starten beim <b>Wunsch</b>, gehen über <b>bestellt</b> und <b>gekauft</b>, fügen eine Tinte hinzu und lassen den ersten Rotations-Vorschlag laufen.",
@@ -937,8 +1040,8 @@
         "title": "❓  Hilfe"
       },
       "ink_add": {
-        "title": "Schritt 1 – Erste Tinte anlegen",
-        "body": "Lege jetzt eine Tinte an, die du wirklich besitzt. Für den Start reichen <b>Marke und Name</b>; Farbe, Flaschengröße, Sheen, Shimmer und weitere Eigenschaften kannst du sofort oder später ergänzen.<br><br>Wird der Dialog abgebrochen, bleibt dieser Schritt aktiv."
+        "body": "Wir öffnen den Tinten-Dialog. Trag eine Tinte ein, die du hast – Marke, Farbe, Flaschengröße. Eigenschaften wie Sheen/Shimmer kannst du später setzen.",
+        "title": "Schritt 3 / 4 – Erste Tinte anlegen"
       },
       "inks": {
         "body": "Tintenbestand mit Eigenschaften (Sheen, Shimmer, Pigment, Wasserfestigkeit), Füllstand und Reinigungsaufwand. Bildet die Grundlage für Rotations-Vorschläge und Sicherheitsregeln.",
@@ -973,8 +1076,8 @@
         "title": "☰  Einstellungen"
       },
       "welcome": {
-        "title": "Willkommen beim FountainPen Manager",
-        "body": "Wir beginnen mit einer <b>Modulrunde</b>, damit du zuerst weißt, wo welche Funktion liegt. Die Expertenbereiche kommen bewusst am Schluss.<br><br>Danach legen wir gemeinsam <b>eine Tinte und ein bis zwei Füller</b> an und führen eine echte Rotation bis zur ersten Befüllung durch."
+        "body": "Diese kurze Tour zeigt dir die App-Bereiche und führt dich danach durch deinen ersten Füllerkauf samt Tinte und Vorschlag.<br><br>Du kannst jederzeit über <b>Überspringen</b> abbrechen und sie später unter <b>Hilfe</b> oder <b>Einstellungen</b> neu starten.",
+        "title": "Willkommen beim FountainPen Manager"
       },
       "wishlist": {
         "body": "Wunsch-Füller, Tinten, Federn, Papier und Zubehör. Mit Status: <b>Wunsch</b> → <b>bestellt</b> → <b>gekauft</b>. Beim Kauf kannst du den Eintrag sauber in Sammlung und Ausgaben übernehmen.",
@@ -987,79 +1090,21 @@
       "wishlist_status": {
         "body": "Du siehst deinen Wunsch jetzt in der Liste. Markiere ihn und nutze Rechtsklick:<br>&nbsp;&nbsp;1) <b>Status setzen → Bestellt</b><br>&nbsp;&nbsp;2) wenn der Füller da ist: <b>Als gekauft übernehmen …</b><br><br>Beim Übernehmen wird ein echter Füller-Eintrag plus Ausgabe angelegt. Klicke <b>Weiter</b>, wenn du fertig bist.",
         "title": "Schritt 2 / 4 – Status: bestellt → gekauft"
-      },
-      "ink_created": {
-        "title": "✓ Erste Tinte gespeichert",
-        "body": "Deine erste Tinte ist angelegt. Sie steht nun für Befüllungen, Sicherheitsregeln und Rotationsvorschläge zur Verfügung."
-      },
-      "pen_add": {
-        "title": "Schritt 2 – Ersten Füller anlegen",
-        "body": "Lege jetzt deinen ersten Füller an. Wichtig sind <b>Marke, Modell und Füllsystem</b>. Eine Feder kannst du direkt erfassen oder später ergänzen.<br><br>Wird der Dialog abgebrochen, bleibt dieser Schritt aktiv."
-      },
-      "pen_created": {
-        "title": "✓ Erster Füller gespeichert",
-        "body": "Dein erster Füller ist angelegt. Als Nächstes lernst du die wichtigsten Alltagsbereiche kennen. Danach kannst du dem Füller deine Tinte zuweisen."
-      },
-      "expert_modules": {
-        "title": "Weitere Module im Expertenmodus",
-        "body": "Im Standard-Einfachmodus bleiben die wichtigsten Alltagsbereiche sichtbar. Über den Modus-Schalter in der Seitenleiste oder in den Einstellungen erreichst du zusätzlich <b>Federn, Papier, Schreibproben, Wishlist, Ausgaben, Statistik, Regeln und Enthusiasten-Labor</b>."
-      },
-      "expert_intro": {
-        "title": "Expertenfunktionen – letzter Teil der Modulrunde",
-        "body": "Für den letzten Teil schaltet die Führung vorübergehend in den Expertenmodus. Du siehst nun Federn, Papier, Schreibproben, Wishlist, Ausgaben, Statistik, Regeln und das Enthusiasten-Labor.<br><br>Beim Ende wird dein ursprünglicher Modus automatisch wiederhergestellt."
-      },
-      "writing_samples": {
-        "title": "📝 Schreibproben",
-        "body": "Schreibproben dokumentieren reale Kombinationen aus Füller, Feder, Tinte und Papier. Mehrere Proben lassen sich später direkt miteinander vergleichen."
-      },
-      "statistics": {
-        "title": "📊 Statistik",
-        "body": "Auswertungen zu Nutzung, Sammlung, Ausgaben, Wartung und Wertentwicklung. Filter helfen, Zeiträume und Bereiche gezielt zu vergleichen."
-      },
-      "enthusiast_lab": {
-        "title": "🧪 Enthusiasten-Labor",
-        "body": "Optionale Sammlerwerkzeuge wie Tintenreichweite, Farbfamilien-Lücken, Federhistorie und Reinigungsaufwand. Diese Funktionen vertiefen die Sammlung, sind aber für den Einstieg nicht erforderlich."
-      },
-      "setup_intro": {
-        "title": "Jetzt richten wir deine erste Rotation gemeinsam ein",
-        "body": "Die Modulrunde ist abgeschlossen. Nun arbeiten wir mit echten Einträgen:<br><br><b>1.</b> eine Tinte anlegen<br><b>2.</b> einen Füller anlegen<br><b>3.</b> optional einen zweiten Füller ergänzen<br><b>4.</b> Vorschlag erzeugen und bewusst übernehmen"
-      },
-      "second_pen": {
-        "title": "Optional – zweiten Füller ergänzen",
-        "body": "Ein Füller genügt für die Rotation. Mit einem zweiten Füller wird die Auswahl aber anschaulicher.<br><br>Klicke auf <b>Zweiten Füller auswählen</b>. Danach entscheidest du im Dialog, ob du einen zweiten Füller anlegen oder diesen optionalen Schritt überspringen möchtest."
-      },
-      "rotation_setup": {
-        "title": "Rotation vorbereiten",
-        "body": "Die Rotation berücksichtigt nur <b>aktive, leere und verfügbare Füller</b> sowie nicht leere, nicht archivierte Tinten. Deine gerade angelegten Einträge erfüllen diese Voraussetzungen."
-      },
-      "rotation_generate": {
-        "title": "Ersten Rotationsvorschlag erzeugen",
-        "body": "Klicke jetzt auf <b>Vorschläge erzeugen</b>. Die Engine bewertet Füllsystem, Feder, Tintenrisiko, Reinigungsaufwand, Farbspektrum, Rolle und optionale Regeln."
-      },
-      "rotation_result": {
-        "title": "Vorschlag verstehen",
-        "body": "Hier siehst du Füller, Tinte, Score und Begründung. Ein Klick auf den Score erklärt die einzelnen Bestandteile. Warnungen sind sichtbar, Entscheidungen bleiben aber bei dir."
-      },
-      "rotation_apply": {
-        "title": "Vorschlag bewusst übernehmen",
-        "body": "Mit <b>Vorschlag übernehmen</b> wird die vorgeschlagene Tinte tatsächlich als Befüllung eingetragen. Erst dadurch startet der Safety-Timer und der Füller erscheint in der aktuellen Rotation."
-      },
-      "rotation_active": {
-        "title": "Deine erste aktive Rotation",
-        "body": "Die Befüllung steht jetzt unter <b>Aktuelle Belegung</b>. Von hier aus kannst du Standzeit, Reinigung, Leeren und spätere Neubefüllungen verwalten."
       }
     },
     "triggers": {
-      "help_text": "<b>App-Führung</b> – Modulrunde, Expertenfunktionen, erste Tinte, ein bis zwei Füller und eine vollständige Rotation.",
+      "help_text": "<b>App-Tour</b> – Rundgang durch alle Bereiche und geführter erster Füllerkauf (Wunsch → bestellt → gekauft → Tinte → erster Vorschlag).",
       "reset_button": "🚀  Tour zurücksetzen",
       "reset_done_body": "Die App-Tour wird beim nächsten Programmstart erneut angezeigt\noder kann über Hilfe/Einstellungen sofort gestartet werden.",
       "reset_done_title": "Tour zurückgesetzt",
-      "reset_tooltip": "App-Führung beim nächsten Start erneut anzeigen.",
+      "reset_tooltip": "App-Tour beim nächsten Start erneut anzeigen – unabhängig davon, ob bereits Sammlungsdaten vorhanden sind.",
       "start_button": "Tour starten",
       "start_error": "Die Tour konnte nicht gestartet werden:\n{error}",
       "start_now_button": "👋  Tour jetzt starten",
-      "start_now_tooltip": "Modulrunde starten und danach gemeinsam erste Tinte, ein bis zwei Füller und eine Rotation einrichten.",
-      "title": "Tour"
+      "start_now_tooltip": "App-Tour sofort starten – Rundgang + geführter erster Füllerkauf.",
+      "title": "Tour",
+      "wizard_button": "Einrichtungsassistent starten",
+      "wizard_tooltip": "Startet die geführte Einrichtung für Tinte, Füller und erste Befüllung erneut. Vorhandene Daten werden nicht verändert."
     },
     "wizard": {
       "back": "← Zurück",
@@ -1079,10 +1124,6 @@
       "welcome_body": "Diese kurze Einführung zeigt dir die wichtigsten ersten Schritte.\n\nDie App hat eine bewusste Reihenfolge:\n\n  🫙  Zuerst Tinten anlegen\n  ✒   Dann Füller anlegen und Tinte zuweisen\n  🔄  Erst dann kommt Rotation und Safety Timer zum Leben\n\nWenn du zuerst einen Füller anlegst und dann eine Tinte einfüllen willst, findest du dort einen leeren Dropdown – weil noch keine Tinte existiert.\n\nDieser Wizard führt dich Schritt für Schritt.",
       "welcome_title": "Willkommen beim FountainPen Manager",
       "window_title": "✒  Willkommen beim FountainPen Manager"
-    },
-    "second_pen": {
-      "question_title": "Optional: zweiten Füller anlegen",
-      "question_body": "Möchtest du für die Einführung noch einen zweiten Füller anlegen?\n\nMit zwei Füllern wird sichtbar, wie die Rotation zwischen mehreren Kandidaten auswählt. Ein Füller reicht aber vollständig aus."
     }
   },
   "ui": {
@@ -1195,33 +1236,6 @@
       "glossary_shimmer_desc": "Glitzerpartikel in der Tinte; höherer Reinigungsaufwand.",
       "glossary_vac_desc": "Vakuumfüller (Vacuum Filler). Großes Tintenvolumen, aber aufwendiger zu reinigen – deshalb warnt eine harte Regel z. B. vor Shimmer-Tinten darin.",
       "hilfe_regel_erklarungen_0fd89964": "❔  Hilfe & Regel-Erklärungen",
-      "legacy_exact": {
-        "text_001": "Regelsystem-Grundprinzip",
-        "text_002": "Das Regelsystem ist ein Expertensystem. Es bewertet Kombinationen aus Füller, Tinte, Feder, Papier, Service-Status und Sammlerstatus. Jede Regel kann einzeln oder über ihre Regelgruppe deaktiviert werden.",
-        "text_003": "Warnstufen",
-        "text_004": "<b>Info:</b> Hinweis ohne Risiko.<br><b>Warnung:</b> mögliche Nachteile, aber normal nutzbar.<br><b>Kritisch:</b> hohes Risiko, bewusst prüfen.<br><b>Blockiert:</b> nicht automatisch verwenden; nur manuell mit Override.",
-        "text_005": "Beispiel: Vac + Shimmer",
-        "text_006": "Vac-Füller sind aufwendiger zu reinigen. Shimmer-Partikel können sich im System absetzen. Darum kann die Regel diese Kombination blockieren oder im Full Auto Mode ablehnen. Manuell bleibt ein Override möglich, wenn du das Risiko bewusst akzeptierst.",
-        "text_007": "Full Auto darf entscheiden, wenn du es aktivierst. Er kann riskante Kombinationen ablehnen, bessere Alternativen bevorzugen und gesperrte Füller überspringen.",
-        "text_008": "Nie still",
-        "text_009": "Jede Auto-Entscheidung muss erklärbar sein: betroffene Regel, Grund, Score, Risiko und ob eine Alternative gewählt wurde. So bleibt nachvollziehbar, warum die App etwas empfohlen oder abgelehnt hat.",
-        "text_010": "Service & Sperren",
-        "text_011": "Ein Füller im Service, ein Problemfüller oder ein manuell gesperrter Füller wird nicht in Rotation und Full Auto verwendet. Im Dashboard erscheint er unter <b>Service & Sperren</b>.",
-        "text_012": "Service-Ende",
-        "text_013": "Beim Sperren kannst du ein Startdatum, eine Dauer oder direkt ein geplantes Enddatum setzen. Ist kein Enddatum gesetzt, bleibt der Füller gesperrt, bis du ihn manuell entsperrst.",
-        "text_014": "Austrocknungsrisiko",
-        "text_015": "Wenn eine Tinte länger als die Safety-Zeit im Füller bleibt, zeigt das Dashboard eine Warnung. Kritische Füller sollten gereinigt oder manuell als Austrocknungsrisiko gesperrt werden.",
-        "text_016": "Verbrauch / Restmenge",
-        "text_017": "Im Easy Mode bleibt Verbrauch automatisch aus. Im Expert Mode kannst du Verbrauch und Restmenge einschalten. Dann reduziert Einfüllen oder Leeren+Befüllen den Tintenbestand nach Füllvolumen.",
-        "text_018": "Warum abschaltbar?",
-        "text_019": "Nicht jeder möchte Füllstände exakt pflegen. Die App soll sammeln und rotieren können, ohne dass Verbrauchspflege zur Pflicht wird.",
-        "text_020": "Metallischer Farbglanz auf geeignetem Papier.",
-        "text_021": "Glitzerpartikel in der Tinte; höherer Reinigungsaufwand.",
-        "text_022": "Ausfransen der Linie auf saugendem Papier.",
-        "text_023": "Besonders wertvoller oder emotional wichtiger Füller.",
-        "text_024": "Bewusstes Überstimmen einer Warnung oder Blockade.",
-        "text_025": "Überwacht, wie lange eine Tinte im Füller bleibt."
-      },
       "regeln_ac603d2a": "Regeln",
       "service_92844dc6": "Service",
       "verbrauch_934c21a7": "Verbrauch"
@@ -1330,6 +1344,8 @@
       "add_ink": "Tinte hinzufügen",
       "add_pen": "Füller hinzufügen",
       "cleaned": "Gereinigt",
+      "context_help": "❔ Hilfe zum Reiter",
+      "context_help_tooltip": "Öffnet direkt das passende Kapitel im In-App-Wiki.",
       "fill": "Einfüllen",
       "quick_actions": "Schnellaktionen",
       "search_placeholder": "Suchen im aktuellen Modul …",
@@ -1670,6 +1686,7 @@
       "ohne_enddatum_manuell_entsperren_680bcd67": "Ohne Enddatum / manuell entsperren",
       "optional_bildpfad_aa00f1fa": "Optional: Bildpfad",
       "optionale_notizen_9b9f7ceb": "Optionale Notizen …",
+      "override_reason_default": "Manuelle Befüllung bewusst bestätigt",
       "override_reason_prompt": "Diese Befüllung verletzt aktive Regeln:\n\n{rules}\n\nBitte Override-Grund eingeben:",
       "passt_mechanisch_aber_andere_haptik_flow_wegen_f_a1be9931": "Passt mechanisch, aber andere Haptik/Flow wegen Feed/Gehäuse …",
       "pflichtfeld_485a6d5a": "Pflichtfeld",
@@ -2038,7 +2055,7 @@
       "neue_datenbank_leer_starten_nur_pfad_wechseln_ff88d340": "Neue Datenbank leer starten / nur Pfad wechseln",
       "neue_datenbankdatei_anlegen_5227515b": "Neue Datenbankdatei anlegen",
       "neue_leere_datenbank_anlegen_frisch_starten_a4a8f845": "Neue leere Datenbank anlegen (frisch starten)",
-      "optionen_sind_nach_bereichen_getrennt_links_bere_e2a10495": "Optionen sind nach Bereichen getrennt. Links Bereich wählen, rechts ändern. Jede Seite besitzt bei Bedarf einen eigenen Scrollbalken.",
+      "optionen_sind_nach_bereichen_getrennt_links_bere_e2a10495": "Optionen sind nach Bereichen getrennt. Bei normaler Breite links den Bereich wählen; auf schmalen Fenstern erscheint oben eine kompakte Auswahl. Jede Seite besitzt bei Bedarf einen eigenen Scrollbalken.",
       "pen_status_reset_done": "{count} Füller zurückgesetzt.",
       "pfad_zur_datenbankdatei_e4efe81d": "Pfad zur Datenbankdatei …",
       "punkt_1_234_3ef398cc": "Punkt  1.234",
@@ -2071,25 +2088,7 @@
       "vorhandene_datenbankdatei_offnen_wechseln_96515b61": "Vorhandene Datenbankdatei öffnen / wechseln",
       "vorschau_57ca03ef": "Vorschau:",
       "wahrung_150ec8df": "Währung",
-      "was_mochtest_du_tun_3c2ef2c3": "Was möchtest du tun?",
-      "full_backup_button": "💾  Vollbackup",
-      "restore_backup_button": "↩  Backup wiederherstellen",
-      "open_data_folder_button": "📂  Ordner öffnen",
-      "optimize_button": "🧹  Optimieren",
-      "full_backup_filter": "FPM-Vollbackup (*.fpmbackup)",
-      "full_backup_saved_message": "Vollbackup gespeichert:\n{path}\n\nEnthaltene Dateien: {count}",
-      "backup_failed_title": "Backup fehlgeschlagen",
-      "backup_failed_message": "Das Vollbackup konnte nicht erstellt werden:\n{error}",
-      "restore_backup_dialog_title": "FPM-Vollbackup auswählen",
-      "restore_backup_confirm_title": "Backup wirklich wiederherstellen?",
-      "restore_backup_confirm_body": "Die aktuelle Datenbank, Medien und Einstellungen werden durch den Inhalt des Backups ersetzt. Vorher wird automatisch ein Rückfall-Backup erstellt. Fortfahren?",
-      "restore_backup_done_title": "Backup wiederhergestellt",
-      "restore_backup_done_body": "{count} Dateien wurden wiederhergestellt.\n\nRückfall-Backup der vorherigen Daten:\n{fallback}",
-      "restore_backup_failed_title": "Wiederherstellung fehlgeschlagen",
-      "restore_backup_failed_body": "Das Backup konnte nicht vollständig wiederhergestellt werden:\n{error}\n\n{rollback_status}\n\nDas Rückfall-Backup liegt hier:\n{fallback}",
-      "restore_backup_rollback_success": "Der vorherige Zustand wurde automatisch aus dem Rückfall-Backup wiederhergestellt.",
-      "restore_backup_rollback_failed": "Auch die automatische Rückkehr zum vorherigen Zustand ist fehlgeschlagen: {error}",
-      "restore_backup_rollback_not_available": "Es konnte noch kein Rückfall-Backup erstellt werden; der bisherige Datenbestand wurde nicht absichtlich ersetzt."
+      "was_mochtest_du_tun_3c2ef2c3": "Was möchtest du tun?"
     },
     "statistics_widget": {
       "all_categories": "Alle Kategorien",
@@ -2201,6 +2200,21 @@
       "wunsch_bd625c0d": "+ Wunsch hinzufügen",
       "wunschpreis": "Wunschpreis"
     }
+  },
+  "ui.pen_widget": {
+    "size_chart_hint": "Stilisierte Füller nach Länge; geschlossen/offen/gepostet je nach Auswahl.",
+    "size_compare_metric_best": "Bestes verfügbares Maß",
+    "size_compare_metric_closed": "Geschlossen",
+    "size_compare_metric_label": "Maß:",
+    "size_compare_metric_posted": "Gepostet",
+    "size_compare_metric_uncapped": "Offen",
+    "size_compare_mode_label": "Darstellung:",
+    "size_compare_mode_overlay": "Überlagern",
+    "size_compare_mode_rows": "Liste",
+    "size_compare_overlay_title": "Überlagerter Füller-Vergleich",
+    "size_compare_ruler_mm": "Skala in mm",
+    "size_compare_scaled_title": "Stilisierte Füller, maßstäblich skaliert",
+    "size_compare_visual_hint": "Vergleicht gespeicherte Füllermaße als stilisierte, maßstäblich skalierte Füller. In der Überlagerung starten alle links an derselben Kante, damit Längenunterschiede sofort sichtbar sind."
   },
   "update": {
     "apply_start_failed": "Der Update-Prozess konnte nicht gestartet werden: {error}",
@@ -2366,24 +2380,5 @@
       "regular": "Normal"
     },
     "untitled": "Unbenannte Schreibprobe"
-  },
-  "ui.pen_widget": {
-    "size_compare_visual_hint": "Vergleicht gespeicherte Füllermaße als stilisierte, maßstäblich skalierte Füller. In der Überlagerung starten alle links an derselben Kante, damit Längenunterschiede sofort sichtbar sind.",
-    "size_compare_mode_label": "Darstellung:",
-    "size_compare_mode_overlay": "Überlagern",
-    "size_compare_mode_rows": "Liste",
-    "size_compare_metric_label": "Maß:",
-    "size_compare_metric_best": "Bestes verfügbares Maß",
-    "size_compare_metric_closed": "Geschlossen",
-    "size_compare_metric_uncapped": "Offen",
-    "size_compare_metric_posted": "Gepostet",
-    "size_compare_overlay_title": "Überlagerter Füller-Vergleich",
-    "size_compare_ruler_mm": "Skala in mm",
-    "size_compare_scaled_title": "Stilisierte Füller, maßstäblich skaliert",
-    "size_chart_hint": "Stilisierte Füller nach Länge; geschlossen/offen/gepostet je nach Auswahl."
-  },
-  "media": {
-    "import_failed_title": "Bild konnte nicht übernommen werden",
-    "import_failed_body": "Die Daten wurden gespeichert, aber das Bild konnte nicht in die Medienablage übernommen werden.\n\nGrund: {error}\n\nDer ursprüngliche Pfad bzw. die URL bleibt am Eintrag erhalten. Du kannst das Bild später erneut setzen."
   }
 }

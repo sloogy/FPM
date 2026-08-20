@@ -3,12 +3,13 @@ from __future__ import annotations
 
 from typing import Dict
 from PySide6.QtCore import Signal, Qt
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QDialog
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
 
 from app_info import APP_NAME, APP_VERSION
 from ui.ui_scale import scale_px
 from i18n.translator import t
 from logic.app_mode import EXPERT_MODE, SIMPLE_MODE, fallback_page, get_app_mode, set_app_mode
+from ui.common import ResponsiveDialog
 
 MODULES: Dict[str, dict] = {
     "dashboard": {"title_key": "nav.dashboard", "icon": "🏠", "page": 0},
@@ -142,15 +143,18 @@ class CalibreSidebar(QWidget):
         self.pageSelected.emit(page)
 
     def set_mode(self, mode: str) -> str:
-        """Modus programmatisch setzen und Navigation neu aufbauen."""
-        self._mode = set_app_mode(mode)
+        """Schaltet den Navigationsmodus kontrolliert und baut die Sidebar neu."""
+        normalized = set_app_mode(mode)
+        if normalized == self._mode:
+            return self._mode
+        self._mode = normalized
         self._setup_ui()
+        self.modeChanged.emit(self._mode)
         return self._mode
 
     def _toggle_mode(self) -> None:
         new_mode = EXPERT_MODE if self._mode == SIMPLE_MODE else SIMPLE_MODE
         self.set_mode(new_mode)
-        self.modeChanged.emit(self._mode)
 
     def set_current_page(self, page: int):
         for p, btn in self._buttons.items():
@@ -161,7 +165,7 @@ class CalibreSidebar(QWidget):
 ObsidianSidebar = CalibreSidebar
 
 
-class NavigationSettingsDialog(QDialog):
+class NavigationSettingsDialog(ResponsiveDialog):
     """Kompatibilitätsdialog: In der Calibre-Ansicht ist die Navigation bewusst fest."""
 
     def __init__(self, parent=None):
@@ -178,3 +182,7 @@ class NavigationSettingsDialog(QDialog):
         ok = QPushButton(t('ui.navigation.ok_d0686962'))
         ok.clicked.connect(self.accept)
         layout.addWidget(ok)
+        self.enable_responsive_layout(
+            520, 360, minimum_width=320, minimum_height=240,
+            scroll=True
+        )

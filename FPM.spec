@@ -1,12 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller onedir spec for FountainPen Manager.
 
-Build on Windows for Windows releases:
-    pyinstaller FPM.spec --noconfirm --clean
+Used by the cross-platform GitHub release workflow and for local builds:
 
-The app keeps user data outside the executable by default. Portable launchers set
+    python -m PyInstaller FPM.spec --noconfirm --clean
+
+Produces:
+    dist/FountainPenManager/FountainPenManager.exe  (Windows)
+    dist/FountainPenManager/FountainPenManager      (Linux)
+
+User data is kept outside the executable by default. Portable launchers set
 FPM_DATA_DIR to a local data/ folder next to the executable.
 """
+
+import sys
 from pathlib import Path
 
 ROOT = Path(SPECPATH)
@@ -21,6 +28,8 @@ datas = [
     (str(ROOT / "README.md"), "."),
     (str(ROOT / "version.json"), "."),
     (str(ROOT / "docs" / "BENUTZERHANDBUCH_DE.md"), "docs"),
+    (str(ROOT / "docs" / "USER_MANUAL_EN.md"), "docs"),
+    (str(ROOT / "docs" / "MANUEL_UTILISATEUR_FR.md"), "docs"),
 ]
 
 hiddenimports = [
@@ -28,9 +37,16 @@ hiddenimports = [
     "updater.check_update",
     "updater.apply_update",
     "updater.common",
-    "requests",
     "packaging.version",
 ]
+
+# The ICO is required for Windows. Linux builds do not need a Windows icon and
+# should not fail when the platform toolchain cannot process it.
+icon_path = (
+    str(ROOT / "assets" / "fountainpen.ico")
+    if sys.platform.startswith("win")
+    else None
+)
 
 
 a = Analysis(
@@ -59,14 +75,14 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=str(ROOT / "assets" / "fountainpen.ico"),
+    icon=icon_path,
 )
 
 coll = COLLECT(
@@ -75,7 +91,7 @@ coll = COLLECT(
     a.zipfiles,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     name="FountainPenManager",
 )

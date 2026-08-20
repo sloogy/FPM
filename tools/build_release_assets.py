@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
-"""Build GitHub Release assets for FountainPenManager.
+"""Build combined Windows and Linux GitHub release assets for FPM.
 
-Erzeugt in einem sauberen Ausgabeordner:
-- versionierte direkte Windows-/Linux-Binaries
-- getrennte portable ZIPs fuer Windows und Linux mit stabilen Startnamen
-- optional Windows-Installer-EXE und Installer-ZIP fuer SmartScreen/Browser-Blockaden
-- latest.json fuer den In-App-Updater
-- SHA256SUMS.txt fuer die manuelle Pruefung
+This script consumes two PyInstaller onedir bundles plus the Windows installer
+and creates:
 
-Updater-Vertrag:
-Die Manifest-Keys ``windows`` und ``linux`` bleiben portable ZIPs. Der Installer
-ist ein separates Asset. Installer-Installationen duerfen den Key
-``windows_installer`` bevorzugen; portable Fallbacks bleiben trotzdem erhalten.
+- FountainPenManager-v<version>-portable-windows.zip
+- FountainPenManager-v<version>-portable-linux.zip
+- FountainPenManager_Setup_<version>.exe
+- FountainPenManager_Setup_<version>.zip
+- fpm_<version>_Windows_x86_64.lpmodule
+- fpm_<version>_Linux_x86_64.lpmodule
+- latest.json
+- SHA256SUMS.txt
+
+It deliberately uses only the Python standard library so the manifest job does
+not require the application runtime dependencies.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -31,393 +35,424 @@ sys.path.insert(0, str(ROOT))
 
 from app_info import APP_NAME, APP_VERSION  # noqa: E402
 
-WINDOWS_CANONICAL_EXE = "FountainPenManager.exe"
-LINUX_CANONICAL_BINARY = "FountainPenManager"
+WINDOWS_BINARY = "FountainPenManager.exe"
+LINUX_BINARY = "FountainPenManager"
 
 
-def _die(message: str) -> None:
+def die(message: str) -> None:
     raise SystemExit(message)
 
 
-def _sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
-def _first_existing(candidates: Iterable[Path]) -> Path | None:
+def first_existing(candidates: Iterable[Path]) -> Path | None:
     for path in candidates:
         if path.is_file():
             return path
     return None
 
 
-def _find_windows_exe(build_dir: Path) -> Path:
-    direct = _first_existing(
-        [
-            build_dir / WINDOWS_CANONICAL_EXE,
-            build_dir / "FountainPenManager-windows.exe",
-            build_dir / "dist" / WINDOWS_CANONICAL_EXE,
-            ROOT / "dist" / WINDOWS_CANONICAL_EXE,
-        ]
+def find_binary(build_dir: Path, filename: str) -> Path:
+    direct = first_existing(
+        (
+            build_dir / filename,
+            build_dir / "dist" / filename,
+            build_dir / "FountainPenManager" / filename,
+        )
     )
     if direct:
         return direct
 
-    matches = sorted(build_dir.rglob("FountainPenManager*.exe"))
-    matches = [p for p in matches if "setup" not in p.name.lower()]
+    matches = sorted(path for path in build_dir.rglob(filename) if path.is_file())
     if matches:
         return matches[0]
-    _die(f"Windows-EXE nicht gefunden in: {build_dir}")
+
+    die(f"{filename} wurde nicht gefunden in: {build_dir}")
 
 
-def _find_linux_binary(build_dir: Path) -> Path:
-    direct = _first_existing(
-        [
-            build_dir / LINUX_CANONICAL_BINARY,
-            build_dir / "FountainPenManager-linux",
-            build_dir / "dist" / LINUX_CANONICAL_BINARY,
-            ROOT / "dist" / LINUX_CANONICAL_BINARY,
-        ]
+def find_installer(installer_dir: Path) -> Path:
+    direct = first_existing(
+        (
+            installer_dir / "FountainPenManager_Setup.exe",
+            installer_dir / "release" / "FountainPenManager_Setup.exe",
+        )
     )
     if direct:
         return direct
 
-    matches = sorted(build_dir.rglob("FountainPenManager*"))
-    matches = [
-        p
-        for p in matches
-        if p.is_file()
-        and not p.name.lower().endswith((".exe", ".zip", ".txt", ".json"))
-        and "setup" not in p.name.lower()
-    ]
+    matches = sorted(installer_dir.rglob("FountainPenManager_Setup*.exe"))
     if matches:
         return matches[0]
-    _die(f"Linux-Binary nicht gefunden in: {build_dir}")
+
+    die(f"Windows-Installer wurde nicht gefunden in: {installer_dir}")
 
 
-def _find_installer(build_dir: Path) -> Path | None:
-    # GitHub Actions kann den Installer als FountainPenManager_Setup.exe oder bereits
-    # versioniert liefern. Das Release-Asset wird unten immer normalisiert.
-    candidates = sorted(build_dir.rglob("FountainPenManager_Setup*.exe"))
-    return candidates[0] if candidates else None
+def copy_bundle(binary: Path, destination: Path) -> None:
+    if destination.exists():
+        shutil.rmtree(destination)
+
+    shutil.copytree(binary.parent, destination)
+
+    copied_binary = destination / binary.name
+    if not copied_binary.is_file():
+        die(f"Bundle enthält die Programmdatei nicht: {copied_binary}")
+
+    if not (destination / "_internal").is_dir():
+        die(f"PyInstaller-onedir-Bundle ohne _internal/: {destination}")
 
 
-def _copy_file(src: Path, dst: Path, executable: bool = False) -> None:
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dst)
-    if executable:
-        try:
-            mode = os.stat(dst).st_mode
-            os.chmod(dst, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-        except OSError:
-            pass
-
-
-def _copy_bundle_contents(src_dir: Path, dst_dir: Path) -> None:
-    """Kopiert einen PyInstaller-onedir-Bundle-Ordner ins portable Arbeitsverzeichnis."""
-    dst_dir.mkdir(parents=True, exist_ok=True)
-    excluded_names = {
-        "FountainPenManager_Setup.exe",
-        "FountainPenManager_Setup.zip",
-        "SHA256SUMS.txt",
-        "latest.json",
-    }
-    for src in sorted(src_dir.rglob("*")):
-        rel = src.relative_to(src_dir)
-        if any(part.startswith("FountainPenManager_Setup_") for part in rel.parts):
-            continue
-        if src.name in excluded_names:
-            continue
-        dst = dst_dir / rel
-        if src.is_dir():
-            dst.mkdir(parents=True, exist_ok=True)
-        else:
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
-
-
-def _copy_user_manual(dst_root: Path) -> None:
-    docs_dir = dst_root / "docs"
-    docs_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(ROOT / "docs" / "BENUTZERHANDBUCH_DE.md", docs_dir / "BENUTZERHANDBUCH_DE.md")
-
-
-def _write_zip(zip_path: Path, src_dir: Path) -> None:
+def write_zip(zip_path: Path, source_dir: Path) -> None:
     zip_path.parent.mkdir(parents=True, exist_ok=True)
-    if zip_path.exists():
-        zip_path.unlink()
-    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for path in sorted(src_dir.rglob("*")):
-            if path.is_dir():
-                continue
-            zf.write(path, path.relative_to(src_dir).as_posix())
+    zip_path.unlink(missing_ok=True)
+
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(source_dir.rglob("*")):
+            if path.is_file():
+                archive.write(path, path.relative_to(source_dir).as_posix())
 
 
-def _write_windows_starter(path: Path) -> None:
+def write_windows_starter(path: Path) -> None:
     path.write_text(
         "@echo off\r\n"
         "setlocal EnableExtensions\r\n"
-        "set \"DIR=%~dp0\"\r\n"
-        "rem DPI/Scaling: System-Skalierung verwenden, Fractional Scaling nicht grob runden.\r\n"
-        "set \"QT_ENABLE_HIGHDPI_SCALING=1\"\r\n"
-        "set \"QT_AUTO_SCREEN_SCALE_FACTOR=1\"\r\n"
-        "set \"QT_SCALE_FACTOR_ROUNDING_POLICY=PassThrough\"\r\n"
-        "set \"FPM_DATA_DIR=%DIR%data\"\r\n"
-        f"if exist \"%DIR%{WINDOWS_CANONICAL_EXE}\" (\r\n"
-        f"  start \"\" \"%DIR%{WINDOWS_CANONICAL_EXE}\"\r\n"
-        "  exit /b 0\r\n"
+        'set "DIR=%~dp0"\r\n'
+        'set "FPM_DATA_DIR=%DIR%data"\r\n'
+        'if not exist "%FPM_DATA_DIR%" mkdir "%FPM_DATA_DIR%"\r\n'
+        'set "QT_ENABLE_HIGHDPI_SCALING=1"\r\n'
+        'set "QT_AUTO_SCREEN_SCALE_FACTOR=1"\r\n'
+        'set "QT_SCALE_FACTOR_ROUNDING_POLICY=PassThrough"\r\n'
+        f'if not exist "%DIR%{WINDOWS_BINARY}" (\r\n'
+        f'  echo {WINDOWS_BINARY} wurde nicht gefunden.\r\n'
+        "  exit /b 1\r\n"
         ")\r\n"
-        f"echo {WINDOWS_CANONICAL_EXE} wurde nicht gefunden.\r\n"
-        "pause\r\n"
-        "exit /b 1\r\n",
+        f'start "" "%DIR%{WINDOWS_BINARY}" %*\r\n',
         encoding="utf-8",
         newline="",
     )
 
 
-def _write_linux_starter(path: Path) -> None:
+def write_linux_starter(path: Path) -> None:
     path.write_text(
         "#!/usr/bin/env bash\n"
         "set -euo pipefail\n"
-        "DIR=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\n"
-        "# DPI/Scaling: System-Skalierung verwenden, Fractional Scaling nicht grob runden.\n"
-        "export QT_ENABLE_HIGHDPI_SCALING=\"${QT_ENABLE_HIGHDPI_SCALING:-1}\"\n"
-        "export QT_AUTO_SCREEN_SCALE_FACTOR=\"${QT_AUTO_SCREEN_SCALE_FACTOR:-1}\"\n"
-        "export QT_SCALE_FACTOR_ROUNDING_POLICY=\"${QT_SCALE_FACTOR_ROUNDING_POLICY:-PassThrough}\"\n"
-        "export FPM_DATA_DIR=\"${FPM_DATA_DIR:-$DIR/data}\"\n"
-        f"chmod +x \"$DIR/{LINUX_CANONICAL_BINARY}\" 2>/dev/null || true\n"
-        f"exec \"$DIR/{LINUX_CANONICAL_BINARY}\" \"$@\"\n",
+        'DIR="$(cd "$(dirname "$0")" && pwd)"\n'
+        'export FPM_DATA_DIR="${FPM_DATA_DIR:-$DIR/data}"\n'
+        'export QT_ENABLE_HIGHDPI_SCALING="${QT_ENABLE_HIGHDPI_SCALING:-1}"\n'
+        'export QT_AUTO_SCREEN_SCALE_FACTOR="${QT_AUTO_SCREEN_SCALE_FACTOR:-1}"\n'
+        'export QT_SCALE_FACTOR_ROUNDING_POLICY="${QT_SCALE_FACTOR_ROUNDING_POLICY:-PassThrough}"\n'
+        'mkdir -p "$FPM_DATA_DIR"\n'
+        f'chmod +x "$DIR/{LINUX_BINARY}" 2>/dev/null || true\n'
+        f'exec "$DIR/{LINUX_BINARY}" "$@"\n',
         encoding="utf-8",
     )
-    mode = os.stat(path).st_mode
-    os.chmod(path, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def _write_portable_readme(path: Path, version: str, platform_name: str) -> None:
-    start_hint = (
-        "Doppelklick auf start-windows.cmd oder FountainPenManager.exe"
-        if platform_name == "windows"
-        else "./start-linux.sh"
-    )
+def write_readme(path: Path, version: str, platform_name: str) -> None:
+    starter = "start-windows.cmd" if platform_name == "windows" else "./start-linux.sh"
     path.write_text(
-        f"FountainPenManager {version} — Portable {platform_name}\n"
-        "=====================================\n\n"
-        f"Start: {start_hint}\n\n"
-        "Daten, Einstellungen und Backups werden in ./data/ gespeichert.\n"
-        "Der Ordner ist portabel und kann z.B. auf einem USB-Stick liegen.\n\n"
-        "Updater-Hinweis:\n"
-        "Dieses ZIP ist absichtlich auch ein Update-Paket.\n"
-        "Die ausführbare Datei hat deshalb den stabilen Namen FountainPenManager.exe bzw. FountainPenManager.\n"
-        "Bitte diese Namen im ZIP nicht entfernen oder umbenennen.\n",
+        f"FountainPen Manager {version} — Portable {platform_name}\n"
+        "================================================\n\n"
+        f"Start: {starter}\n\n"
+        "Datenbank, Einstellungen und Backups werden in ./data gespeichert.\n"
+        "Die Programmdatei und der Ordner _internal/ müssen zusammenbleiben.\n",
         encoding="utf-8",
     )
 
 
-def _create_portable_windows_zip(out_dir: Path, version: str, windows_exe: Path) -> Path:
-    work = out_dir / "_portable_windows"
-    if work.exists():
-        shutil.rmtree(work)
+def create_portable_zip(
+    *,
+    build_dir: Path,
+    output_dir: Path,
+    version: str,
+    platform_name: str,
+) -> Path:
+    binary_name = WINDOWS_BINARY if platform_name == "windows" else LINUX_BINARY
+    binary = find_binary(build_dir, binary_name)
+    work = output_dir / f"_portable_{platform_name}"
 
-    _copy_bundle_contents(windows_exe.parent, work)
+    copy_bundle(binary, work)
 
-    target_exe = work / WINDOWS_CANONICAL_EXE
-    if not target_exe.is_file():
-        _die(f"Windows-Bundle ohne stabilen Startnamen: {target_exe}")
-    if not (work / "_internal").is_dir():
-        _die("Windows-Bundle ohne _internal/ ist kein onedir-Build")
-
-    (work / "data" / "backups").mkdir(parents=True, exist_ok=True)
-    (work / "data" / ".keep").touch()
-    (work / "data" / "backups" / ".keep").touch()
-    _copy_user_manual(work)
-    _write_windows_starter(work / "start-windows.cmd")
-    _write_portable_readme(work / "README.txt", version, "windows")
-    zip_path = out_dir / f"FountainPenManager-v{version}-portable-windows.zip"
-    _write_zip(zip_path, work)
-    shutil.rmtree(work)
-    return zip_path
-
-
-def _create_portable_linux_zip(out_dir: Path, version: str, linux_binary: Path) -> Path:
-    work = out_dir / "_portable_linux"
-    if work.exists():
-        shutil.rmtree(work)
-
-    _copy_bundle_contents(linux_binary.parent, work)
-
-    target_binary = work / LINUX_CANONICAL_BINARY
-    if not target_binary.is_file():
-        _die(f"Linux-Bundle ohne stabilen Startnamen: {target_binary}")
-    if not (work / "_internal").is_dir():
-        _die("Linux-Bundle ohne _internal/ ist kein onedir-Build")
-    try:
-        mode = os.stat(target_binary).st_mode
-        os.chmod(target_binary, mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    except OSError:
-        pass
+    target_binary = work / binary_name
+    if platform_name == "linux":
+        target_binary.chmod(
+            target_binary.stat().st_mode
+            | stat.S_IXUSR
+            | stat.S_IXGRP
+            | stat.S_IXOTH
+        )
 
     (work / "data" / "backups").mkdir(parents=True, exist_ok=True)
     (work / "data" / ".keep").touch()
     (work / "data" / "backups" / ".keep").touch()
-    _copy_user_manual(work)
-    _write_linux_starter(work / "start-linux.sh")
-    _write_portable_readme(work / "README.txt", version, "linux")
-    zip_path = out_dir / f"FountainPenManager-v{version}-portable-linux.zip"
-    _write_zip(zip_path, work)
-    shutil.rmtree(work)
-    return zip_path
 
+    if platform_name == "windows":
+        write_windows_starter(work / "start-windows.cmd")
+    else:
+        write_linux_starter(work / "start-linux.sh")
 
-def _create_installer_zip(out_dir: Path, version: str, installer_exe: Path) -> tuple[Path, Path]:
-    installer_name = f"FountainPenManager_Setup_{version}.exe"
-    normalized_installer = out_dir / installer_name
-    _copy_file(installer_exe, normalized_installer, executable=False)
+    write_readme(work / "README.txt", version, platform_name)
 
-    readme = out_dir / "WINDOWS_DOWNLOAD_HINWEIS.txt"
-    readme.write_text(
-        "FountainPenManager Windows-Download\n"
-        "==============================\n\n"
-        "Windows SmartScreen oder der Browser kann neue, unsignierte Open-Source-Installer blockieren, "
-        "weil der Herausgeber noch keine ausreichende Reputation hat.\n\n"
-        "Empfohlen:\n"
-        "1. ZIP herunterladen und entpacken.\n"
-        "2. SHA256 aus SHA256SUMS.txt mit dem Download vergleichen.\n"
-        "3. Installer starten. Falls SmartScreen erscheint: Weitere Informationen → Trotzdem ausführen.\n\n"
-        "PowerShell-Prüfung:\n"
-        f"Get-FileHash .\\{installer_name} -Algorithm SHA256\n",
-        encoding="utf-8",
+    zip_path = output_dir / (
+        f"FountainPenManager-v{version}-portable-{platform_name}.zip"
     )
+    write_zip(zip_path, work)
+    shutil.rmtree(work)
+    return zip_path
 
-    work = out_dir / "_installer_zip"
+
+def create_installer_assets(
+    *, installer_dir: Path, output_dir: Path, version: str, signed: bool
+) -> tuple[Path, Path]:
+    source = find_installer(installer_dir)
+    normalized = output_dir / f"FountainPenManager_Setup_{version}.exe"
+    shutil.copy2(source, normalized)
+
+    work = output_dir / "_installer_zip"
     if work.exists():
         shutil.rmtree(work)
     work.mkdir(parents=True)
-    shutil.copy2(normalized_installer, work / installer_name)
-    shutil.copy2(readme, work / readme.name)
-    zip_path = out_dir / f"FountainPenManager_Setup_{version}.zip"
-    _write_zip(zip_path, work)
+
+    shutil.copy2(normalized, work / normalized.name)
+    signature_notice = (
+        "Der Installer ist Authenticode-signiert und wurde vor der "
+        "Veröffentlichung mit signtool geprüft.\n"
+        if signed
+        else "Dieser Prerelease-Installer ist nicht digital signiert.\n"
+    )
+    (work / "WINDOWS_DOWNLOAD_HINWEIS.txt").write_text(
+        "FountainPen Manager Windows-Download\n"
+        "====================================\n\n"
+        f"{signature_notice}"
+        "SHA256SUMS.txt kann zur Integritätsprüfung verwendet werden.\n",
+        encoding="utf-8",
+    )
+
+    installer_zip = output_dir / f"FountainPenManager_Setup_{version}.zip"
+    write_zip(installer_zip, work)
     shutil.rmtree(work)
-    readme.unlink(missing_ok=True)
-    return normalized_installer, zip_path
+    return normalized, installer_zip
 
 
-def _asset(base_url: str, path: Path, asset_type: str) -> dict[str, str]:
+def copy_module_asset(source: Path, output_dir: Path, expected_name: str) -> Path:
+    source = source.resolve()
+    if not source.is_file():
+        die(f"LifePlanner module asset missing: {source}")
+    target = output_dir / expected_name
+    shutil.copy2(source, target)
+    with zipfile.ZipFile(target) as archive:
+        names = set(archive.namelist())
+        if {"component.json", "component.json.sig", "payload/module.json"} - names:
+            die(f"{target.name}: incomplete LifePlanner module archive")
+    return target
+
+
+def asset(base_url: str, path: Path, asset_type: str) -> dict[str, str]:
     return {
         "type": asset_type,
         "url": f"{base_url.rstrip('/')}/{path.name}",
-        "sha256": _sha256_file(path),
+        "sha256": sha256_file(path),
     }
 
 
-def _write_latest_json(
-    out_dir: Path,
-    version: str,
-    release_tag: str,
-    base_url: str,
-    portable_windows_zip: Path,
-    portable_linux_zip: Path,
-    installer_exe: Path | None,
-    installer_zip: Path | None,
-) -> Path:
-    assets: dict[str, dict[str, str]] = {
-        # Updater-Vertrag: Plattform-Keys bleiben portable ZIPs.
-        "windows": _asset(base_url, portable_windows_zip, "portable-zip"),
-        "linux": _asset(base_url, portable_linux_zip, "portable-zip"),
-        # Explizite manuelle Download-/Fallback-Assets.
-        "portable_windows_zip": _asset(base_url, portable_windows_zip, "portable-zip"),
-        "portable_linux_zip": _asset(base_url, portable_linux_zip, "portable-zip"),
-        # Kompatibilitaets-Fallback: Windows zeigt auf das Windows-ZIP.
-        "portable_zip": _asset(base_url, portable_windows_zip, "portable-zip"),
+def validate_portable_zip(
+    zip_path: Path, *, binary_name: str, starter_name: str
+) -> None:
+    with zipfile.ZipFile(zip_path) as archive:
+        names = set(archive.namelist())
+
+    required = {
+        binary_name,
+        starter_name,
+        "data/.keep",
+        "data/backups/.keep",
     }
-    if installer_exe is not None:
-        # Muss exakt "installer" bleiben: updater.check_update behandelt nur
-        # diesen Typ als Setup-EXE und staget ihn nicht als FountainPenManager.exe.
-        assets["windows_installer"] = _asset(base_url, installer_exe, "installer")
-    if installer_zip is not None:
-        assets["windows_installer_zip"] = _asset(base_url, installer_zip, "installer-zip")
+    missing = required - names
+    if missing:
+        die(f"{zip_path.name}: fehlende Dateien: {sorted(missing)}")
+
+    if not any(name.startswith("_internal/") for name in names):
+        die(f"{zip_path.name}: _internal/ fehlt")
+
+
+def write_checksums(output_dir: Path) -> None:
+    checksum_files = sorted(
+        path
+        for path in output_dir.iterdir()
+        if path.is_file() and path.name != "SHA256SUMS.txt"
+    )
+    (output_dir / "SHA256SUMS.txt").write_text(
+        "".join(
+            f"{sha256_file(path)}  {path.name}\n"
+            for path in checksum_files
+        ),
+        encoding="ascii",
+    )
+
+
+def print_created_assets(output_dir: Path, label: str) -> None:
+    print(f"{label} assets created:")
+    for path in sorted(output_dir.iterdir()):
+        if path.is_file():
+            print(f"  {path.name}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--version", required=True)
+    parser.add_argument("--release-tag", required=True)
+    parser.add_argument("--base-url")
+    parser.add_argument("--windows-build-dir", type=Path, required=True)
+    parser.add_argument("--linux-build-dir", type=Path, required=True)
+    parser.add_argument("--installer-dir", type=Path, required=True)
+    parser.add_argument("--module-windows", type=Path)
+    parser.add_argument("--module-linux", type=Path)
+    parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument("--prerelease", action="store_true")
+    args = parser.parse_args()
+
+    expected_tag = f"v{args.version}"
+    if args.version != APP_VERSION:
+        die(
+            f"Version mismatch: app_info.py={APP_VERSION}, "
+            f"argument={args.version}"
+        )
+    rc_suffix = args.release_tag.removeprefix(expected_tag + "-rc.")
+    valid_rc_tag = (
+        args.release_tag.startswith(expected_tag + "-rc.")
+        and rc_suffix.isdecimal()
+        and int(rc_suffix) >= 1
+        and str(int(rc_suffix)) == rc_suffix
+    )
+    if args.prerelease and not valid_rc_tag:
+        die(
+            f"Prerelease tag mismatch: expected {expected_tag}-rc.N, "
+            f"got {args.release_tag}"
+        )
+    if not args.prerelease and args.release_tag != expected_tag:
+        die(
+            f"Tag mismatch: expected {expected_tag}, "
+            f"got {args.release_tag}"
+        )
+    if not args.prerelease and (
+        not args.base_url or not args.module_windows or not args.module_linux
+    ):
+        die("Stable releases require base URL and both signed LifePlanner modules")
+
+    output_dir = args.out_dir.resolve()
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True)
+
+    asset_version = (
+        args.release_tag.removeprefix("v") if args.prerelease else args.version
+    )
+    windows_zip = create_portable_zip(
+        build_dir=args.windows_build_dir.resolve(),
+        output_dir=output_dir,
+        version=asset_version,
+        platform_name="windows",
+    )
+    linux_zip = create_portable_zip(
+        build_dir=args.linux_build_dir.resolve(),
+        output_dir=output_dir,
+        version=asset_version,
+        platform_name="linux",
+    )
+    installer_exe, installer_zip = create_installer_assets(
+        installer_dir=args.installer_dir.resolve(),
+        output_dir=output_dir,
+        version=asset_version,
+        signed=not args.prerelease,
+    )
+
+    validate_portable_zip(
+        windows_zip,
+        binary_name=WINDOWS_BINARY,
+        starter_name="start-windows.cmd",
+    )
+    validate_portable_zip(
+        linux_zip,
+        binary_name=LINUX_BINARY,
+        starter_name="start-linux.sh",
+    )
+
+    if args.prerelease:
+        (output_dir / "UNSIGNED_PRERELEASE.txt").write_text(
+            f"FountainPen Manager {args.release_tag}\n"
+            "=====================================\n\n"
+            "UNSIGNED TEST BUILD / NICHT SIGNIERTER TESTBUILD\n\n"
+            "Dieses Prerelease dient ausschließlich der Funktionsprüfung. "
+            "Windows kann deshalb eine Sicherheitswarnung anzeigen. Die "
+            "finale Version wird erst nach erfolgreicher Prüfung mit "
+            "Authenticode- und LifePlanner-Keys veröffentlicht.\n",
+            encoding="utf-8",
+        )
+        write_checksums(output_dir)
+        print_created_assets(output_dir, "Prerelease")
+        return 0
+
+    module_manifest = json.loads((ROOT / "module.json").read_text(encoding="utf-8"))
+    if module_manifest.get("version") != args.version:
+        die("module.json version does not match release version")
+    module_id = module_manifest["id"]
+    module_windows = copy_module_asset(
+        args.module_windows,
+        output_dir,
+        f"{module_id}_{args.version}_Windows_x86_64.lpmodule",
+    )
+    module_linux = copy_module_asset(
+        args.module_linux,
+        output_dir,
+        f"{module_id}_{args.version}_Linux_x86_64.lpmodule",
+    )
+
+    assets = {
+        "windows": asset(args.base_url, windows_zip, "portable-zip"),
+        "linux": asset(args.base_url, linux_zip, "portable-zip"),
+        "portable_windows_zip": asset(
+            args.base_url, windows_zip, "portable-zip"
+        ),
+        "portable_linux_zip": asset(
+            args.base_url, linux_zip, "portable-zip"
+        ),
+        "portable_zip": asset(args.base_url, windows_zip, "portable-zip"),
+        "windows_installer": asset(
+            args.base_url, installer_exe, "installer"
+        ),
+        "windows_installer_zip": asset(
+            args.base_url, installer_zip, "installer-zip"
+        ),
+        "lifeplanner_windows": asset(
+            args.base_url, module_windows, "lifeplanner-module"
+        ),
+        "lifeplanner_linux": asset(
+            args.base_url, module_linux, "lifeplanner-module"
+        ),
+    }
 
     manifest = {
         "app": APP_NAME,
         "channel": "stable",
-        "version": version,
-        "release_tag": release_tag,
+        "version": args.version,
+        "release_tag": args.release_tag,
         "assets": assets,
     }
-    path = out_dir / "latest.json"
-    path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return path
-
-
-def _write_sha256sums(out_dir: Path, files: list[Path]) -> Path:
-    sums = out_dir / "SHA256SUMS.txt"
-    lines = [f"{_sha256_file(path)}  {path.name}" for path in sorted(files, key=lambda p: p.name)]
-    sums.write_text("\n".join(lines) + "\n", encoding="ascii")
-    return sums
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Build FountainPenManager GitHub release assets")
-    parser.add_argument("--version", default=APP_VERSION, help="Version, default from app_info.APP_VERSION")
-    parser.add_argument("--release-tag", help="Git tag, default v<version>")
-    parser.add_argument("--base-url", required=True, help="GitHub release download base URL")
-    parser.add_argument("--windows-build-dir", required=True, type=Path)
-    parser.add_argument("--linux-build-dir", required=True, type=Path)
-    parser.add_argument("--out-dir", default=Path("release_assets"), type=Path)
-    parser.add_argument("--require-installer", action="store_true", help="Fail if Windows installer EXE is missing")
-    args = parser.parse_args()
-
-    version = str(args.version).lstrip("v")
-    release_tag = args.release_tag or f"v{version}"
-    out_dir = args.out_dir
-    if out_dir.exists():
-        shutil.rmtree(out_dir)
-    out_dir.mkdir(parents=True)
-
-    windows_exe = _find_windows_exe(args.windows_build_dir)
-    linux_binary = _find_linux_binary(args.linux_build_dir)
-    installer_source = _find_installer(args.windows_build_dir)
-    if args.require_installer and installer_source is None:
-        _die(f"Windows-Installer wurde nicht gefunden in: {args.windows_build_dir}")
-
-
-    portable_windows_zip = _create_portable_windows_zip(out_dir, version, windows_exe)
-    portable_linux_zip = _create_portable_linux_zip(out_dir, version, linux_binary)
-
-    installer_exe: Path | None = None
-    installer_zip: Path | None = None
-    if installer_source is not None:
-        installer_exe, installer_zip = _create_installer_zip(out_dir, version, installer_source)
-
-    latest = _write_latest_json(
-        out_dir,
-        version,
-        release_tag,
-        args.base_url,
-        portable_windows_zip,
-        portable_linux_zip,
-        installer_exe,
-        installer_zip,
+    latest_json = output_dir / "latest.json"
+    latest_json.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
     )
 
-    files_for_sums = [
-        portable_windows_zip,
-        portable_linux_zip,
-        latest,
-    ]
-    if installer_exe is not None:
-        files_for_sums.append(installer_exe)
-    if installer_zip is not None:
-        files_for_sums.append(installer_zip)
-    sums = _write_sha256sums(out_dir, files_for_sums)
+    write_checksums(output_dir)
+    print_created_assets(output_dir, "Release")
 
-    print("Release assets erzeugt:")
-    for path in sorted(out_dir.iterdir()):
-        if path.is_file():
-            print(f"- {path}")
-    print(f"SHA256: {sums}")
     return 0
 
 

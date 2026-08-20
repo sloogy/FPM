@@ -18,11 +18,12 @@ import html
 import json
 import re
 import urllib.parse
-import urllib.request
 import unicodedata
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Callable, Iterable
+
+from app_info import APP_VERSION
+from logic.network_security import open_public_http_url
 
 DIMENSION_FIELDS = (
     "length_mm",
@@ -130,7 +131,8 @@ MANUFACTURER_DOMAINS: dict[str, tuple[str, ...]] = {
     "waterman": ("waterman.com",),
 }
 
-_OVERLAY_STATE = SimpleNamespace(cache=None, path=None)
+_manufacturer_overlay_cache: dict[str, tuple[str, ...]] | None = None
+_manufacturer_overlay_path: Path | None = None
 
 
 def load_manufacturer_overlay(data_dir: Path | None) -> dict[str, tuple[str, ...]]:
@@ -139,13 +141,12 @@ def load_manufacturer_overlay(data_dir: Path | None) -> dict[str, tuple[str, ...
     Werte dürfen ein einzelner Domain-String oder eine Liste von Domains sein:
     ``{"asvine": "asvine.example"}`` oder ``{"pilot": ["pilotpen.eu", "pilotpen.com"]}``.
     """
+    global _manufacturer_overlay_cache, _manufacturer_overlay_path
     if data_dir is None:
-        # Ohne expliziten Datenordner nur den eingebauten Katalog verwenden.
-        # Ein zuvor geladener Test-/Fremdordner darf nicht global weiterwirken.
-        return {}
+        return _manufacturer_overlay_cache or {}
     path = Path(data_dir) / "manufacturer_domains.json"
-    if _OVERLAY_STATE.cache is not None and _OVERLAY_STATE.path == path:
-        return _OVERLAY_STATE.cache
+    if _manufacturer_overlay_cache is not None and _manufacturer_overlay_path == path:
+        return _manufacturer_overlay_cache
     overlay: dict[str, tuple[str, ...]] = {}
     try:
         if path.exists():
@@ -165,8 +166,8 @@ def load_manufacturer_overlay(data_dir: Path | None) -> dict[str, tuple[str, ...
                         overlay[normalize_pen_key(key, "")] = domains
     except Exception:
         overlay = {}
-    _OVERLAY_STATE.cache = overlay
-    _OVERLAY_STATE.path = path
+    _manufacturer_overlay_cache = overlay
+    _manufacturer_overlay_path = path
     return overlay
 
 
@@ -877,23 +878,23 @@ def extract_dimension_suggestion_from_text(
 
 
 def _fetch_url_text(url: str, timeout_s: int = DEFAULT_ONLINE_TIMEOUT_S) -> str:
-    req = urllib.request.Request(
+    response = open_public_http_url(
         url,
+        timeout_s=timeout_s,
         headers={
-            "User-Agent": "FountainPenManager/0.2.86 reference lookup (+user approved)",
+            "User-Agent": f"FountainPenManager/{APP_VERSION} reference lookup (+user approved)",
             "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.3",
         },
     )
-    with urllib.request.urlopen(req, timeout=timeout_s) as response:  # nosec: user-triggered reference lookup
+    with response:
         raw = response.read(MAX_ONLINE_BYTES + 1)
+        try:
+            charset = response.headers.get_content_charset() or "utf-8"
+        except Exception:
+            charset = "utf-8"
     if len(raw) > MAX_ONLINE_BYTES:
-        raw = raw[:MAX_ONLINE_BYTES]
-    content_type = ""
-    try:
-        content_type = response.headers.get_content_charset() or "utf-8"
-    except Exception:
-        content_type = "utf-8"
-    return raw.decode(content_type or "utf-8", errors="replace")
+        raise ValueError("Online-Antwort überschreitet das Größenlimit.")
+    return raw.decode(charset, errors="replace")
 
 
 def _extract_candidate_links(search_html: str) -> list[str]:

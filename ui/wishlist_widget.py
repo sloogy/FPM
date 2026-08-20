@@ -10,22 +10,22 @@ from PySide6.QtWidgets import (
     QDialogButtonBox, QMenu, QStackedWidget
 )
 
+from ui.ui_scale import scale_px
+from ui.common import EmptyStateWidget, ResponsiveDialog
+from database.db import get_session
+from database.models import WishlistItem, Expense, Pen, Ink, Nib, NibFormat, Paper
+from i18n.translator import LocaleService, t
+from logic.article_card_service import ensure_article_card
+from logic.event_bus import AppEventBus
+from logic.budget_export_service import sync_default_outbox_from_session
+from ui.theme import BTN_PRIMARY, BTN_SECONDARY, BTN_SUCCESS, BTN_DANGER
+from ui.localized_inputs import LocalizedDoubleSpinBox
 from ui.locale_widgets import (
-    LocalizedDoubleSpinBox as QDoubleSpinBox,
     bind_currency_combo,
     current_currency,
     populate_currency_combo,
     set_combo_currency,
 )
-from ui.ui_scale import scale_px
-from ui.common import EmptyStateWidget
-from database.db import get_session
-from database.models import WishlistItem, Expense, Pen, Ink, Nib, NibFormat, Paper
-from i18n.translator import LocaleService, format_money, t
-from logic.article_card_service import ensure_article_card
-from logic.event_bus import AppEventBus
-from logic.budget_export_service import sync_default_outbox_from_session
-from ui.theme import BTN_PRIMARY, BTN_SECONDARY, BTN_SUCCESS, BTN_DANGER
 
 TYPE_KEYS = ["pen", "ink", "nib", "paper", "accessory", "service"]
 STATUS_KEYS = ["wish", "watching", "ordered", "bought", "rejected"]
@@ -153,7 +153,7 @@ class WishlistWidget(QWidget):
                 self.table.setItem(r, 3, QTableWidgetItem(str(item.priority or 3)))
                 price = item.actual_price or item.expected_price or item.desired_price
                 cur = item.currency or LocaleService.instance().currency
-                self.table.setItem(r, 4, QTableWidgetItem(format_money(price, cur) if price is not None else "—"))
+                self.table.setItem(r, 4, QTableWidgetItem(f"{price:g} {cur}" if price is not None else "—"))
                 self.table.setItem(r, 5, QTableWidgetItem(item.shop or ""))
                 self.table.setItem(r, 6, QTableWidgetItem(item.article_card_path or "—"))
                 übernommen = f"{item.created_object_type} #{item.created_object_id}" if item.created_object_id else "—"
@@ -522,7 +522,7 @@ class WishlistWidget(QWidget):
             QMessageBox.information(self, t("wishlist.transfer_done_title"), t("wishlist.transfer_expense_body"))
 
 
-class WishlistDialog(QDialog):
+class WishlistDialog(ResponsiveDialog):
     def __init__(self, parent=None, item=None):
         super().__init__(parent)
         self.item = item
@@ -531,6 +531,10 @@ class WishlistDialog(QDialog):
         self._setup()
         if item:
             self._load(item)
+        self.enable_responsive_layout(
+            740, 700, minimum_width=360, minimum_height=320,
+            scroll=True
+        )
 
     def _setup(self):
         root = QVBoxLayout(self)
@@ -540,12 +544,12 @@ class WishlistDialog(QDialog):
         self.brand = QLineEdit(); self.model = QLineEdit(); self.variant = QLineEdit()
         self.status = QComboBox(); [self.status.addItem(v, k) for k, v in _wishlist_statuses().items()]
         self.priority = QSpinBox(); self.priority.setRange(1, 5); self.priority.setValue(3)
-        self.desired = QDoubleSpinBox(); self.desired.setRange(0, 1_000_000); self.desired.setDecimals(2)
-        self.expected = QDoubleSpinBox(); self.expected.setRange(0, 1_000_000); self.expected.setDecimals(2)
-        self.actual = QDoubleSpinBox(); self.actual.setRange(0, 1_000_000); self.actual.setDecimals(2)
+        self.desired = LocalizedDoubleSpinBox(); self.desired.setRange(0, 1_000_000); self.desired.setDecimals(2)
+        self.expected = LocalizedDoubleSpinBox(); self.expected.setRange(0, 1_000_000); self.expected.setDecimals(2)
+        self.actual = LocalizedDoubleSpinBox(); self.actual.setRange(0, 1_000_000); self.actual.setDecimals(2)
         self.currency = QComboBox(); populate_currency_combo(self.currency)
-        self.shipping = QDoubleSpinBox(); self.shipping.setRange(0, 100_000); self.shipping.setDecimals(2)
-        self.customs = QDoubleSpinBox(); self.customs.setRange(0, 100_000); self.customs.setDecimals(2)
+        self.shipping = LocalizedDoubleSpinBox(); self.shipping.setRange(0, 100_000); self.shipping.setDecimals(2)
+        self.customs = LocalizedDoubleSpinBox(); self.customs.setRange(0, 100_000); self.customs.setDecimals(2)
         bind_currency_combo(self.currency, self.desired, self.expected, self.actual, self.shipping, self.customs)
         self.shop = QLineEdit(); self.url = QLineEdit()
         self.reason = QTextEdit(); self.reason.setMaximumHeight(80)
@@ -597,7 +601,7 @@ class WishlistDialog(QDialog):
         }
 
 
-class WishlistTransferDialog(QDialog):
+class WishlistTransferDialog(ResponsiveDialog):
     def __init__(self, parent=None, item=None):
         super().__init__(parent)
         self.setWindowTitle(t('ui.wishlist_widget.wishlist_kauf_ubernehmen_1267d6d5'))
@@ -623,6 +627,10 @@ class WishlistTransferDialog(QDialog):
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         btns.accepted.connect(self.accept); btns.rejected.connect(self.reject)
         root.addWidget(btns)
+        self.enable_responsive_layout(
+            540, 360, minimum_width=320, minimum_height=240,
+            scroll=True
+        )
 
     def target_type(self):
         return self.target.currentData()

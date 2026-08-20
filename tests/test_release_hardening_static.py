@@ -6,8 +6,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_release_version_metadata_is_current():
     src = (ROOT / "app_info.py").read_text(encoding="utf-8")
-    assert 'APP_VERSION = "0.2.90"' in src
-    assert 'APP_BUILD = "windows-path-release-fix"' in src
+    assert 'APP_VERSION = "0.3.05"' in src
+    assert 'APP_BUILD = "enterprise-lifeplanner-pipeline"' in src
 
 
 def test_i18n_runtime_does_not_translate_inside_longer_words():
@@ -36,6 +36,7 @@ def test_release_blocker_strings_use_explicit_translation_keys():
         "settings": (ROOT / "ui" / "settings_widget.py").read_text(encoding="utf-8"),
         "wishlist": (ROOT / "ui" / "wishlist_widget.py").read_text(encoding="utf-8"),
         "pen": (ROOT / "ui" / "pen_widget.py").read_text(encoding="utf-8"),
+        "pen_dialogs": (ROOT / "ui" / "pen_dialogs.py").read_text(encoding="utf-8"),
         "rotation": (ROOT / "ui" / "rotation_widget.py").read_text(encoding="utf-8"),
     }
     forbidden = [

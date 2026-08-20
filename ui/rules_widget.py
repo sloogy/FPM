@@ -44,6 +44,7 @@ from ui.ui_scale import scale_px
 from database.db import get_session
 from database.models import AppSettings, Rule
 from i18n.translator import t
+from ui.common import ResponsiveDialog
 
 CONDITION_KEYS = [
     "fill_system_ink_prop",
@@ -712,7 +713,7 @@ class RulesWidget(QWidget):
             session.close()
 
 
-class RuleDialog(QDialog):
+class RuleDialog(ResponsiveDialog):
     def __init__(self, parent=None, rule=None):
         super().__init__(parent)
         self.rule = rule
@@ -724,6 +725,10 @@ class RuleDialog(QDialog):
             if getattr(rule, "is_system", False):
                 self.name.setReadOnly(True)
                 self.name.setToolTip(t('ui.rules_widget.systemregel_name_bleibt_stabil_damit_der_seed_be_fe13d56c'))
+        self.enable_responsive_layout(
+            780, 700, minimum_width=380, minimum_height=320,
+            scroll=True
+        )
 
     def _setup(self):
         root = QVBoxLayout(self)

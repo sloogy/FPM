@@ -1,4 +1,5 @@
-"""Static checks for Windows portable/installer release packaging."""
+"""Static checks for Windows/Linux portable and installer packaging."""
+
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,16 +21,20 @@ def test_pyinstaller_spec_collects_required_runtime_data():
     assert "FountainPenManager" in spec
     assert "console=False" in spec
     assert "assets" in spec and "fountainpen.ico" in spec
+    assert 'sys.platform.startswith("win")' in spec
     for lang in ("de.json", "en.json", "fr.json"):
         assert lang in spec
     assert "sqlalchemy.dialects.sqlite" in spec
 
 
-def test_inno_setup_script_is_release_ready():
+def test_inno_setup_script_is_release_ready_and_version_synced():
+    from app_info import APP_VERSION
+
     iss = read("installer/FountainPenManager_Setup.iss")
-    assert '#define MyAppVersion "0.2.90"' in iss
+    assert f'#define MyAppVersion "{APP_VERSION}"' in iss
     assert "FountainPenManager.exe" in iss
     assert "OutputBaseFilename=FountainPenManager_Setup_{#MyAppVersion}" in iss
+    assert 'Source: "dist\\FountainPenManager\\*"' in iss
     assert "WizardStyle=modern" in iss
     assert "recursesubdirs" in iss
     assert "German.isl" in iss
@@ -37,7 +42,7 @@ def test_inno_setup_script_is_release_ready():
     assert "Default.isl" in iss
 
 
-def test_build_script_creates_budgettool_style_assets():
+def test_local_windows_build_script_still_creates_supported_assets():
     src = read("tools/build_windows.py")
     expected_names = [
         "portable-windows.zip",
@@ -55,14 +60,20 @@ def test_build_script_creates_budgettool_style_assets():
     assert "ISCC" in src
 
 
-def test_windows_github_workflow_builds_on_windows_runner():
+def test_release_workflow_builds_both_platforms_and_installer():
     workflow = read(".github/workflows/windows-release.yml")
     assert "windows-latest" in workflow
+    assert "ubuntu-latest" in workflow
+    assert "ubuntu-latest" in workflow
     assert "python-version: '3.12'" in workflow
-    assert "requirements-build.txt" in workflow
+    assert "constraints-windows.lock" in workflow
+    assert "constraints-linux.lock" in workflow
+    assert "--require-hashes" in workflow
     assert "innosetup" in workflow.lower()
-    assert "tools/build_windows.py --clean" in workflow
-    assert "softprops/action-gh-release" in workflow
+    assert "python -m PyInstaller FPM.spec --noconfirm --clean" in workflow
+    assert "tools/build_release_assets.py" in workflow
+    assert "gh release create" in workflow
+    assert "softprops/action-gh-release" not in workflow
 
 
 def test_multilingual_windows_release_docs_exist():

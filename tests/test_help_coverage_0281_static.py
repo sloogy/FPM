@@ -28,17 +28,29 @@ def _get(d: dict, dotted: str):
     return node
 
 
-def test_help_widget_registers_rotation_and_research_tabs():
+def test_help_widget_registers_core_tabs_in_usable_order():
     src = _src("ui/help_widget.py")
-    assert "_add_rotation_tab" in src and "_add_research_tab" in src
-    # Reihenfolge: Rotation direkt nach Start (Kern-Workflow früh), Recherche vor Glossar
-    order = [src.index(x) for x in (
-        "self._add_start_tab(tabs)", "self._add_rotation_tab(tabs)",
-        "self._add_rules_tab(tabs)", "self._add_research_tab(tabs)",
-        "self._add_glossary_tab(tabs)",
-    )]
+    for method in (
+        "_add_start_tab",
+        "_add_data_entry_tab",
+        "_add_rotation_tab",
+        "_add_rules_tab",
+        "_add_research_tab",
+        "_add_glossary_tab",
+    ):
+        assert method in src
+    order = [
+        src.index(token)
+        for token in (
+            "self._add_start_tab()",
+            "self._add_data_entry_tab()",
+            "self._add_rotation_tab()",
+            "self._add_rules_tab()",
+            "self._add_research_tab()",
+            "self._add_glossary_tab()",
+        )
+    ]
     assert order == sorted(order)
-    # Dashboard-Karte im Start-Tab
     assert "help.dashboard_title" in src and "help.dashboard_body" in src
 
 
@@ -49,6 +61,8 @@ def test_help_keys_exist_and_are_substantial_in_all_languages():
         "help.rotation.reroll_body", "help.rotation.random_body", "help.rotation.pins_body",
         "help.research.tab", "help.research.lookup_body", "help.research.sources_body",
         "help.research.overlay_body",
+        "help.data_entry.tab", "help.data_entry.persistence_body",
+        "help.search_placeholder", "help.open_manual_button",
         "rotation.generate_tooltip",
     ]
     for lang in ("de", "en", "fr"):
@@ -105,7 +119,7 @@ def test_glossary_extended_to_twelve_terms():
 def test_generate_button_has_reroll_tooltip():
     src = _src("ui/rotation_widget.py")
     assert '"rotation.generate_tooltip"' in src
-    assert 'self.generate_btn.setToolTip(t("rotation.generate_tooltip"))' in src
+    assert "b.setToolTip(t(tip_key))" in src
 
 
 def test_help_body_texts_survive_t_formatting():
@@ -114,5 +128,5 @@ def test_help_body_texts_survive_t_formatting():
     Guard: help-Karten werden im Widget ohne Parameter aufgerufen.
     """
     src = _src("ui/help_widget.py")
-    assert "t('help.research.overlay_body')" in src  # kein kwargs-Aufruf
-    assert "t('help.research.overlay_body'," not in src
+    assert 't("help.research.overlay_body")' in src  # kein kwargs-Aufruf
+    assert 't("help.research.overlay_body",' not in src

@@ -1,4 +1,4 @@
-"""v0.2.90 release-readiness hardening checks."""
+"""v0.3.05 release-readiness hardening checks."""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -9,14 +9,14 @@ def read(rel: str) -> str:
 
 
 def test_readme_and_windows_docs_are_current_version():
-    assert "# FountainPen Manager v0.2.90" in read("README.md")
+    assert "# FountainPen Manager v0.3.05" in read("README.md")
     for rel in (
         "docs/WINDOWS_RELEASE_DE.md",
         "docs/WINDOWS_RELEASE_EN.md",
         "docs/WINDOWS_RELEASE_FR.md",
     ):
         text = read(rel)
-        assert "0.2.90" in text
+        assert "0.3.05" in text
         assert "0.2.67" not in text
         assert "FPM_DATA_DIR" in text
 
@@ -79,3 +79,16 @@ def test_gui_smoke_docs_and_script_exist():
     assert "QT_QPA_PLATFORM" in smoke
     assert "MainWindow" in smoke
     assert "range(14)" in smoke
+
+
+def test_release_workflow_installs_runtime_dependencies_before_gui_checks():
+    workflow = read('.github/workflows/release-check.yml')
+    assert '--require-hashes --only-binary=:all:' in workflow
+    assert 'constraints-linux.lock' in workflow and 'constraints-windows.lock' in workflow
+    assert 'libxcb-cursor0' in workflow
+    install_pos = workflow.index('python -m pip install --require-hashes')
+    ruff_pos = workflow.index('python -m ruff check . --select E9,F63,F7,F82')
+    test_pos = workflow.index('python -m pytest -q')
+    gui_pos = workflow.index('python tools/gui_smoke_test.py')
+    assert '--cov-fail-under=65' in workflow
+    assert install_pos < ruff_pos < test_pos < gui_pos

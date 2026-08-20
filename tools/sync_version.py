@@ -6,6 +6,7 @@ Aktualisiert/prueft:
 - version.json
 - VERSION_INFO.txt
 - installer/FountainPenManager_Setup.iss
+- module.json
 - latest.json.template
 - docs/latest.json.template
 """
@@ -25,6 +26,10 @@ from app_info import APP_NAME, APP_VERSION, APP_RELEASE_DATE, APP_BUILD  # noqa:
 def _latest_template_data() -> dict:
     tag = f"v{APP_VERSION}"
     base = f"https://github.com/sloogy/FPM/releases/download/{tag}"
+    try:
+        module_id = json.loads((ROOT / "module.json").read_text(encoding="utf-8")).get("id", "fpm")
+    except Exception:
+        module_id = "fpm"
     return {
         "app": APP_NAME,
         "channel": "stable",
@@ -66,6 +71,16 @@ def _latest_template_data() -> dict:
                 "url": f"{base}/FountainPenManager_Setup_{APP_VERSION}.zip",
                 "sha256": "PUT_SHA256_HERE",
             },
+            "lifeplanner_windows": {
+                "type": "lifeplanner-module",
+                "url": f"{base}/{module_id}_{APP_VERSION}_Windows_x86_64.lpmodule",
+                "sha256": "PUT_SHA256_HERE",
+            },
+            "lifeplanner_linux": {
+                "type": "lifeplanner-module",
+                "url": f"{base}/{module_id}_{APP_VERSION}_Linux_x86_64.lpmodule",
+                "sha256": "PUT_SHA256_HERE",
+            },
         },
     }
 
@@ -103,6 +118,27 @@ def sync_version_info(check: bool) -> bool:
     return True
 
 
+def sync_module_manifest(check: bool) -> bool:
+    p = ROOT / "module.json"
+    if not p.exists():
+        return True
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return False if check else _rewrite_module_manifest(p)
+    expected = dict(data)
+    expected["version"] = APP_VERSION
+    ok = data == expected
+    if check or ok:
+        return ok
+    p.write_text(json.dumps(expected, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return True
+
+
+def _rewrite_module_manifest(p: Path) -> bool:
+    raise ValueError(f"module manifest is invalid JSON and cannot be safely synchronized: {p}")
+
+
 def sync_installer(check: bool) -> bool:
     p = ROOT / "installer" / "FountainPenManager_Setup.iss"
     if not p.exists():
@@ -137,6 +173,7 @@ def main() -> int:
         "version.json": sync_version_json(check),
         "VERSION_INFO.txt": sync_version_info(check),
         "installer/FountainPenManager_Setup.iss": sync_installer(check),
+        "module.json": sync_module_manifest(check),
         "latest.json.template": sync_latest_template("latest.json.template", check),
         "docs/latest.json.template": sync_latest_template("docs/latest.json.template", check),
     }

@@ -4,12 +4,12 @@
 
 Cette version crée deux artefacts Windows, selon le modèle du BudgetTool :
 
-- `FountainPenManager-v0.2.90-portable-windows.zip`
-- `FountainPenManager_Setup_0.2.90.exe`
+- `FountainPenManager-v0.3.05-portable-windows.zip`
+- `FountainPenManager_Setup_0.3.05.exe`
 
 Elle crée aussi :
 
-- `FountainPenManager_Setup_0.2.90.zip`
+- `FountainPenManager_Setup_0.3.05.zip`
 - `latest.json`
 - `SHA256SUMS.txt`
 
@@ -53,3 +53,9 @@ Le workflow `.github/workflows/windows-release.yml` compile sur `windows-latest`
 4. Installateur Inno Setup
 5. SHA256SUMS et `latest.json`
 6. Upload comme artefact et, pour les tags, comme asset GitHub Release
+
+Un tag numéroté tel que `v0.3.05-rc.1` exécute les véritables builds Windows/Linux et l’installeur sans clés de signature. Les résultats sont publiés comme GitHub Prerelease clairement non signée, sans `latest.json` ni modules LifePlanner. Seul le tag final exact `v0.3.05` exige les clés Authenticode et LifePlanner et peut publier la version stable.
+
+## Validation Enterprise v0.3.05
+
+Les versions officielles étiquetées sont construites uniquement avec les verrous hachés séparés `constraints-windows.lock` et `constraints-linux.lock`. L’application Windows et l’installateur doivent être signés avec Authenticode et réussir `signtool verify /pa /all /v`. L’absence d’un verrou, d’un contrôle CI ou d’un secret de signature bloque le workflow sans solution de repli non sécurisée.

@@ -25,10 +25,10 @@ from logic.writing_sample_service import (
     compare_samples,
     BinderNode,
 )
-from ui.common import EmptyStateWidget
+from ui.common import EmptyStateWidget, ResponsiveDialog
 from ui.theme import BTN_PRIMARY
-from ui.locale_widgets import LocalizedDoubleSpinBox as QDoubleSpinBox
 from ui.ui_scale import scale_px
+from ui.localized_inputs import LocalizedDoubleSpinBox
 
 SAMPLE_TYPES = ["regular", "ink_test", "paper_test", "nib_tuning", "quote", "longform"]
 
@@ -94,7 +94,7 @@ class WritingSamplesWidget(QWidget):
 
         hint = QLabel(t("writing_samples.hint"))
         hint.setWordWrap(True)
-        hint.setStyleSheet("color:#7f8c8d; border:none; padding:2px;")
+        hint.setStyleSheet("color:#5f6f72; border:none; padding:2px;")
         root.addWidget(hint)
 
         self.stack = QStackedWidget()
@@ -357,22 +357,47 @@ class WritingSamplesWidget(QWidget):
                 pen = sess.get(Pen, sample.pen_id) if sess else None
             except Exception:
                 pen = None
+        # v0.2.87: Import darf die Transaktion nie kippen (sonst verliert der
+        # Nutzer die komplette Schreibprobe, weil ein Bild-Download scheiterte).
         try:
+            source = self._prefetch_remote_image(raw)
             imported = import_writing_sample_image(
                 _data_dir(),
-                raw,
+                source,
                 pen_id=sample.pen_id,
                 brand=getattr(pen, "brand", None),
                 model=getattr(pen, "model", None),
                 title=sample.title,
             )
-        except Exception as exc:  # media is optional; the sample itself must survive
+        except Exception as exc:  # noqa: BLE001
             self._last_media_warning = str(exc)
             return
         if imported:
             sample.image_path = imported
 
+    def _prefetch_remote_image(self, raw):
+        """URLs im Worker-Thread laden (v0.2.88), lokale Pfade durchreichen."""
+        text = str(raw or "").strip()
+        if not text.startswith(("http://", "https://")):
+            return raw
+        from pathlib import Path as _Path
+        from ui.media_download import download_image_to
+        import tempfile
+
+        tmp_dir = _Path(tempfile.mkdtemp(prefix="fpm_sample_"))
+        self._temp_media_dirs = getattr(self, "_temp_media_dirs", [])
+        self._temp_media_dirs.append(tmp_dir)
+        return download_image_to(self, text, tmp_dir / "download.img")
+
+    def _cleanup_temp_media(self) -> None:
+        import shutil
+
+        for folder in getattr(self, "_temp_media_dirs", []):
+            shutil.rmtree(folder, ignore_errors=True)
+        self._temp_media_dirs = []
+
     def _warn_media_import_failed(self) -> None:
+        self._cleanup_temp_media()
         message = getattr(self, "_last_media_warning", None)
         if not message:
             return
@@ -447,12 +472,11 @@ class WritingSamplesWidget(QWidget):
                 session.commit()
                 AppEventBus.instance().emit_samples()
                 self.refresh()
-                self._warn_media_import_failed()
         finally:
             session.close()
 
 
-class WritingSampleDialog(QDialog):
+class WritingSampleDialog(ResponsiveDialog):
     def __init__(self, parent=None, *, session, sample: Optional[WritingSample] = None, defaults: dict | None = None):
         super().__init__(parent)
         self.session = session
@@ -467,6 +491,10 @@ class WritingSampleDialog(QDialog):
         else:
             self._apply_defaults()
             self._auto_title()
+        self.enable_responsive_layout(
+            800, 720, minimum_width=360, minimum_height=320,
+            scroll=True
+        )
 
     def _setup_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -513,8 +541,8 @@ class WritingSampleDialog(QDialog):
 
         metrics = QGroupBox(t("writing_samples.groups.metrics"))
         mf = QFormLayout(metrics)
-        self.line_width = QDoubleSpinBox(); self.line_width.setRange(0, 5); self.line_width.setDecimals(2); self.line_width.setSuffix(" mm")
-        self.dry_time = QDoubleSpinBox(); self.dry_time.setRange(0, 600); self.dry_time.setDecimals(0); self.dry_time.setSuffix(" s")
+        self.line_width = LocalizedDoubleSpinBox(); self.line_width.setRange(0, 5); self.line_width.setDecimals(2); self.line_width.setSuffix(" mm")
+        self.dry_time = LocalizedDoubleSpinBox(); self.dry_time.setRange(0, 600); self.dry_time.setDecimals(0); self.dry_time.setSuffix(" s")
         self.feathering = self._spin5(default=1)
         self.bleedthrough = self._spin5(default=1)
         self.shading = self._spin5(default=3)
@@ -671,7 +699,7 @@ class WritingSampleDialog(QDialog):
         }
 
 
-class WritingSampleComparisonDialog(QDialog):
+class WritingSampleComparisonDialog(ResponsiveDialog):
     """Grid-Vergleich für 2–4 Schreibproben."""
 
     def __init__(self, parent=None, *, comparison):
@@ -743,3 +771,7 @@ class WritingSampleComparisonDialog(QDialog):
         close.clicked.connect(self.accept)
         row = QHBoxLayout(); row.addStretch(); row.addWidget(close)
         root.addLayout(row)
+        self.enable_responsive_layout(
+            1040, 660, minimum_width=420, minimum_height=320,
+            scroll=True
+        )

@@ -1,0 +1,49 @@
+FountainPen Manager v0.3.05 – Local Validation Evidence
+Date: 2026-08-20
+Scope: Enterprise + LifePlanner pipeline integration candidate
+
+RESULT SUMMARY
+- Version synchronization: PASS (0.3.05; app_info/version.json/VERSION_INFO/installer/latest templates/module.json)
+- Windows path audit: PASS
+- Compileall: PASS
+- Import smoke: PASS, 66 production modules; SQLAlchemy and PySide6 real
+- Name audit: PASS, 0 undefined names, 0 unused imports
+- Exception audit: PASS, 145 broad handlers within ratchet <=146, 0 bare except
+- Database access audit: PASS, 49 direct UI queries within ratchet <=49; 4 files query-free
+- Localization: PASS, 2,109 keys in German/English/French
+- i18n quality/key-wiring/runtime/visible-text audits: PASS
+- KILLCRITIC: PASS, 139 invariants x 1,000 = 139,000 checks, 0 findings
+- Complete pytest suite: PASS, 418 tests; core coverage 75.37% (gate 65%)
+- Focused updater suite: PASS, 27 tests; coverage 86.55% (gate 85%)
+- PyInstaller Linux onedir build: PASS; bundled executable initialized its isolated database and remained healthy until the smoke timeout
+- Focused v0.3.05 release/LifePlanner suite: PASS, 14 tests
+  - real Windows .lpmodule build + Ed25519 signature verification
+  - real Linux .lpmodule build + Ed25519 signature verification
+  - runtime-attestation verification before module build
+  - tampered runtime rejected
+  - tampered component metadata rejected
+  - tampered payload rejected
+  - ZIP path traversal / Windows separator tricks rejected
+  - host-contract verification and installation for Windows/Linux modules
+  - single-publisher workflow guard
+  - version/tag/manifest/asset-name derivation guard
+  - nested LifePlanner translation runtime lookup
+- GitHub workflow YAML parsing: PASS for generate-lockfile.yml, release-check.yml, windows-release.yml
+- Single GitHub Release publisher: PASS; only one `gh release create` remains
+- Separate LifePlanner release workflow: REMOVED
+
+LOCALLY VERIFIED RELEASE GATES
+- constraints-linux.lock and constraints-windows.lock: generated, hash-checked, binary-only dry-run installation plans PASS
+- Exact constraints-linux.lock environment on Python 3.12: installed successfully
+- Ruff fatal-error gate: PASS
+- Bandit medium-severity gate: PASS
+- PySide6 GUI smoke and all GUI-specific tests: PASS with real PySide6
+
+EXTERNAL MANDATORY GATES
+- The official Windows/Linux GitHub Actions matrix must reproduce the local results.
+- A real Authenticode certificate was not available locally. Tagged releases require and verify both EXE and installer signatures.
+- The real LifePlanner Ed25519 release key was not available locally. End-to-end signing tests use ephemeral test keys; tagged releases require `LIFEPLANNER_UPDATE_PRIVATE_KEY_B64` and fail closed if it is missing or invalid.
+
+RELEASE DECISION
+- Enterprise + LifePlanner source RC: PASS for handoff.
+- Public/Enterprise binary release: READY FOR TAG PIPELINE; publication remains fail-closed until the Windows/Linux matrix, real Authenticode signing, and the real LifePlanner release key pass in GitHub CI.

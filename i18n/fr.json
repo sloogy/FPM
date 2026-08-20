@@ -153,6 +153,38 @@
       "problem": "Stylo problématique",
       "service": "En service"
     },
+    "tiles": {
+      "activity": {
+        "detail": "Dernier : {last}",
+        "none": "Aucun remplissage enregistré",
+        "primary": "Affichés : {count}",
+        "title": "Activité récente"
+      },
+      "budget": {
+        "detail": "Reste à financer : {remaining}",
+        "primary": "Objectifs : {count} · Atteints : {complete}",
+        "title": "Objectifs d’épargne"
+      },
+      "collection": {
+        "detail": "Valeur : {value} · Avis : {issues} · Archivés : {archived}",
+        "primary": "Stylos : {pens} · Encres : {inks}",
+        "title": "Collection et état",
+        "tooltip": "Critiques : {critical} · Alertes : {warning} · Entrées sans devise : {missing}"
+      },
+      "interaction_hint": "Un clic : focaliser et agrandir le tableau. « Ouvrir l’onglet » ou double-clic : ouvrir directement l’onglet correspondant.",
+      "open_tab": "Ouvrir l’onglet →",
+      "open_tab_tooltip": "Aller directement à la section correspondante",
+      "rotation": {
+        "detail": "Bientôt dus : {soon}",
+        "primary": "Encrés : {active} · En retard : {overdue}",
+        "title": "Rotation et durée"
+      },
+      "service": {
+        "detail": "Critiques : {critical} · Bloqués : {blocked}",
+        "primary": "Cas ouverts : {count}",
+        "title": "Service et blocages"
+      }
+    },
     "timer_title_counts": "⏱ Ink Safety Timer – {overdue} en retard · {soon} bientôt dus",
     "total_inks": "Encres",
     "total_pens": "Stylos au total",
@@ -357,22 +389,53 @@
     "total": "Total"
   },
   "help": {
-    "dashboard_body": "Les quatre cartes montrent le quotidien : <b>Stylos actifs</b> (encrés), <b>Encres</b>, <b>Avertissements</b> (timers en retard + violations de règles) et <b>Valeur de la collection</b>. La ligne grise en dessous résume l’inventaire (total / archivés / service). Important : l’<b>Ink Safety Timer</b> est une centrale d’alerte – il ne montre que les remplissages en retard ou bientôt dus (à partir de 80 % des jours max). Tout ce qui est « au vert » figure intégralement sur la page Rotation sous « Chargement actuel ».",
+    "auto": {
+      "decision_body": "Full Auto peut refuser les combinaisons risquées, préférer de meilleures alternatives et ignorer les stylos bloqués, mais seulement après activation explicite du mode.",
+      "decision_title": "Full Auto décide seulement après autorisation",
+      "explain_body": "Chaque décision automatique indique règle, raison, score, risque et éventuelle alternative choisie. Les recommandations et refus restent ainsi traçables.",
+      "explain_title": "Aucune décision silencieuse",
+      "tab": "Auto"
+    },
+    "consumption": {
+      "optional_body": "Tout le monde ne souhaite pas maintenir des niveaux exacts. Collection, rotation et entretien fonctionnent sans suivi de consommation. La fonction t’aide sans imposer un flux de travail.",
+      "optional_title": "Pourquoi est-ce facultatif ?",
+      "stock_body": "Le suivi de consommation est facultatif. Lorsqu’il est activé, un remplissage réduit le stock du flacon selon le volume enregistré. La quantité ne devient jamais négative ; les flacons vides sont exclus des suggestions.",
+      "stock_title": "Consommation et quantité restante",
+      "tab": "Consommation"
+    },
+    "dashboard_body": "Cinq tuiles résument la collection, la rotation, le service, l’activité et les objectifs d’épargne facultatifs. <b>Un clic</b> focalise et agrandit un seul tableau détaillé ; un nouveau clic le replie. Le bouton visible <b>« Ouvrir l’onglet »</b> ou un <b>double-clic</b> sur une tuile ou une ligne ouvre l’onglet correspondant. Le minuteur de sécurité n’affiche toujours que les remplissages en retard ou bientôt dus à partir de 80 % des jours maximum.",
     "dashboard_title": "Lire le tableau de bord",
-    "manual_body": "Cette aide est la version courte. Le guide complet avec tous les détails – formule du score, calcul des temps de séjour, déroulé de la recherche, tableaux de référence et FAQ – est fourni sous <b>docs/BENUTZERHANDBUCH_DE.md</b> (en allemand) dans le dossier du programme. Il s’ouvre avec tout lecteur Markdown/texte et s’imprime bien.",
+    "data_entry": {
+      "images_body": "Les images sont copiées dans le stockage média géré. Elles restent disponibles même si le fichier original est déplacé ou renommé. Sauvegarde le répertoire de données avec la base SQLite.",
+      "images_title": "Images et médias gérés",
+      "persistence_body": "Marque, modèle, textes, dimensions, données d’achat et associations sont conservés dans l’état du dialogue. Avant de fermer avec des changements non enregistrés, l’app demande confirmation. Si une valeur semble manquer, vérifie d’abord que <b>Enregistrer</b> et non <b>Annuler</b> a été choisi.",
+      "persistence_title": "Les saisies restent lors du changement de page",
+      "tab": "Saisie",
+      "units_body": "Les nombres peuvent utiliser le séparateur décimal régional, par exemple <b>143,5 mm</b>, <b>24,8 g</b>, <b>0,8 ml</b> ou <b>CHF 39.95</b>. Les unités et symboles monétaires visibles sont correctement retirés lors de l’enregistrement ; changer de page ne remet plus la valeur à 0.",
+      "units_title": "Dimensions, poids et devises",
+      "workflow_body": "Le dialogue du stylo est divisé en plusieurs pages. Les saisies restent disponibles lors du passage d’une page à l’autre. Seul <b>Enregistrer</b> écrit le dossier dans la base ; <b>Annuler</b> abandonne tout le brouillon nouveau ou modifié.",
+      "workflow_title": "Enregistrer un stylo en toute sécurité"
+    },
+    "manual_body": "Cette aide est la version courte et consultable du wiki. Le manuel français complet est fourni sous <b>docs/MANUEL_UTILISATEUR_FR.md</b>. Le bouton <b>Ouvrir le manuel</b> ouvre automatiquement la langue sélectionnée.",
+    "manual_missing_body": "Le fichier du manuel manque dans le dossier du programme. Réinstalle ou extrais de nouveau le paquet complet.",
+    "manual_missing_title": "Manuel introuvable",
+    "manual_open_error_body": "Le fichier n’a pas pu être transmis à une application de lecture :\n{path}",
+    "manual_open_error_title": "Impossible d’ouvrir le manuel",
     "manual_title": "📖 Manuel complet",
-    "mode_body": "<b>Easy Mode</b> est le mode collection calme : stylos, encres, wishlist et calcul de valeur. La consommation/quantité restante est volontairement désactivée.<br><br><b>Expert Mode</b> active les modules plus profonds et permet la consommation, des règles plus complexes, Full Auto et davantage de diagnostic.",
+    "mode_body": "<b>Mode simple</b> affiche les six zones principales : Tableau de bord, Stylos, Encres, Rotation, Aide et Réglages. Le <b>mode expert</b> ajoute Plumes, Papier, Dépenses, Wishlist, Règles, Statistiques, Échantillons d’écriture et Laboratoire passionné. Le mode ne change que la navigation visible ; tes données et fonctions restent intactes.",
     "mode_title": "Easy Mode vs. Expert Mode",
+    "open_manual_button": "📖 Ouvrir le manuel",
+    "open_manual_tooltip": "Ouvre le manuel complet dans la langue actuellement sélectionnée.",
     "quickstart_body": "<b>Ordre recommandé :</b><br>1. Ajouter des encres<br>2. Ajouter éventuellement des plumes ou les associer au stylo<br>3. Ajouter des stylos et assigner les plumes<br>4. Remplir un stylo<br>5. Sur la page Rotation, cliquer sur « 💡 Suggestions » et remplir d’un clic sur une ligne<br><br>Ensuite, le tableau de bord, le safety timer, la rotation et les avertissements fonctionnent correctement.",
     "quickstart_title": "Démarrage rapide",
     "research": {
-      "lookup_body": "Dans le dialogue du stylo, la <b>recherche des dimensions</b> suit la cascade <b>IA/recherche structurée → site du fabricant → web ouvert → cache local</b>. Les propositions sont affichées avant application et ne remplissent que les champs vides ; les valeurs manuelles ne sont jamais écrasées. La <b>recherche d’images</b> commence volontairement sur le site du fabricant, puis passe au web ouvert. Les dimensions confirmées sont mises en cache localement.",
-      "lookup_title": "Dimensions : IA d’abord · Images : fabricant d’abord",
+      "lookup_body": "Dans le dialogue du stylo, « Chercher les dimensions » et « Chercher des images » interrogent d’abord le <b>site du fabricant</b> (intégré pour ~46 marques connues), puis seulement le web ouvert. La recherche de dimensions en ligne lit les pages fabricant prudemment, montre les propositions <b>avant</b> application et ne remplit que les champs vides – tes valeurs manuelles ne sont jamais écrasées. Les résultats confirmés sont mis en cache localement.",
+      "lookup_title": "Dimensions & images : le fabricant d’abord",
       "overlay_body": "Marque manquante ou domaine erroné ? Crée le fichier <b>manufacturer_domains.json</b> dans le répertoire de données (à côté de la base) – sans mise à jour. Exemple :<br><code>{ \"Ma Marque\": \"mamarque.example\",<br>&nbsp;&nbsp;\"Pilot\": [\"pilotpen.eu\", \"pilotpen.com\"] }</code><br>Une chaîne ou une liste de domaines par marque ; ces entrées remplacent la liste intégrée. Les erreurs sont sans risque – la recherche web ouverte reste la dernière étape.",
       "overlay_title": "Ajouter ses propres marques (manufacturer_domains.json)",
       "sources_body": "Chaque proposition nomme sa source : <b>manufacturer:&lt;domaine&gt;</b> = directement du fabricant (préféré et trié en premier), <b>online:&lt;domaine&gt;</b> = web ouvert, <b>cache</b> = résultat local confirmé auparavant. Tu vois ainsi d’un coup d’œil la fiabilité d’une valeur.",
       "sources_title": "Étiquettes de source",
-      "tab": "Recherche & données"
+      "tab": "Recherche"
     },
     "rotation": {
       "pins_body": "Un <b>appariement fixe</b> 💍 (défini dans le dialogue du stylo) signifie : ce stylo reçoit toujours exactement cette encre – ni le hasard ni le reroll ne l’emportent. Un <b>stylo obligatoire</b> ⭐ reçoit toujours un slot en premier, mais son encre reste libre. Principe de l’app : le moteur recommande – tu décides ; chaque avertissement peut être outrepassé.",
@@ -383,11 +446,33 @@
       "reroll_title": "D’autres suggestions ? Recliquer, tout simplement",
       "score_body": "Le <b>score</b> combine rôle, diversité des couleurs, temps d’inactivité, adéquation plume/papier et bonus/malus de règles : vert ≥ 100 (très adapté), orange sous 0 (plutôt défavorable), rouge = règle de protection bloquante. La colonne d’indices montre tous les avertissements de règles plus les deux infos principales – « … +N » signifie : plus de détails dans l’info-bulle et en cliquant sur le score (explication du pourquoi).",
       "score_title": "Comprendre le score et les indices",
-      "tab": "Rotation & suggestions",
+      "tab": "Rotation",
       "workflow_body": "Le moteur propose une encre adaptée pour chaque stylo <b>vide</b>. En haut, tu choisis le nombre de slots, éventuellement papier et thème. Un clic sur « 💡 Suggestions » crée la liste ; un clic sur une ligne ouvre le dialogue de remplissage. Les stylos en service, bloqués et les flacons vides sont ignorés automatiquement.",
       "workflow_title": "Comment fonctionnent les suggestions"
     },
-    "start_tab": "Démarrage rapide"
+    "rules": {
+      "levels_body": "<b>Info :</b> indication sans risque.<br><b>Avertissement :</b> inconvénients possibles, mais utilisation normale.<br><b>Critique :</b> risque élevé à vérifier consciemment.<br><b>Bloqué :</b> aucune utilisation automatique ; uniquement manuellement avec un override documenté.",
+      "levels_title": "Niveaux d’alerte",
+      "principle_body": "Le système évalue les combinaisons de stylo, encre, plume, papier, statut de service et statut de collection. Chaque règle peut être désactivée individuellement ou via son groupe. Le moteur recommande ; tu décides.",
+      "principle_title": "Principe du système de règles",
+      "tab": "Règles",
+      "vac_shimmer_body": "Les remplisseurs à vide sont plus difficiles à nettoyer. Les particules de shimmer peuvent se déposer dans le système. Une règle dure peut donc bloquer cette combinaison ou la refuser en mode Full Auto. Un override manuel conscient reste possible et est journalisé.",
+      "vac_shimmer_title": "Exemple : vac + shimmer"
+    },
+    "search_no_results": "Aucune aide correspondante. Essaie un terme plus court.",
+    "search_placeholder": "Rechercher dans le wiki …",
+    "search_results": "{count} carte(s) d’aide correspondante(s)",
+    "search_tooltip": "Recherche dans toutes les cartes d’aide. Plusieurs mots sont pris en compte ensemble.",
+    "service": {
+      "dry_risk_body": "Quand un remplissage dépasse sa durée de sécurité, le tableau de bord affiche un avertissement. Les stylos critiques devraient être nettoyés ou bloqués consciemment comme risque de dessèchement.",
+      "dry_risk_title": "Risque de dessèchement",
+      "end_body": "Lors du blocage, tu peux définir une date de début, une durée ou une date de fin prévue. Sans date de fin, le stylo reste bloqué jusqu’à sa libération manuelle.",
+      "end_title": "Fin de service prévue",
+      "locks_body": "Les stylos en service, problématiques ou bloqués manuellement ne sont pas utilisés pour de nouvelles rotations ni par Full Auto. Ils apparaissent sous <b>Service & blocages</b> sur le tableau de bord.",
+      "locks_title": "Service & blocages",
+      "tab": "Service"
+    },
+    "start_tab": "Départ"
   },
   "ink": {
     "add": "+ Ajouter une encre",
@@ -469,6 +554,13 @@
     "region_label": "France (FR)",
     "thousands_sep": " "
   },
+  "media": {
+    "download_cancelled": "Le téléchargement de l’image a été annulé.",
+    "download_progress": "Téléchargement de l’image …",
+    "download_shutdown_failed": "Le téléchargement de l’image n’a pas pu être arrêté correctement lors de la fermeture.",
+    "import_failed_body": "Les données ont été enregistrées, mais l’image n’a pas pu être ajoutée à la médiathèque.\n\nRaison : {error}\n\nLe chemin ou l’URL d’origine reste attaché à l’entrée. Tu peux redéfinir l’image plus tard.",
+    "import_failed_title": "L’image n’a pas pu être importée"
+  },
   "nav": {
     "dashboard": "Tableau de bord",
     "enthusiast_lab": "Labo passionné",
@@ -540,6 +632,7 @@
     "days_loaded": "Jours encrés",
     "delete": "Supprimer",
     "diameter": "Diamètre (mm)",
+    "discard_changes": "Abandonner les changements",
     "edit": "Modifier",
     "edit_title": "Modifier le stylo",
     "fill_system": "Système de remplissage",
@@ -551,6 +644,7 @@
       "vac": "Stylo à dépression"
     },
     "insurance_value": "Valeur d'assurance",
+    "keep_editing": "Continuer la modification",
     "length": "Longueur (mm)",
     "load_ink": "Remplir avec une encre",
     "mark_cleaned": "Marquer comme nettoyé",
@@ -568,6 +662,8 @@
       "vintage": "Vintage"
     },
     "title": "Gestion des stylos",
+    "unsaved_body": "Tu as modifié des données sans les enregistrer. Continuer la modification ou abandonner les changements ?",
+    "unsaved_title": "Saisies non enregistrées",
     "weight": "Poids (g)",
     "writing_feel": "Sensation d'écriture"
   },
@@ -793,9 +889,7 @@
     "theme_work": "Travail/Business",
     "title": "Rotation intelligente",
     "vac_difficult": "Vac + encre difficile",
-    "warning_hard_rule_suffix": " (règle stricte)",
-    "generate_button": "💡 Générer les propositions",
-    "refresh_button": "↻ Actualiser"
+    "warning_hard_rule_suffix": " (règle stricte)"
   },
   "rule_engine": {
     "no_active_violations": "Aucune violation de règle active. Score {score}.",
@@ -845,6 +939,7 @@
   "settings": {
     "about": "À propos de FountainPen Manager",
     "backup": "Créer une sauvegarde",
+    "backup_failed": "La sauvegarde cohérente de la base de données n’a pas pu être créée ou vérifiée : {error}",
     "budget_export_body": "Exporte toutes les dépenses FPM sous forme de fichier JSONL vérifiable. BudgetManager pourra l’importer ensuite de façon contrôlée, sans accès direct à cette base de données.",
     "budget_export_button": "Exporter JSONL BudgetManager",
     "budget_export_dialog_title": "Enregistrer l’export BudgetManager",
@@ -866,9 +961,21 @@
     "currency": "Devise par défaut",
     "db_path": "Chemin de la base de données",
     "decimal_sep": "Séparateur décimal",
+    "diagnostics_body": "Des journaux techniques rotatifs facilitent le diagnostic. Le paquet d’assistance ne contient ni base de données, ni collection, ni images.",
+    "diagnostics_export": "Exporter le paquet d’assistance",
+    "diagnostics_export_done": "Le paquet d’assistance a été enregistré ici :\n{path}",
+    "diagnostics_export_done_title": "Paquet d’assistance créé",
+    "diagnostics_export_failed": "Le paquet d’assistance n’a pas pu être créé : {error}",
+    "diagnostics_export_title": "Enregistrer le paquet d’assistance",
+    "diagnostics_file_filter": "Archive ZIP (*.zip)",
+    "diagnostics_open": "Ouvrir le dossier de diagnostic",
+    "diagnostics_title": "Diagnostic et assistance",
     "edc_slots": "Emplacements EDC (par défaut)",
     "exchange_rates": "Taux de change (1 CHF = …)",
     "exchange_rates_hint": "Les taux sont utilisés pour convertir la valeur de la collection.",
+    "invalid_exchange_rate": "Taux de change invalide pour {currency}. Saisissez un nombre supérieur à 0.",
+    "separators_must_differ": "Les séparateurs décimal et de milliers doivent être différents.",
+    "thousands_space": "Espace (1 234)",
     "folder_open_err": "Impossible d'ouvrir le dossier :\n{error}",
     "folder_open_title": "Dossier de données",
     "language": "Langue",
@@ -894,9 +1001,7 @@
     "title": "Paramètres",
     "ui_scale_saved_body": "Mise à l’échelle de l’interface enregistrée et appliquée. Facteur : {factor}×",
     "updates": "Mises à jour",
-    "invalid_exchange_rate": "Taux de change invalide pour {currency}. Saisissez un nombre supérieur à 0.",
-    "thousands_space": "Espace (1 234)",
-    "separators_must_differ": "Les séparateurs décimal et de milliers doivent être différents."
+    "lifeplanner_central_updater": "Dans ce mode de lancement, les mises à jour sont gérées centralement par LifePlanner."
   },
   "tour": {
     "buttons": {
@@ -907,9 +1012,7 @@
       "finish_abort": "Terminer la visite",
       "generate": "Générer les propositions →",
       "next": "Suivant →",
-      "open_dialog": "Ouvrir le dialogue →",
-      "optional_pen": "Choisir un deuxième stylo →",
-      "apply_suggestion": "Appliquer la proposition →"
+      "open_dialog": "Ouvrir le dialogue →"
     },
     "quickstart": {
       "body": "<b>Bienvenue dans FountainPen Manager !</b><br><br>Ordre recommandé pour commencer :<br><br><b>1.</b> 🖋  <b>Ajouter des encres</b> – Gestion des encres → + Encre<br><b>2.</b> 🔧  <b>Ajouter des plumes</b> (optionnel, améliore la rotation)<br><b>3.</b> ✒  <b>Ajouter des stylos</b> – Gestion des stylos → + Stylo → attribuer une plume<br><b>4.</b> 💧  <b>Remplir avec une encre</b> – sélectionner le stylo → remplir<br><br>→ Ensuite le tableau de bord affiche les alertes, la rotation fait des propositions et le minuteur de sécurité démarre.",
@@ -917,7 +1020,7 @@
     },
     "steps": {
       "dashboard": {
-        "body": "Vue d’ensemble de tous les remplissages actifs, des minuteurs de sécurité pour chaque encre, des cartes de service et de la valeur de la collection. Ici tu vois rapidement ce qui demande de l’attention.",
+        "body": "Des tuiles compactes montrent la collection, la rotation, le service et l’activité. Un clic ouvre le tableau correspondant, un double-clic l’onglet associé.",
         "title": "🏠  Tableau de bord"
       },
       "expenses": {
@@ -925,8 +1028,8 @@
         "title": "💰  Dépenses"
       },
       "finished": {
-        "title": "Configuration et première rotation terminées 🎉",
-        "body": "Tu connais les modules quotidiens et experts, tu as créé tes premières données et appliqué une vraie proposition de rotation.<br><br>Le guide peut être relancé depuis <b>Aide</b> ou <b>Paramètres</b>."
+        "body": "Tu connais maintenant les zones principales et tu as un stylo, une encre et une première proposition. La visite est disponible à tout moment via <b>Aide</b> ou <b>Paramètres → Relancer la visite</b>.<br><br>Amuse-toi bien avec FountainPen Manager.",
+        "title": "Terminé 🎉"
       },
       "first_purchase": {
         "body": "Tu connais maintenant les zones. Ajoutons ensemble ton premier stylo. Nous partons d’un <b>souhait</b>, passons par <b>commandé</b> et <b>acheté</b>, ajoutons une encre et lançons la première proposition de rotation.",
@@ -937,8 +1040,8 @@
         "title": "❓  Aide"
       },
       "ink_add": {
-        "title": "Étape 1 – Ajouter la première encre",
-        "body": "Ajoute une encre que tu possèdes réellement. <b>La marque et le nom</b> suffisent pour commencer ; couleur, volume du flacon, sheen, shimmer et autres propriétés peuvent être complétés maintenant ou plus tard.<br><br>Si tu annules le dialogue, cette étape reste active."
+        "body": "Nous ouvrons le dialogue d’encre. Saisis une encre que tu possèdes : marque, couleur, taille du flacon. Les propriétés comme sheen ou shimmer peuvent être réglées plus tard.",
+        "title": "Étape 3 / 4 – Ajouter la première encre"
       },
       "inks": {
         "body": "Stock d’encres avec propriétés (sheen, shimmer, pigment, résistance à l’eau), quantité restante et effort de nettoyage. C’est la base des propositions de rotation et des règles de sécurité.",
@@ -973,8 +1076,8 @@
         "title": "☰  Paramètres"
       },
       "welcome": {
-        "title": "Bienvenue dans FountainPen Manager",
-        "body": "Nous commençons par une <b>visite des modules</b> afin que tu saches où se trouve chaque fonction. Les zones expertes viennent volontairement à la fin.<br><br>Ensuite, nous créons ensemble <b>une encre et un ou deux stylos</b>, puis exécutons une vraie rotation jusqu’au premier remplissage."
+        "body": "Cette courte visite te montre les zones de l’application, puis te guide dans ton premier achat de stylo, avec encre et proposition.<br><br>Tu peux arrêter à tout moment avec <b>Ignorer</b> et relancer plus tard depuis <b>Aide</b> ou <b>Paramètres</b>.",
+        "title": "Bienvenue dans FountainPen Manager"
       },
       "wishlist": {
         "body": "Stylos, encres, plumes, papiers et accessoires souhaités. Flux de statut : <b>souhait</b> → <b>commandé</b> → <b>acheté</b>. Lors d’un achat, l’entrée peut être transférée proprement dans la collection et les dépenses.",
@@ -987,79 +1090,21 @@
       "wishlist_status": {
         "body": "Tu vois maintenant le souhait dans la liste. Sélectionne-le et utilise le clic droit :<br>&nbsp;&nbsp;1) <b>Définir le statut → Commandé</b><br>&nbsp;&nbsp;2) quand le stylo est arrivé : <b>Transférer comme acheté …</b><br><br>Le transfert crée une vraie entrée de stylo plus une dépense. Clique sur <b>Suivant</b> quand c’est fait.",
         "title": "Étape 2 / 4 – Statut : commandé → acheté"
-      },
-      "ink_created": {
-        "title": "✓ Première encre enregistrée",
-        "body": "Ta première encre est prête pour les remplissages, les règles de sécurité et les propositions de rotation."
-      },
-      "pen_add": {
-        "title": "Étape 2 – Ajouter le premier stylo",
-        "body": "Ajoute maintenant ton premier stylo. Les champs essentiels sont <b>marque, modèle et système de remplissage</b>. Tu peux créer ou attribuer une plume maintenant ou plus tard.<br><br>Si tu annules le dialogue, cette étape reste active."
-      },
-      "pen_created": {
-        "title": "✓ Premier stylo enregistré",
-        "body": "Ton premier stylo est prêt. La visite présente maintenant les principales zones du quotidien. Tu pourras ensuite le remplir avec l’encre ajoutée."
-      },
-      "expert_modules": {
-        "title": "Modules supplémentaires en mode Expert",
-        "body": "Le mode Simple garde visibles les fonctions quotidiennes. Le sélecteur de mode dans la barre latérale ou les paramètres donne accès aux <b>Plumes, Papier, Échantillons d’écriture, Wishlist, Dépenses, Statistiques, Règles et Laboratoire passionné</b>."
-      },
-      "expert_intro": {
-        "title": "Fonctions expertes – dernière partie de la visite",
-        "body": "Pour la dernière partie, le guide passe temporairement en mode Expert. Tu verras les plumes, le papier, les échantillons d’écriture, la wishlist, les dépenses, les statistiques, les règles et le Laboratoire passionné.<br><br>Ton mode initial sera rétabli automatiquement à la fin."
-      },
-      "writing_samples": {
-        "title": "📝 Échantillons d’écriture",
-        "body": "Les échantillons documentent des combinaisons réelles de stylo, plume, encre et papier. Plusieurs échantillons pourront ensuite être comparés côte à côte."
-      },
-      "statistics": {
-        "title": "📊 Statistiques",
-        "body": "Analyses de l’utilisation, de la collection, des dépenses, de la maintenance et de l’évolution de valeur. Les filtres permettent de comparer des périodes et domaines précis."
-      },
-      "enthusiast_lab": {
-        "title": "🧪 Laboratoire passionné",
-        "body": "Outils optionnels pour collectionneurs : portée des encres, lacunes de familles de couleurs, historique des plumes et effort de nettoyage. Ils ne sont pas nécessaires pour débuter."
-      },
-      "setup_intro": {
-        "title": "Configurons maintenant ensemble ta première rotation",
-        "body": "La visite des modules est terminée. Nous travaillons maintenant avec de vraies données :<br><br><b>1.</b> ajouter une encre<br><b>2.</b> ajouter un stylo<br><b>3.</b> ajouter éventuellement un deuxième stylo<br><b>4.</b> générer puis appliquer consciemment une proposition"
-      },
-      "second_pen": {
-        "title": "Optionnel – ajouter un deuxième stylo",
-        "body": "Un seul stylo suffit pour la rotation. Un deuxième rend toutefois le choix plus parlant.<br><br>Clique sur <b>Choisir un deuxième stylo</b>, puis décide de l’ajouter ou d’ignorer cette étape optionnelle."
-      },
-      "rotation_setup": {
-        "title": "Préparer la rotation",
-        "body": "La rotation ne considère que les <b>stylos actifs, vides et disponibles</b> ainsi que les encres ni vides ni archivées. Tes nouvelles entrées remplissent ces conditions."
-      },
-      "rotation_generate": {
-        "title": "Générer la première proposition de rotation",
-        "body": "Clique sur <b>Générer les propositions</b>. Le moteur évalue le système de remplissage, la plume, le risque de l’encre, l’effort de nettoyage, le spectre de couleurs, le rôle et les règles optionnelles."
-      },
-      "rotation_result": {
-        "title": "Comprendre la proposition",
-        "body": "Tu vois ici le stylo, l’encre, le score et l’explication. Clique sur le score pour examiner ses composants. Les avertissements restent visibles, mais la décision t’appartient."
-      },
-      "rotation_apply": {
-        "title": "Appliquer consciemment la proposition",
-        "body": "<b>Appliquer la proposition</b> enregistre réellement l’encre proposée comme remplissage. Le minuteur de sécurité démarre alors et le stylo apparaît dans la rotation actuelle."
-      },
-      "rotation_active": {
-        "title": "Ta première rotation active",
-        "body": "Le remplissage apparaît maintenant sous <b>Affectation actuelle</b>. Tu peux y gérer la durée, le nettoyage, la vidange et les remplissages suivants."
       }
     },
     "triggers": {
-      "help_text": "<b>Guide de l’application</b> – visite des modules, fonctions expertes, première encre, un ou deux stylos et rotation complète.",
+      "help_text": "<b>Visite de l’application</b> – parcours de toutes les zones et premier achat de stylo guidé (souhait → commandé → acheté → encre → première proposition).",
       "reset_button": "🚀  Réinitialiser la visite",
       "reset_done_body": "La visite sera affichée à nouveau au prochain démarrage\nou peut être lancée immédiatement depuis Aide/Paramètres.",
       "reset_done_title": "Visite réinitialisée",
-      "reset_tooltip": "Afficher à nouveau le guide au prochain démarrage.",
+      "reset_tooltip": "Afficher à nouveau la visite au prochain démarrage, même si des données de collection existent déjà.",
       "start_button": "Démarrer la visite",
       "start_error": "La visite n’a pas pu être démarrée :\n{error}",
       "start_now_button": "👋  Démarrer la visite maintenant",
-      "start_now_tooltip": "Lancer la visite des modules puis configurer ensemble la première encre, un ou deux stylos et une rotation.",
-      "title": "Visite"
+      "start_now_tooltip": "Démarrer immédiatement la visite – parcours plus premier achat de stylo guidé.",
+      "title": "Visite",
+      "wizard_button": "Lancer l’assistant de configuration",
+      "wizard_tooltip": "Relance la configuration guidée pour l’encre, le stylo et le premier remplissage. Les données existantes ne sont pas modifiées."
     },
     "wizard": {
       "back": "← Retour",
@@ -1079,10 +1124,6 @@
       "welcome_body": "Cette courte introduction montre les premières étapes importantes.\n\nL’application suit un ordre voulu :\n\n  🫙  Ajouter d’abord des encres\n  ✒   Puis ajouter des stylos et assigner une encre\n  🔄  Ensuite seulement, rotation et minuteur de sécurité prennent vie\n\nSi tu ajoutes d’abord un stylo puis veux le remplir, la liste d’encres sera vide, car aucune encre n’existe encore.\n\nCet assistant te guide pas à pas.",
       "welcome_title": "Bienvenue dans FountainPen Manager",
       "window_title": "✒  Bienvenue dans FountainPen Manager"
-    },
-    "second_pen": {
-      "question_title": "Optionnel : ajouter un deuxième stylo",
-      "question_body": "Souhaites-tu ajouter un deuxième stylo pour cette introduction ?\n\nDeux stylos montrent mieux comment la rotation choisit entre plusieurs candidats, mais un seul stylo suffit."
     }
   },
   "ui": {
@@ -1195,33 +1236,6 @@
       "glossary_shimmer_desc": "Particules scintillantes dans l’encre ; nettoyage plus exigeant.",
       "glossary_vac_desc": "Remplisseur à vide (vacuum filler). Grande capacité d’encre mais nettoyage plus exigeant – d’où une règle dure contre les encres shimmer.",
       "hilfe_regel_erklarungen_0fd89964": "❔  Aide & explications des règles",
-      "legacy_exact": {
-        "text_001": "Principe du système de règles",
-        "text_002": "Le système de règles est un système expert. Il évalue les combinaisons de stylo, encre, plume, papier, statut de service et statut de collection. Chaque règle peut être désactivée individuellement ou via son groupe de règles.",
-        "text_003": "Niveaux d’alerte",
-        "text_004": "<b>Info :</b> indication sans risque.<br><b>Avertissement :</b> inconvénients possibles, mais usage normal possible.<br><b>Critique :</b> risque élevé ; vérifier consciemment.<br><b>Bloqué :</b> ne pas utiliser automatiquement ; seulement manuellement avec override.",
-        "text_005": "Exemple : vac + shimmer",
-        "text_006": "Les stylos vac sont plus difficiles à nettoyer. Les particules de shimmer peuvent se déposer dans le système ; la règle peut donc bloquer cette combinaison ou la refuser en Full Auto Mode. Un override manuel reste possible si tu acceptes consciemment le risque.",
-        "text_007": "Full Auto peut décider si tu l’actives. Il peut refuser les combinaisons risquées, préférer de meilleures alternatives et ignorer les stylos bloqués.",
-        "text_008": "Jamais silencieusement",
-        "text_009": "Chaque décision automatique doit être explicable : règle concernée, raison, score, risque et alternative choisie ou non. Les recommandations et refus restent ainsi traçables.",
-        "text_010": "Service & blocages",
-        "text_011": "Un stylo en service, problématique ou bloqué manuellement n’est pas utilisé dans la rotation ni par Full Auto. Il apparaît dans le tableau de bord sous <b>Service & blocages</b>.",
-        "text_012": "Fin du service",
-        "text_013": "Lors du blocage, tu peux définir une date de début, une durée ou directement une date de fin prévue. Sans date de fin, le stylo reste bloqué jusqu’à déblocage manuel.",
-        "text_014": "Risque de dessèchement",
-        "text_015": "Si une encre reste dans un stylo plus longtemps que la durée de sécurité, le tableau de bord affiche un avertissement. Les stylos critiques devraient être nettoyés ou bloqués manuellement comme risque de dessèchement.",
-        "text_016": "Consommation / quantité restante",
-        "text_017": "En Easy Mode, la consommation reste automatiquement désactivée. En Expert Mode, tu peux activer la consommation et la quantité restante. Remplir ou vider+remplir réduit alors le stock d’encre selon le volume.",
-        "text_018": "Pourquoi désactivable ?",
-        "text_019": "Tout le monde ne veut pas gérer précisément les niveaux de remplissage. L’app doit permettre de collectionner et de faire tourner sans rendre le suivi de consommation obligatoire.",
-        "text_020": "Reflet métallique de couleur sur papier adapté.",
-        "text_021": "Particules scintillantes dans l’encre ; nettoyage plus exigeant.",
-        "text_022": "Effilochage du trait sur papier absorbant.",
-        "text_023": "Stylo particulièrement précieux ou important émotionnellement.",
-        "text_024": "Dépassement volontaire d’un avertissement ou blocage.",
-        "text_025": "Surveille combien de temps une encre reste dans un stylo."
-      },
       "regeln_ac603d2a": "Règles",
       "service_92844dc6": "Service",
       "verbrauch_934c21a7": "Consommation"
@@ -1330,6 +1344,8 @@
       "add_ink": "Ajouter une encre",
       "add_pen": "Ajouter un stylo",
       "cleaned": "Nettoyé",
+      "context_help": "❔ Aide pour cet onglet",
+      "context_help_tooltip": "Ouvre directement le chapitre correspondant dans le wiki intégré.",
       "fill": "Remplir",
       "quick_actions": "Actions rapides",
       "search_placeholder": "Rechercher dans le module actuel …",
@@ -1670,6 +1686,7 @@
       "ohne_enddatum_manuell_entsperren_680bcd67": "Sans date de fin / débloquer manuellement",
       "optional_bildpfad_aa00f1fa": "Optionnel : chemin d'image",
       "optionale_notizen_9b9f7ceb": "Optionale Notes …",
+      "override_reason_default": "Remplissage manuel confirmé volontairement",
       "override_reason_prompt": "Ce remplissage enfreint des règles actives :\n\n{rules}\n\nVeuillez saisir un motif d’exception :",
       "passt_mechanisch_aber_andere_haptik_flow_wegen_f_a1be9931": "Compatible mécaniquement, mais haptique/débit différent selon alimentateur/corps …",
       "pflichtfeld_485a6d5a": "Obligatoirefeld",
@@ -2038,7 +2055,7 @@
       "neue_datenbank_leer_starten_nur_pfad_wechseln_ff88d340": "Démarrer avec une base vide / changer seulement le chemin",
       "neue_datenbankdatei_anlegen_5227515b": "Créer un nouveau fichier de base de données",
       "neue_leere_datenbank_anlegen_frisch_starten_a4a8f845": "Créer une nouvelle base vide (nouveau départ)",
-      "optionen_sind_nach_bereichen_getrennt_links_bere_e2a10495": "Les options sont regroupées par domaine. Choisissez un domaine à gauche et modifiez les réglages à droite. Chaque page dispose de sa propre barre de défilement si nécessaire.",
+      "optionen_sind_nach_bereichen_getrennt_links_bere_e2a10495": "Les options sont regroupées par domaine. En largeur normale, choisissez le domaine à gauche ; dans une fenêtre étroite, un sélecteur compact apparaît en haut. Chaque page dispose de sa propre barre de défilement si nécessaire.",
       "pen_status_reset_done": "{count} stylo(s) réinitialisé(s).",
       "pfad_zur_datenbankdatei_e4efe81d": "Chemin vers le fichier de base de données …",
       "punkt_1_234_3ef398cc": "Point  1.234",
@@ -2071,25 +2088,7 @@
       "vorhandene_datenbankdatei_offnen_wechseln_96515b61": "Ouvrir / utiliser une base de données existante",
       "vorschau_57ca03ef": "Aperçu:",
       "wahrung_150ec8df": "Devise",
-      "was_mochtest_du_tun_3c2ef2c3": "Que veux-tu faire ?",
-      "full_backup_button": "💾  Sauvegarde complète",
-      "restore_backup_button": "↩  Restaurer une sauvegarde",
-      "open_data_folder_button": "📂  Ouvrir le dossier",
-      "optimize_button": "🧹  Optimiser",
-      "full_backup_filter": "Sauvegarde FPM complète (*.fpmbackup)",
-      "full_backup_saved_message": "Sauvegarde complète enregistrée :\n{path}\n\nFichiers inclus : {count}",
-      "backup_failed_title": "Échec de la sauvegarde",
-      "backup_failed_message": "La sauvegarde complète n’a pas pu être créée :\n{error}",
-      "restore_backup_dialog_title": "Sélectionner une sauvegarde FPM complète",
-      "restore_backup_confirm_title": "Restaurer cette sauvegarde ?",
-      "restore_backup_confirm_body": "La base actuelle, les médias et les paramètres seront remplacés par le contenu de la sauvegarde. Une sauvegarde de secours est créée automatiquement. Continuer ?",
-      "restore_backup_done_title": "Sauvegarde restaurée",
-      "restore_backup_done_body": "{count} fichiers ont été restaurés.\n\nSauvegarde de secours des données précédentes :\n{fallback}",
-      "restore_backup_failed_title": "Échec de la restauration",
-      "restore_backup_failed_body": "La sauvegarde n’a pas pu être entièrement restaurée :\n{error}\n\n{rollback_status}\n\nLa sauvegarde de secours se trouve ici :\n{fallback}",
-      "restore_backup_rollback_success": "L’état précédent a été restauré automatiquement à partir de la sauvegarde de secours.",
-      "restore_backup_rollback_failed": "Le retour automatique à l’état précédent a également échoué : {error}",
-      "restore_backup_rollback_not_available": "Aucune sauvegarde de secours n’avait encore pu être créée ; les données existantes n’ont pas été remplacées volontairement."
+      "was_mochtest_du_tun_3c2ef2c3": "Que veux-tu faire ?"
     },
     "statistics_widget": {
       "all_categories": "Toutes les catégories",
@@ -2201,6 +2200,21 @@
       "wunsch_bd625c0d": "+ Ajouter un souhait",
       "wunschpreis": "Prix souhaité"
     }
+  },
+  "ui.pen_widget": {
+    "size_chart_hint": "Stylos stylisés par longueur ; fermé/ouvert/posté selon la sélection.",
+    "size_compare_metric_best": "Meilleure mesure disponible",
+    "size_compare_metric_closed": "Fermé",
+    "size_compare_metric_label": "Mesure :",
+    "size_compare_metric_posted": "Posté",
+    "size_compare_metric_uncapped": "Ouvert",
+    "size_compare_mode_label": "Affichage :",
+    "size_compare_mode_overlay": "Superposer",
+    "size_compare_mode_rows": "Liste",
+    "size_compare_overlay_title": "Comparaison de stylos superposée",
+    "size_compare_ruler_mm": "Échelle en mm",
+    "size_compare_scaled_title": "Stylos stylisés à l’échelle",
+    "size_compare_visual_hint": "Compare les dimensions enregistrées sous forme de stylos-plume stylisés et mis à l’échelle. En mode superposé, tous commencent au même bord gauche pour voir immédiatement les différences de longueur."
   },
   "update": {
     "apply_start_failed": "Le processus de mise à jour n’a pas pu démarrer : {error}",
@@ -2366,24 +2380,5 @@
       "regular": "Normal"
     },
     "untitled": "Échantillon sans titre"
-  },
-  "ui.pen_widget": {
-    "size_compare_visual_hint": "Compare les dimensions enregistrées sous forme de stylos-plume stylisés et mis à l’échelle. En mode superposé, tous commencent au même bord gauche pour voir immédiatement les différences de longueur.",
-    "size_compare_mode_label": "Affichage :",
-    "size_compare_mode_overlay": "Superposer",
-    "size_compare_mode_rows": "Liste",
-    "size_compare_metric_label": "Mesure :",
-    "size_compare_metric_best": "Meilleure mesure disponible",
-    "size_compare_metric_closed": "Fermé",
-    "size_compare_metric_uncapped": "Ouvert",
-    "size_compare_metric_posted": "Posté",
-    "size_compare_overlay_title": "Comparaison de stylos superposée",
-    "size_compare_ruler_mm": "Échelle en mm",
-    "size_compare_scaled_title": "Stylos stylisés à l’échelle",
-    "size_chart_hint": "Stylos stylisés par longueur ; fermé/ouvert/posté selon la sélection."
-  },
-  "media": {
-    "import_failed_title": "L’image n’a pas pu être importée",
-    "import_failed_body": "Les données ont été enregistrées, mais l’image n’a pas pu être ajoutée à la médiathèque.\n\nRaison : {error}\n\nLe chemin ou l’URL d’origine reste attaché à l’entrée. Tu peux redéfinir l’image plus tard."
   }
 }

@@ -10,25 +10,33 @@ v0.2.4 – Änderbarer Datenbankpfad:
 import csv
 import math
 import os
-import shutil
 import sqlite3
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QGroupBox, QFormLayout, QComboBox, QSpinBox, QLineEdit, QFileDialog, QMessageBox, QApplication, QDialog, QDialogButtonBox, QRadioButton, QButtonGroup, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QStackedWidget, QListWidget, QListWidgetItem, QScrollArea, QFrame, QSizePolicy, QAbstractItemView
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QGroupBox, QFormLayout, QComboBox, QSpinBox, QLineEdit, QFileDialog, QMessageBox, QApplication, QDialog, QDialogButtonBox, QRadioButton, QButtonGroup, QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView, QStackedWidget, QListWidget, QListWidgetItem, QScrollArea, QFrame, QSizePolicy, QAbstractItemView, QGridLayout
 from PySide6.QtCore import Qt, Signal
 from app_info import APP_VERSION
-from database.db import dispose_db, get_data_dir, get_session, get_db_path, reinit_db, reset_inkloads, reset_ink_levels, reset_pen_status, factory_reset_userdata
+from database.db import (
+    create_consistent_backup,
+    get_session,
+    get_db_path,
+    reinit_db,
+    reset_inkloads,
+    reset_ink_levels,
+    reset_pen_status,
+    factory_reset_userdata,
+)
 from i18n.translator import REGION_PRESETS, DEFAULT_EXCHANGE_RATES, DATE_FORMAT_OPTIONS, LocaleService, Translator, t
 from i18n.qt_i18n import apply_widget_tree, translate_source_text
 from database.models import AppSettings, Pen, Ink, Nib, Paper, InkLoad, Expense
-from logic.backup_service import create_full_backup, restore_full_backup
 from logic.budget_export_service import export_expenses_jsonl, default_budgetmanager_to_fpm_path, existing_fpm_bridge_ids, import_budgetmanager_proposals, load_budgetmanager_expense_proposals, sync_default_outbox_from_session
 from ui.navigation import NavigationSettingsDialog
 from logic.app_mode import APP_MODE_KEY, EXPERT_MODE, SIMPLE_MODE, get_app_mode, normalize_app_mode
+from logic.log_utils import create_diagnostics_bundle, diagnostics_dir
 from ui.locale_widgets import LocalizedDoubleSpinBox as QDoubleSpinBox, set_money_affix
 from ui.ui_scale import PRESETS, apply_ui_scaling, scale_px
+from ui.common import ResponsiveDialog
 
 def _refresh_all_widgets():
     """Ruft refresh() auf allen Stack-Seiten des MainWindow auf."""
@@ -47,14 +55,43 @@ def _refresh_all_widgets():
             settings_w = stack.widget(i)
             if hasattr(settings_w, '_update_path_label'):
                 settings_w._update_path_label()
-    # Locale changes must affect already open dialogs and decimal fields too,
-    # not only pages that implement refresh().
     for widget in QApplication.allWidgets():
         refresh_locale = getattr(widget, 'refresh_locale', None)
         if callable(refresh_locale):
             refresh_locale()
 
-class DbPathDialog(QDialog):
+class ResponsiveButtonGrid(QWidget):
+    """Ordnet Aktionsschaltflächen je nach verfügbarer Breite neu an."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._buttons: list[QPushButton] = []
+        self._grid = QGridLayout(self)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._grid.setHorizontalSpacing(8)
+        self._grid.setVerticalSpacing(8)
+
+    def add_button(self, button: QPushButton) -> None:
+        button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        button.setMinimumWidth(0)
+        self._buttons.append(button)
+        self._relayout(max(320, self.width()))
+
+    def _relayout(self, width: int) -> None:
+        while self._grid.count():
+            self._grid.takeAt(0)
+        columns = 1 if width < 440 else 2 if width < 760 else 3
+        for index, button in enumerate(self._buttons):
+            self._grid.addWidget(button, index // columns, index % columns)
+        for column in range(columns):
+            self._grid.setColumnStretch(column, 1)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._relayout(event.size().width())
+
+
+class DbPathDialog(ResponsiveDialog):
     """
     Erlaubt dem Nutzer:
       A) Neue leere Datenbank an einem frei wählbaren Ort anlegen.
@@ -66,7 +103,6 @@ class DbPathDialog(QDialog):
     def __init__(self, current_path: Path, parent=None):
         super().__init__(parent)
         self.setWindowTitle(t('ui.settings_widget.datenbankpfad_andern_e03bd795'))
-        self.setMinimumWidth(scale_px(520))
         self.setModal(True)
         self._current_path = current_path
         self._new_path: Path | None = None
@@ -90,7 +126,8 @@ class DbPathDialog(QDialog):
         self._path_edit.setPlaceholderText(t('ui.settings_widget.pfad_zur_datenbankdatei_e4efe81d'))
         self._path_edit.setReadOnly(True)
         browse_btn = QPushButton(t('ui.settings_widget.durchsuchen_24ee1a3c'))
-        browse_btn.setMinimumWidth(scale_px(150))
+        browse_btn.setMinimumWidth(0)
+        browse_btn.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         browse_btn.clicked.connect(self._browse)
         path_row.addWidget(self._path_edit)
         path_row.addWidget(browse_btn)
@@ -105,7 +142,7 @@ class DbPathDialog(QDialog):
             self._copy_group.addButton(rb)
             copy_layout.addWidget(rb)
         copy_note = QLabel(t('ui.settings_widget.i_beim_offnen_einer_vorhandenen_db_wird_nie_kopi_c1fd05ba'))
-        copy_note.setStyleSheet('color:#7f8c8d; font-size:12px;')
+        copy_note.setStyleSheet('color:#5f6f72; font-size:12px;')
         copy_note.setWordWrap(True)
         copy_layout.addWidget(copy_note)
         layout.addWidget(copy_grp)
@@ -115,6 +152,9 @@ class DbPathDialog(QDialog):
         btns.accepted.connect(self._validate_and_accept)
         btns.rejected.connect(self.reject)
         layout.addWidget(btns)
+        self.enable_responsive_layout(
+            620, 520, minimum_width=340, minimum_height=300, scroll=True
+        )
 
     def _update_copy_state(self):
         """Kopier-Option deaktivieren wenn 'vorhandene DB öffnen' gewählt."""
@@ -155,6 +195,7 @@ class DbPathDialog(QDialog):
 
 class SettingsWidget(QWidget):
     tour_requested = Signal()
+    wizard_requested = Signal()
 
     def __init__(self):
         super().__init__()
@@ -177,14 +218,22 @@ class SettingsWidget(QWidget):
         root.addWidget(title)
         hint = QLabel(t('ui.settings_widget.optionen_sind_nach_bereichen_getrennt_links_bere_e2a10495'))
         hint.setWordWrap(True)
-        hint.setStyleSheet('color:#64748b; font-size:13px;')
+        hint.setStyleSheet('color:#5f6f72; font-size:13px;')
         root.addWidget(hint)
+        self.settings_nav_combo = QComboBox()
+        self.settings_nav_combo.setObjectName('settingsNavCombo')
+        self.settings_nav_combo.setToolTip(t('ui.settings_widget.optionen_sind_nach_bereichen_getrennt_links_bere_e2a10495'))
+        self.settings_nav_combo.setVisible(False)
+        root.addWidget(self.settings_nav_combo)
         shell = QHBoxLayout()
+        self._settings_shell = shell
         shell.setSpacing(14)
         root.addLayout(shell, 1)
         self.settings_nav = QListWidget()
         self.settings_nav.setObjectName('settingsNav')
-        self.settings_nav.setFixedWidth(230)
+        self.settings_nav.setMinimumWidth(190)
+        self.settings_nav.setMaximumWidth(230)
+        self.settings_nav.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         self.settings_nav.setSpacing(4)
         self.settings_nav.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.settings_nav.setStyleSheet('QListWidget#settingsNav { background:#ffffff; border:1px solid #d5dce6; border-radius:10px; padding:8px; outline:none; }QListWidget#settingsNav::item { padding:10px 12px; border-radius:7px; color:#334155; min-height:24px; }QListWidget#settingsNav::item:hover { background:#eef6ff; }QListWidget#settingsNav::item:selected { background:#2563eb; color:white; font-weight:700; }')
@@ -201,12 +250,39 @@ class SettingsWidget(QWidget):
         self._add_settings_page('Reset / Gefahrenzone', '⚠', self._build_reset_page())
         self._add_settings_page(t('settings.updates'), '⬆', self._build_update_page())
         self._add_settings_page('Über', 'ℹ', self._build_about_page())
-        self.settings_nav.currentRowChanged.connect(self.settings_stack.setCurrentIndex)
+        self.settings_nav.currentRowChanged.connect(self._set_settings_index)
+        self.settings_nav_combo.currentIndexChanged.connect(self._set_settings_index)
         self.settings_nav.setCurrentRow(0)
+        self._apply_narrow_settings_layout(self.width())
+
+
+    def _set_settings_index(self, index: int) -> None:
+        if index < 0 or index >= self.settings_stack.count():
+            return
+        self.settings_stack.setCurrentIndex(index)
+        if self.settings_nav.currentRow() != index:
+            self.settings_nav.blockSignals(True)
+            self.settings_nav.setCurrentRow(index)
+            self.settings_nav.blockSignals(False)
+        if self.settings_nav_combo.currentIndex() != index:
+            self.settings_nav_combo.blockSignals(True)
+            self.settings_nav_combo.setCurrentIndex(index)
+            self.settings_nav_combo.blockSignals(False)
+
+    def _apply_narrow_settings_layout(self, width: int) -> None:
+        narrow = width < 840
+        self.settings_nav.setVisible(not narrow)
+        self.settings_nav_combo.setVisible(narrow)
+        self._settings_shell.setSpacing(0 if narrow else 14)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._apply_narrow_settings_layout(event.size().width())
 
     def _add_settings_page(self, title: str, icon: str, page: QWidget):
         item = QListWidgetItem(f'{icon}  {translate_source_text(title)}')
         self.settings_nav.addItem(item)
+        self.settings_nav_combo.addItem(item.text())
         self.settings_stack.addWidget(self._scroll_page(page))
 
     def _scroll_page(self, page: QWidget) -> QScrollArea:
@@ -241,6 +317,8 @@ class SettingsWidget(QWidget):
         fl.setFormAlignment(Qt.AlignmentFlag.AlignTop)
         fl.setHorizontalSpacing(18)
         fl.setVerticalSpacing(10)
+        fl.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        fl.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         return (grp, fl)
 
     def _v_card(self, title: str) -> tuple[QGroupBox, QVBoxLayout]:
@@ -263,6 +341,8 @@ class SettingsWidget(QWidget):
         b = QPushButton(translate_source_text(text))
         b.setStyleSheet(f'background:{color}; color:white; border:none; padding:8px 16px; border-radius:6px; font-weight:bold;')
         b.setMinimumHeight(scale_px(34))
+        b.setMinimumWidth(0)
+        b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         return b
 
     def _build_general_page(self) -> QWidget:
@@ -301,7 +381,6 @@ class SettingsWidget(QWidget):
         root.addWidget(app_grp)
         root.addWidget(self._note(t('ui.settings_widget.rules_module_note')))
         save_btn = self._styled_button(t('ui.settings_widget.legacy_exact.text_010'), 'primary')
-        save_btn.setMinimumWidth(scale_px(330))
         save_btn.clicked.connect(self._save)
         root.addWidget(save_btn)
         root.addStretch(1)
@@ -331,7 +410,6 @@ class SettingsWidget(QWidget):
         root.addWidget(self._note(t('settings.rotation_random_note'), 'warn'))
         root.addWidget(self._note(t('settings.rotation_reroll_note')))
         save_btn = self._styled_button(t('settings.rotation_save'), 'primary')
-        save_btn.setMinimumWidth(scale_px(330))
         save_btn.clicked.connect(self._save_rotation_settings)
         root.addWidget(save_btn)
         root.addStretch(1)
@@ -385,7 +463,6 @@ class SettingsWidget(QWidget):
         self.dec_point_rb = QRadioButton(t('ui.settings_widget.punkt_1_234_56_4daf83b0'))
         self.dec_comma_rb = QRadioButton(t('ui.settings_widget.komma_1_234_56_ea863434'))
         self.decimal_group = QButtonGroup(self)
-        self.decimal_group.setExclusive(True)
         self.decimal_group.addButton(self.dec_point_rb)
         self.decimal_group.addButton(self.dec_comma_rb)
         self.dec_point_rb.setChecked(True)
@@ -400,7 +477,6 @@ class SettingsWidget(QWidget):
         self.thou_space_rb = QRadioButton(t('settings.thousands_space'))
         self.thou_none_rb = QRadioButton(t('ui.settings_widget.keines_1234_eadbf854'))
         self.thousands_group = QButtonGroup(self)
-        self.thousands_group.setExclusive(True)
         self.thou_apos_rb.setChecked(True)
         for rb in (self.thou_apos_rb, self.thou_dot_rb, self.thou_comma_rb, self.thou_space_rb, self.thou_none_rb):
             self.thousands_group.addButton(rb)
@@ -428,7 +504,7 @@ class SettingsWidget(QWidget):
         for row, cur in enumerate(self._fx_currencies):
             self.fx_table.setItem(row, 0, QTableWidgetItem(cur))
             self.fx_table.item(row, 0).setFlags(Qt.ItemFlag.ItemIsEnabled)
-            self.fx_table.setItem(row, 1, QTableWidgetItem(self._format_fx_value(DEFAULT_EXCHANGE_RATES[cur])))
+            self.fx_table.setItem(row, 1, QTableWidgetItem(str(DEFAULT_EXCHANGE_RATES[cur])))
         fx_layout.addWidget(self.fx_table)
         fx_save_btn = self._styled_button(t('ui.settings_widget.legacy_exact.text_015'), 'success')
         fx_save_btn.clicked.connect(self._save_region_and_fx)
@@ -440,32 +516,28 @@ class SettingsWidget(QWidget):
     def _build_database_page(self) -> QWidget:
         page, root = self._new_page(t('ui.settings_widget.legacy_exact.text_004'), t('ui.settings_widget.legacy_exact.text_017'))
         db_grp, db_fl = self._form_card(t('settings.db_path'))
-        path_row = QHBoxLayout()
+        path_panel = QWidget()
+        path_row = QVBoxLayout(path_panel)
+        path_row.setContentsMargins(0, 0, 0, 0)
+        path_row.setSpacing(8)
         self.db_path_lbl = QLabel(str(get_db_path()))
         self.db_path_lbl.setStyleSheet('color:#2563eb; font-size:12px;')
         self.db_path_lbl.setWordWrap(True)
+        self.db_path_lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.db_path_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         change_path_btn = self._styled_button(t('ui.settings_widget.legacy_exact.text_018'), 'primary')
-        change_path_btn.setMinimumWidth(scale_px(170))
         change_path_btn.clicked.connect(self._change_db_path)
-        path_row.addWidget(self.db_path_lbl, 1)
+        path_row.addWidget(self.db_path_lbl)
         path_row.addWidget(change_path_btn)
-        db_fl.addRow(t('ui.settings_widget.aktueller_pfad_559e89e2'), path_row)
+        db_fl.addRow(t('ui.settings_widget.aktueller_pfad_559e89e2'), path_panel)
         root.addWidget(db_grp)
         actions_grp, actions_layout = self._v_card(t('ui.settings_widget.legacy_exact.text_019'))
-        db_btns = QHBoxLayout()
-        actions = [
-            (t('ui.settings_widget.full_backup_button'), 'success', self._backup),
-            (t('ui.settings_widget.restore_backup_button'), 'warning', self._restore_backup),
-            (t('ui.settings_widget.open_data_folder_button'), 'secondary', self._open_data_folder),
-            (t('ui.settings_widget.optimize_button'), 'purple', self._vacuum),
-        ]
-        for label, kind, slot in actions:
+        db_btns = ResponsiveButtonGrid()
+        for label, kind, slot in [('💾  Backup', 'success', self._backup), ('📂  Ordner öffnen', 'secondary', self._open_data_folder), ('🧹  Optimieren', 'purple', self._vacuum)]:
             b = self._styled_button(label, kind)
             b.clicked.connect(slot)
-            db_btns.addWidget(b)
-        db_btns.addStretch(1)
-        actions_layout.addLayout(db_btns)
+            db_btns.add_button(b)
+        actions_layout.addWidget(db_btns)
         root.addWidget(actions_grp)
         root.addWidget(self._note(t('ui.settings_widget.legacy_exact.text_023'), 'warn'))
         root.addStretch(1)
@@ -476,7 +548,6 @@ class SettingsWidget(QWidget):
         exp_grp, exp_layout = self._v_card(t('ui.settings_widget.csv_export_0c85e0e9'))
         exp_layout.addWidget(QLabel(t('ui.settings_widget.exportiert_fuller_tinten_federn_papier_inkloads__b6fe904d')))
         export_btn = self._styled_button(t('ui.settings_widget.legacy_exact.text_026'), 'warning')
-        export_btn.setMinimumWidth(scale_px(240))
         export_btn.clicked.connect(self._export_csv)
         exp_layout.addWidget(export_btn)
         root.addWidget(exp_grp)
@@ -486,11 +557,9 @@ class SettingsWidget(QWidget):
         bm_text.setWordWrap(True)
         bm_layout.addWidget(bm_text)
         bm_btn = self._styled_button(t('settings.budget_export_button'), 'success')
-        bm_btn.setMinimumWidth(scale_px(280))
         bm_btn.clicked.connect(self._export_budgetmanager_jsonl)
         bm_layout.addWidget(bm_btn)
         bm_import_btn = self._styled_button(t('settings.budget_import_button'), 'primary')
-        bm_import_btn.setMinimumWidth(scale_px(280))
         bm_import_btn.clicked.connect(self._import_budgetmanager_jsonl)
         bm_layout.addWidget(bm_import_btn)
         root.addWidget(bm_grp)
@@ -503,14 +572,13 @@ class SettingsWidget(QWidget):
         page, root = self._new_page(t('ui.settings_widget.legacy_exact.text_006'), t('ui.settings_widget.legacy_exact.text_028'))
         targeted_grp, targeted_layout = self._v_card(t('ui.settings_widget.legacy_exact.text_029'))
         targeted_layout.addWidget(QLabel(t('ui.settings_widget.datensatze_bleiben_erhalten_nur_bestimmte_status_a31f774c')))
-        btn_row_r = QHBoxLayout()
-        for text, tooltip, slot in [(t('ui.settings_widget.reset_inkloads_button'), t('ui.settings_widget.reset_inkloads_tooltip'), self._reset_inkloads), (t('ui.settings_widget.reset_ink_levels_button'), t('ui.settings_widget.reset_ink_levels_tooltip'), self._reset_ink_levels), (t('ui.settings_widget.reset_pen_status_button'), t('ui.settings_widget.reset_pen_status_tooltip'), self._reset_pen_status), (t('tour.triggers.reset_button'), t('tour.triggers.reset_tooltip'), self._reset_onboarding), (t('tour.triggers.start_now_button'), t('tour.triggers.start_now_tooltip'), self._start_tour_now)]:
-            b = self._styled_button(text, 'secondary' if slot in (self._reset_onboarding, self._start_tour_now) else 'warning')
+        btn_row_r = ResponsiveButtonGrid()
+        for text, tooltip, slot in [(t('ui.settings_widget.reset_inkloads_button'), t('ui.settings_widget.reset_inkloads_tooltip'), self._reset_inkloads), (t('ui.settings_widget.reset_ink_levels_button'), t('ui.settings_widget.reset_ink_levels_tooltip'), self._reset_ink_levels), (t('ui.settings_widget.reset_pen_status_button'), t('ui.settings_widget.reset_pen_status_tooltip'), self._reset_pen_status), (t('tour.triggers.reset_button'), t('tour.triggers.reset_tooltip'), self._reset_onboarding), (t('tour.triggers.start_now_button'), t('tour.triggers.start_now_tooltip'), self._start_tour_now), (t('tour.triggers.wizard_button'), t('tour.triggers.wizard_tooltip'), self._start_wizard_now)]:
+            b = self._styled_button(text, 'secondary' if slot in (self._reset_onboarding, self._start_tour_now, self._start_wizard_now) else 'warning')
             b.setToolTip(translate_source_text(tooltip))
             b.clicked.connect(slot)
-            btn_row_r.addWidget(b)
-        btn_row_r.addStretch(1)
-        targeted_layout.addLayout(btn_row_r)
+            btn_row_r.add_button(b)
+        targeted_layout.addWidget(btn_row_r)
         root.addWidget(targeted_grp)
         danger_grp, danger_layout = self._v_card(t('ui.settings_widget.factory_reset_76aece51'))
         danger_grp.setStyleSheet('QGroupBox { border: 1px solid #ef4444; background:#fff; }')
@@ -529,7 +597,6 @@ class SettingsWidget(QWidget):
         info.setWordWrap(True)
         update_layout.addWidget(info)
         btn = self._styled_button(t('update.btn_check'), 'primary')
-        btn.setMinimumWidth(scale_px(260))
         btn.clicked.connect(self._open_update_dialog)
         update_layout.addWidget(btn)
         root.addWidget(update_grp)
@@ -538,6 +605,10 @@ class SettingsWidget(QWidget):
         return page
 
     def _open_update_dialog(self):
+        if os.environ.get("LIFEPLANNER_CENTRAL_UPDATER", "").strip().lower() in {"1", "true", "yes", "on"}:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.information(self, t("settings.update_title"), t("settings.lifeplanner_central_updater"))
+            return
         from ui.update_dialog import UpdateDialog
         UpdateDialog(self).exec()
 
@@ -551,8 +622,56 @@ class SettingsWidget(QWidget):
         about_fl.addRow(t('ui.settings_widget.daten_6c1d448f'), data_lbl)
         root.addWidget(about_grp)
         root.addWidget(self._note(t('ui.settings_widget.legacy_exact.text_042'), 'ok'))
+
+        diag_grp, diag_layout = self._v_card(t('settings.diagnostics_title'))
+        diag_layout.addWidget(self._note(t('settings.diagnostics_body'), 'info'))
+        diag_buttons = ResponsiveButtonGrid()
+        open_btn = self._styled_button(t('settings.diagnostics_open'), 'secondary')
+        open_btn.clicked.connect(self._open_diagnostics_folder)
+        export_btn = self._styled_button(t('settings.diagnostics_export'), 'primary')
+        export_btn.clicked.connect(self._export_diagnostics)
+        diag_buttons.add_button(open_btn)
+        diag_buttons.add_button(export_btn)
+        diag_layout.addWidget(diag_buttons)
+        root.addWidget(diag_grp)
         root.addStretch(1)
         return page
+
+    def _open_diagnostics_folder(self):
+        folder = diagnostics_dir()
+        try:
+            if sys.platform.startswith('linux'):
+                subprocess.Popen(['xdg-open', str(folder)])
+            elif sys.platform == 'darwin':
+                subprocess.Popen(['open', str(folder)])
+            else:
+                os.startfile(str(folder))
+        except OSError as exc:
+            QMessageBox.warning(
+                self, t('settings.folder_open_title'),
+                t('settings.folder_open_err', error=exc),
+            )
+
+    def _export_diagnostics(self):
+        default = Path.home() / f'fpm_diagnostics_{APP_VERSION}.zip'
+        dest, _ = QFileDialog.getSaveFileName(
+            self, t('settings.diagnostics_export_title'), str(default),
+            t('settings.diagnostics_file_filter'),
+        )
+        if not dest:
+            return
+        try:
+            bundle = create_diagnostics_bundle(Path(dest))
+        except (OSError, RuntimeError, ValueError) as exc:
+            QMessageBox.critical(
+                self, t('ui.settings_widget.fehler_a1fcc21e'),
+                t('settings.diagnostics_export_failed', error=exc),
+            )
+            return
+        QMessageBox.information(
+            self, t('settings.diagnostics_export_done_title'),
+            t('settings.diagnostics_export_done', path=bundle),
+        )
 
     def _update_path_label(self):
         self.db_path_lbl.setText(str(get_db_path()))
@@ -740,7 +859,6 @@ class SettingsWidget(QWidget):
 
     @staticmethod
     def _format_fx_value(value: float) -> str:
-        """Wechselkurs kompakt mit aktivem Dezimalzeichen anzeigen."""
         service = LocaleService.instance()
         raw = f'{float(value):.6f}'.rstrip('0').rstrip('.')
         return raw.replace('.', service.decimal_sep)
@@ -796,8 +914,7 @@ class SettingsWidget(QWidget):
             return
         try:
             if copy_data:
-                new_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(current, new_path)
+                create_consistent_backup(current, new_path)
             reinit_db(new_path)
             _refresh_all_widgets()
             QMessageBox.information(self, t('ui.settings_widget.datenbankpfad_geandert_e744156e'), t('ui.settings_widget.db_path_changed_message', path=new_path, copied=t('ui.settings_widget.db_path_copied_suffix') if copy_data else ''))
@@ -805,101 +922,19 @@ class SettingsWidget(QWidget):
             QMessageBox.critical(self, t('ui.settings_widget.fehler_beim_pfadwechsel_9b0711c5'), t('ui.settings_widget.db_path_change_failed_message', error=e))
 
     def _backup(self):
-        stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        default = Path.home() / f'FPM_full_backup_{stamp}.fpmbackup'
-        dest, _ = QFileDialog.getSaveFileName(
-            self,
-            t('ui.settings_widget.backup_speichern_ba303091'),
-            str(default),
-            t('ui.settings_widget.full_backup_filter'),
-        )
-        if not dest:
-            return
-        try:
-            result = create_full_backup(dest)
-            QMessageBox.information(
-                self,
-                t('ui.settings_widget.backup_5b11f811'),
-                t(
-                    'ui.settings_widget.full_backup_saved_message',
-                    path=result.path,
-                    count=result.file_count,
-                ),
-            )
-        except Exception as e:
-            QMessageBox.critical(
-                self,
-                t('ui.settings_widget.backup_failed_title'),
-                t('ui.settings_widget.backup_failed_message', error=e),
-            )
-
-    def _restore_backup(self):
-        source, _ = QFileDialog.getOpenFileName(
-            self,
-            t('ui.settings_widget.restore_backup_dialog_title'),
-            str(Path.home()),
-            t('ui.settings_widget.full_backup_filter'),
-        )
-        if not source:
-            return
-        reply = QMessageBox.question(
-            self,
-            t('ui.settings_widget.restore_backup_confirm_title'),
-            t('ui.settings_widget.restore_backup_confirm_body'),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-        if reply != QMessageBox.StandardButton.Yes:
-            return
-
-        current_db = get_db_path()
-        data_dir = get_data_dir()
-        fallback_dir = data_dir / 'backups'
-        fallback_dir.mkdir(parents=True, exist_ok=True)
-        fallback = fallback_dir / f'pre_restore_{datetime.now().strftime("%Y%m%d_%H%M%S")}.fpmbackup'
-        try:
-            create_full_backup(fallback, data_dir=data_dir, db_path=current_db)
-            dispose_db()
-            result = restore_full_backup(source, data_dir=data_dir, db_path=current_db)
-            reinit_db(current_db)
-            _refresh_all_widgets()
-            QMessageBox.information(
-                self,
-                t('ui.settings_widget.restore_backup_done_title'),
-                t(
-                    'ui.settings_widget.restore_backup_done_body',
-                    count=result.restored_file_count,
-                    fallback=fallback,
-                ),
-            )
-        except Exception as e:
-            rollback_status = t('ui.settings_widget.restore_backup_rollback_not_available')
-            if fallback.is_file():
-                try:
-                    dispose_db()
-                    restore_full_backup(fallback, data_dir=data_dir, db_path=current_db)
-                    reinit_db(current_db)
-                    rollback_status = t('ui.settings_widget.restore_backup_rollback_success')
-                    _refresh_all_widgets()
-                except Exception as rollback_error:
-                    rollback_status = t(
-                        'ui.settings_widget.restore_backup_rollback_failed',
-                        error=rollback_error,
-                    )
-            else:
-                try:
-                    reinit_db(current_db)
-                except Exception:
-                    pass
-            QMessageBox.critical(
-                self,
-                t('ui.settings_widget.restore_backup_failed_title'),
-                t(
-                    'ui.settings_widget.restore_backup_failed_body',
-                    error=e,
-                    fallback=fallback,
-                    rollback_status=rollback_status,
-                ),
-            )
+        src = get_db_path()
+        dest, _ = QFileDialog.getSaveFileName(self, t('ui.settings_widget.backup_speichern_ba303091'), str(Path.home() / 'fpm_backup.db'), t('ui.settings_widget.sqlite_db_fc737339'))
+        if dest:
+            try:
+                create_consistent_backup(src, Path(dest))
+            except (OSError, RuntimeError, sqlite3.Error) as exc:
+                QMessageBox.critical(
+                    self,
+                    t('ui.settings_widget.fehler_a1fcc21e'),
+                    t('settings.backup_failed', error=exc),
+                )
+                return
+            QMessageBox.information(self, t('ui.settings_widget.backup_5b11f811'), t('ui.settings_widget.backup_saved_message', path=dest))
 
     def _open_data_folder(self):
         folder = get_db_path().parent
@@ -915,9 +950,8 @@ class SettingsWidget(QWidget):
 
     def _vacuum(self):
         try:
-            con = sqlite3.connect(get_db_path())
-            con.execute('VACUUM')
-            con.close()
+            with sqlite3.connect(get_db_path()) as con:
+                con.execute('VACUUM')
             QMessageBox.information(self, t('ui.settings_widget.datenbank_a4f4bb1e'), t('ui.settings_widget.datenbank_wurde_optimiert_7b5372af'))
         except Exception as e:
             QMessageBox.critical(self, t('ui.settings_widget.fehler_a1fcc21e'), str(e))
@@ -1068,15 +1102,27 @@ class SettingsWidget(QWidget):
         except Exception as e:
             QMessageBox.warning(self, t('tour.triggers.title'), t('tour.triggers.start_error', error=e))
 
-    def _reset_onboarding(self):
-        """Onboarding-/Tour-Status zurücksetzen (Tour erscheint beim nächsten Start bei leerer DB)."""
-        session = get_session()
+    def _start_wizard_now(self):
+        """Den Einrichtungsassistenten über das MainWindow öffnen."""
         try:
-            AppSettings.set(session, 'onboarding_completed', '0')
-            session.commit()
-        finally:
-            session.close()
-        QMessageBox.information(self, t('tour.triggers.reset_done_title'), t('tour.triggers.reset_done_body'))
+            self.wizard_requested.emit()
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                t('tour.triggers.title'),
+                t('tour.triggers.start_error', error=exc),
+            )
+
+    def _reset_onboarding(self):
+        """Tour beim nächsten Start auch bei vorhandenen Daten erzwingen."""
+        from ui.tour_controller import reset_tour
+
+        reset_tour()
+        QMessageBox.information(
+            self,
+            t('tour.triggers.reset_done_title'),
+            t('tour.triggers.reset_done_body'),
+        )
 
     def _factory_reset(self):
         res1 = QMessageBox.warning(self, t('ui.settings_widget.factory_reset_36f5d701'), t('ui.settings_widget.achtung_diese_aktion_loscht_alle_fuller_tinten_f_80e88cda'), QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)

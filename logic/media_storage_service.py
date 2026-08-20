@@ -12,13 +12,134 @@ from datetime import datetime
 from pathlib import Path
 import re
 import shutil
+import urllib.error
 import urllib.parse
 import urllib.request
 import unicodedata
 from typing import Literal
+import threading
+
+from logic.network_security import (
+    SafePublicRedirectHandler,
+    build_public_http_opener,
+    validate_connected_peer,
+    validate_public_http_url,
+)
 
 SUPPORTED_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 MAX_MEDIA_BYTES = 15 * 1024 * 1024
+DOWNLOAD_TIMEOUT_S = 8            # v0.2.88: war 15 s; blockiert die UI kürzer
+ALLOWED_DOWNLOAD_SCHEMES = ("http", "https")
+
+# v0.2.88: Magic-Bytes je Bildformat. Eine HTML-Fehlerseite, die unter ".jpg"
+# ausgeliefert wird, landet damit nicht mehr als vermeintliches Bild im
+# Medienordner. Bewusst byte-basiert statt Content-Type-Header: Header lügen,
+# der Dateianfang nicht.
+_IMAGE_MAGIC: tuple[tuple[bytes, str], ...] = (
+    (b"\x89PNG\r\n\x1a\n", ".png"),
+    (b"\xff\xd8\xff", ".jpg"),
+    (b"GIF87a", ".gif"),
+    (b"GIF89a", ".gif"),
+    (b"BM", ".bmp"),
+    (b"II*\x00", ".tif"),
+    (b"MM\x00*", ".tif"),
+)
+
+
+def detect_image_suffix(data: bytes) -> str | None:
+    """Erkennt das Bildformat am Dateianfang. ``None`` = kein bekanntes Bild."""
+    if not data:
+        return None
+    for magic, suffix in _IMAGE_MAGIC:
+        if data.startswith(magic):
+            return suffix
+    # RIFF....WEBP
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp"
+    return None
+
+
+class _SafeRedirectHandler(SafePublicRedirectHandler):
+    """Backward-compatible name for the central public redirect guard."""
+
+
+_opener = build_public_http_opener()
+
+
+class DownloadCancelledError(ValueError):
+    """Raised when a user cancels an active image download."""
+
+
+class ImageDownloadOperation:
+    """Thread-safe, cooperatively abortable image download operation."""
+
+    def __init__(self, url: str, *, timeout_s: int = DOWNLOAD_TIMEOUT_S):
+        self.url = str(url or "").strip()
+        self.timeout_s = int(timeout_s)
+        self._cancelled = threading.Event()
+        self._response_lock = threading.Lock()
+        self._response = None
+
+    def cancel(self) -> None:
+        self._cancelled.set()
+        with self._response_lock:
+            response = self._response
+        if response is not None:
+            try:
+                response.close()
+            except (OSError, ValueError):
+                pass
+
+    def download(self) -> tuple[bytes, str]:
+        validate_public_http_url(self.url)
+        request = urllib.request.Request(
+            self.url,
+            headers={"User-Agent": "FountainPenManager/media-import"},
+        )
+        response = None
+        try:
+            response = _opener.open(request, timeout=self.timeout_s)
+            with self._response_lock:
+                self._response = response
+            validate_connected_peer(response)
+            final_url = response.geturl() if hasattr(response, "geturl") else self.url
+            validate_public_http_url(final_url)
+
+            chunks: list[bytes] = []
+            total = 0
+            while True:
+                if self._cancelled.is_set():
+                    raise DownloadCancelledError("Bilddownload wurde abgebrochen.")
+                chunk = response.read(min(64 * 1024, MAX_MEDIA_BYTES + 1 - total))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                total += len(chunk)
+                if total > MAX_MEDIA_BYTES:
+                    raise ValueError("Bilddatei ist zu groß.")
+            if self._cancelled.is_set():
+                raise DownloadCancelledError("Bilddownload wurde abgebrochen.")
+            data = b"".join(chunks)
+        except (OSError, ValueError, urllib.error.URLError) as exc:
+            if self._cancelled.is_set() and not isinstance(exc, DownloadCancelledError):
+                raise DownloadCancelledError("Bilddownload wurde abgebrochen.") from exc
+            raise
+        finally:
+            with self._response_lock:
+                self._response = None
+            if response is not None:
+                try:
+                    response.close()
+                except (OSError, ValueError):
+                    pass
+
+        if not data:
+            raise ValueError("Leere Bilddatei erhalten.")
+        suffix = detect_image_suffix(data)
+        if suffix is None:
+            raise ValueError("Die heruntergeladene Datei ist kein bekanntes Bildformat.")
+        return data, suffix
+
 
 MediaKind = Literal["images", "writing_samples", "documents"]
 
@@ -112,15 +233,20 @@ def _suffix_from_source(source: str, *, default: str = ".jpg") -> str:
     return suffix if suffix in SUPPORTED_IMAGE_SUFFIXES else default
 
 
-def _download_to(url: str, target: Path) -> None:
-    request = urllib.request.Request(url, headers={"User-Agent": "FountainPenManager/media-import"})
-    with urllib.request.urlopen(request, timeout=15) as response:
-        data = response.read(MAX_MEDIA_BYTES + 1)
-    if not data:
-        raise ValueError("Leere Bilddatei erhalten.")
-    if len(data) > MAX_MEDIA_BYTES:
-        raise ValueError("Bilddatei ist zu groß.")
+def download_image_bytes(url: str, *, timeout_s: int = DOWNLOAD_TIMEOUT_S) -> tuple[bytes, str]:
+    """Load an image through the active, centrally SSRF-protected path."""
+    return ImageDownloadOperation(url, timeout_s=timeout_s).download()
+
+
+def _download_to(url: str, target: Path) -> Path:
+    """Lädt nach ``target``; korrigiert die Endung auf das erkannte Format."""
+    data, detected = download_image_bytes(url)
+    if target.suffix.lower() != detected and not (
+        detected == ".jpg" and target.suffix.lower() in (".jpg", ".jpeg")
+    ):
+        target = target.with_suffix(detected)
     target.write_bytes(data)
+    return target
 
 
 def import_media_asset(
@@ -154,7 +280,7 @@ def import_media_asset(
 
     if raw.startswith(("http://", "https://")):
         target = _unique_path(folder, stem, _suffix_from_source(raw))
-        _download_to(raw, target)
+        target = _download_to(raw, target)
         return MediaImportResult(source=raw, target=target, copied=True)
 
     src = Path(raw).expanduser()

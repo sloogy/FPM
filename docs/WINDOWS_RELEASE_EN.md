@@ -4,12 +4,12 @@
 
 This release produces two Windows artifacts, following the BudgetTool release model:
 
-- `FountainPenManager-v0.2.90-portable-windows.zip`
-- `FountainPenManager_Setup_0.2.90.exe`
+- `FountainPenManager-v0.3.05-portable-windows.zip`
+- `FountainPenManager_Setup_0.3.05.exe`
 
 It also creates:
 
-- `FountainPenManager_Setup_0.2.90.zip`
+- `FountainPenManager_Setup_0.3.05.zip`
 - `latest.json`
 - `SHA256SUMS.txt`
 
@@ -53,3 +53,9 @@ The workflow `.github/workflows/windows-release.yml` builds on `windows-latest`:
 4. Inno Setup installer
 5. SHA256SUMS and `latest.json`
 6. Artifact upload and GitHub Release upload for tags
+
+A numbered tag such as `v0.3.05-rc.1` runs the real Windows/Linux builds and installer without signing keys. The results are published as a clearly marked unsigned GitHub Prerelease, without `latest.json` or LifePlanner modules. Only the exact final tag `v0.3.05` requires the Authenticode and LifePlanner keys and may publish the stable release.
+
+## Enterprise release gate v0.3.05
+
+Official tagged releases are built only from the separate hash locks `constraints-windows.lock` and `constraints-linux.lock`. The Windows application and installer must be Authenticode-signed and pass `signtool verify /pa /all /v`. Missing locks, CI gates, or signing secrets stop the workflow without an insecure fallback.

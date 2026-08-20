@@ -13,7 +13,6 @@ from PySide6.QtCore import QProcess, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
-    QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -27,6 +26,7 @@ from PySide6.QtWidgets import (
 from app_info import APP_VERSION, app_version_label
 from i18n.translator import t
 from updater.common import clear_check_result, read_check_result
+from ui.common import ResponsiveDialog
 
 GITHUB_RELEASES_URL = "https://github.com/sloogy/FPM/releases"
 
@@ -41,7 +41,7 @@ def _entrypoint_cmd(module: str | None = None) -> list[str]:
     return [sys.executable, "-m", module or "updater.check_update"]
 
 
-class UpdateDialog(QDialog):
+class UpdateDialog(ResponsiveDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(t("update.title"))
@@ -109,6 +109,10 @@ class UpdateDialog(QDialog):
 
         self._append(t("update.hint_github_placeholder"))
         QTimer.singleShot(0, self._check)
+        self.enable_responsive_layout(
+            720, 580, minimum_width=360, minimum_height=300,
+            scroll=True
+        )
 
     def _append(self, text: str) -> None:
         for line in str(text).splitlines():

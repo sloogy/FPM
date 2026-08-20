@@ -12,6 +12,16 @@ PROJECT_DIR = Path(__file__).resolve().parent
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
+from logic.log_utils import (
+    configure_logging,
+    install_global_exception_hooks,
+    install_qt_message_handler,
+    log_unexpected,
+)
+
+configure_logging()
+install_global_exception_hooks()
+
 
 def _dispatch_update_cli() -> None:
     """Updater-Einstieg fuer PyInstaller/frozen Builds.
@@ -60,16 +70,18 @@ except ModuleNotFoundError as exc:
     raise SystemExit(1) from exc
 
 try:
-    from database.db import init_db
+    from database.db import init_db, close_db
     from ui.main_window import MainWindow
+    from ui.styles import get_stylesheet
     from ui.ui_scale import apply_ui_scaling
     from i18n.translator import load_language_from_settings
     from i18n.qt_i18n import install_qt_i18n_hooks
     from app_info import APP_NAME, APP_VERSION, ORG_NAME
 except Exception as exc:
+    error_id = log_unexpected("Import der App-Module", exc)
     print(
         "Startfehler in den App-Modulen. Das ist wahrscheinlich ein Code-/Importfehler, "
-        "nicht ein fehlendes pip-Paket.\n",
+        f"nicht ein fehlendes pip-Paket. Fehler-ID: {error_id}\n",
         file=sys.stderr,
     )
     traceback.print_exc()
@@ -83,6 +95,7 @@ def main() -> None:
         )
     except Exception:
         pass
+    install_qt_message_handler()
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(APP_VERSION)
@@ -91,6 +104,7 @@ def main() -> None:
     app.setFont(QFont("Segoe UI", 10))
     # Datenbank initialisieren (nutzt konfigurierbaren Pfad aus ~/.fpm_data/config.json)
     init_db()
+    app.aboutToQuit.connect(close_db)
     # Sprache erst nach init_db laden, damit AppSettings verfügbar ist.
     load_language_from_settings()
     install_qt_i18n_hooks()

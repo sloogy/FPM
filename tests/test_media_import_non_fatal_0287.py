@@ -1,4 +1,4 @@
-"""v0.2.88: Ein fehlgeschlagener Medien-Import darf niemals Daten zerstören.
+"""v0.2.87: Ein fehlgeschlagener Medien-Import darf niemals Daten zerstören.
 
 Hintergrund (Release-Analyse): In `pen_widget._add/_edit/_duplicate` und
 `writing_samples_widget._add/_edit` lief `import_*_image()` **innerhalb** der
@@ -44,6 +44,7 @@ def _method_body(src: str, signature: str) -> str:
 # ── 1. Der Service wirft wirklich (Fix ist kein Phantom) ─────────────
 def test_oversized_download_raises(tmp_path, monkeypatch):
     import logic.media_storage_service as mss
+    monkeypatch.setattr(mss, "validate_public_http_url", lambda *_: None)
 
     class _Resp:
         def __enter__(self):
@@ -52,10 +53,17 @@ def test_oversized_download_raises(tmp_path, monkeypatch):
         def __exit__(self, *a):
             return False
 
-        def read(self, n):
-            return b"x" * (MAX_MEDIA_BYTES + 1)
+        def geturl(self):
+            return "https://example.test/image.jpg"
 
-    monkeypatch.setattr(mss.urllib.request, "urlopen", lambda *a, **k: _Resp())
+        def close(self):
+            pass
+
+        def read(self, n):
+            # gültiger PNG-Header + Überlänge -> Magic ok, Größe schlägt zu
+            return (b"\x89PNG\r\n\x1a\n" + b"x" * (MAX_MEDIA_BYTES + 8))[:n]
+
+    monkeypatch.setattr(mss, "_opener", type("O", (), {"open": lambda s, r, timeout=None: _Resp()})())
     try:
         import_pen_image(tmp_path, "https://example.test/big.jpg", pen_id=1, brand="B", model="M")
     except ValueError as exc:
@@ -66,6 +74,7 @@ def test_oversized_download_raises(tmp_path, monkeypatch):
 
 def test_empty_download_raises(tmp_path, monkeypatch):
     import logic.media_storage_service as mss
+    monkeypatch.setattr(mss, "validate_public_http_url", lambda *_: None)
 
     class _Resp:
         def __enter__(self):
@@ -74,10 +83,16 @@ def test_empty_download_raises(tmp_path, monkeypatch):
         def __exit__(self, *a):
             return False
 
+        def geturl(self):
+            return "https://example.test/image.jpg"
+
+        def close(self):
+            pass
+
         def read(self, n):
             return b""
 
-    monkeypatch.setattr(mss.urllib.request, "urlopen", lambda *a, **k: _Resp())
+    monkeypatch.setattr(mss, "_opener", type("O", (), {"open": lambda s, r, timeout=None: _Resp()})())
     try:
         import_pen_image(tmp_path, "https://example.test/empty.jpg", pen_id=1, brand="B", model="M")
     except ValueError:
@@ -88,11 +103,13 @@ def test_empty_download_raises(tmp_path, monkeypatch):
 
 def test_network_error_propagates(tmp_path, monkeypatch):
     import logic.media_storage_service as mss
+    monkeypatch.setattr(mss, "validate_public_http_url", lambda *_: None)
 
-    def _boom(*a, **k):
-        raise OSError("network unreachable")
+    class _O:
+        def open(self, request, timeout=None):
+            raise OSError("network unreachable")
 
-    monkeypatch.setattr(mss.urllib.request, "urlopen", _boom)
+    monkeypatch.setattr(mss, "_opener", _O())
     try:
         import_pen_image(tmp_path, "https://example.test/x.jpg", pen_id=1, brand="B", model="M")
     except OSError:
@@ -140,7 +157,7 @@ def test_pen_widget_media_import_is_non_fatal():
     assert "_warn_media_import_failed" in src
     # Warnung erst NACH dem Commit
     # Genau die drei Methoden, die Bilder importieren – und nur diese.
-    importing = ("def _add(self) -> bool:", "def _edit_pen_by_id(self, pen_id: int):", "def _copy_pen(self):")
+    importing = ("def _add(self):", "def _edit_pen_by_id(self, pen_id: int):", "def _copy_pen(self):")
     for sig in importing:
         body = _method_body(src, sig)
         assert "_store_pen_image_if_needed(pen)" in body, sig
@@ -165,7 +182,7 @@ def test_writing_samples_media_import_is_non_fatal():
 def test_pen_widget_add_rolls_back_on_error():
     """Vorher fehlte im _add-Fehlerpfad ein explizites rollback()."""
     src = _src("ui/pen_widget.py")
-    add_body = _method_body(src, "def _add(self) -> bool:")
+    add_body = _method_body(src, "def _add(self):")
     assert "session.rollback()" in add_body
 
 

@@ -15,22 +15,23 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QColor
-from ui.common import EmptyStateWidget, ImportPreviewDialog
-from logic.event_bus import AppEventBus
-from logic.enthusiast_lab_service import ink_stock_rows
-from logic.ink_reach_service import ink_reach_row
-
+from ui.localized_inputs import LocalizedDoubleSpinBox
 from ui.locale_widgets import (
-    LocalizedDoubleSpinBox as QDoubleSpinBox,
     bind_currency_combo,
     current_currency,
     populate_currency_combo,
     set_combo_currency,
 )
+from ui.common import EmptyStateWidget, ImportPreviewDialog, ResponsiveDialog
+from logic.event_bus import AppEventBus
+from logic.enthusiast_lab_service import ink_stock_rows
+from logic.ink_reach_service import ink_reach_row
+
 from ui.ui_scale import scale_px
 from database.db import get_session
+from database.repositories import InkRepository
 from database.models import Ink
-from i18n.translator import LocaleService, format_money, format_date, normalize_currency_code, t
+from i18n.translator import LocaleService, format_money, format_date, t
 from logic.color_family_service import normalize_color_family
 from ui.theme import BTN_ACCENT, BTN_MUTED, BTN_PRIMARY, BTN_SECONDARY, BTN_SUCCESS
 
@@ -215,14 +216,14 @@ class InkWidget(QWidget):
         self._dbl = QVBoxLayout(self._dbody)
         scroll.setWidget(self._dbody)
         vl.addWidget(scroll)
-        ph = QLabel(t('ui.ink_widget.tinte_auswahlen_9628463b')); ph.setStyleSheet("color:#95a5a6;font-size:13px;"); ph.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ph = QLabel(t('ui.ink_widget.tinte_auswahlen_9628463b')); ph.setStyleSheet("color:#5f6f72;font-size:13px;"); ph.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._dbl.addWidget(ph); self._dbl.addStretch()
         return panel
 
     def refresh(self):
         session = get_session()
         try:
-            inks = session.query(Ink).order_by(Ink.brand, Ink.name).all()
+            inks = InkRepository(session).all_sorted()
             cur_id = self._selected_id()
             if not inks:
                 self.stack.setCurrentIndex(1)  # EmptyStateWidget
@@ -293,7 +294,7 @@ class InkWidget(QWidget):
 
             def row(lbl, val, color="#2c3e50"):
                 w = QWidget(); h = QHBoxLayout(w); h.setContentsMargins(0,2,0,2)
-                l = QLabel(f"<b>{lbl}</b>"); l.setStyleSheet("color:#7f8c8d; min-width:170px;")
+                l = QLabel(f"<b>{lbl}</b>"); l.setStyleSheet("color:#5f6f72; min-width:170px;")
                 v = QLabel(str(val) if val else "—"); v.setStyleSheet(f"color:{color};"); v.setWordWrap(True)
                 h.addWidget(l); h.addWidget(v, 1); self._dbl.addWidget(w)
 
@@ -306,7 +307,7 @@ class InkWidget(QWidget):
             if ink.bottle_size_ml: row(t("ink.labels.bottle_size"), f"{ink.bottle_size_ml:g} ml")
             if ink.remaining_ml is not None: row(t("ink.labels.remaining"), f"{ink.remaining_ml:g} ml" + (" · " + t("ink.labels.empty_marker") if getattr(ink, "is_empty", False) else ""), "#e74c3c" if getattr(ink, "is_empty", False) else "#2c3e50")
             stock = ink_stock_rows([ink])[0]
-            status_color = {"empty": "#e74c3c", "reorder": "#e67e22", "low": "#f1c40f", "unknown": "#7f8c8d", "ok": "#27ae60"}.get(stock.status, "#2c3e50")
+            status_color = {"empty": "#e74c3c", "reorder": "#e67e22", "low": "#f1c40f", "unknown": "#5f6f72", "ok": "#27ae60"}.get(stock.status, "#2c3e50")
             if stock.fill_pct is not None:
                 row(t("ink.labels.fill_level"), f"{stock.fill_pct:.0f}% · {t('enthusiast_lab.status.ink.' + stock.status)}", status_color)
             else:
@@ -315,7 +316,7 @@ class InkWidget(QWidget):
 
             # Reichweite & Kosten-Effizienz (v0.2.68) – nur zeigen, was real belegt ist.
             reach = ink_reach_row(ink)
-            reach_color = {"reorder_soon": "#e67e22", "healthy": "#27ae60"}.get(reach.status, "#7f8c8d")
+            reach_color = {"reorder_soon": "#e67e22", "healthy": "#27ae60"}.get(reach.status, "#5f6f72")
             if reach.estimated_fills_left is not None:
                 row(t("ink.labels.reach_fills_left"), f"{reach.estimated_fills_left:g}", reach_color)
             if reach.days_left is not None:
@@ -329,13 +330,13 @@ class InkWidget(QWidget):
                 row(t("ink.labels.reach_avg_fill"), f"{reach.avg_fill_ml:g} ml")
             if reach.cost_per_ml is not None:
                 cur = reach.currency or ""
-                row(t("ink.labels.cost_per_ml"), f"{format_money(reach.cost_per_ml, cur or LocaleService.instance().currency, 4)} / ml")
+                row(t("ink.labels.cost_per_ml"), f"{reach.cost_per_ml:g} {cur}".strip())
             if reach.cost_per_fill is not None:
                 cur = reach.currency or ""
-                row(t("ink.labels.cost_per_fill"), format_money(reach.cost_per_fill, cur or LocaleService.instance().currency))
+                row(t("ink.labels.cost_per_fill"), f"{reach.cost_per_fill:g} {cur}".strip())
             if reach.value_used is not None:
                 cur = reach.currency or ""
-                row(t("ink.labels.value_used"), format_money(reach.value_used, cur or LocaleService.instance().currency))
+                row(t("ink.labels.value_used"), f"{reach.value_used:g} {cur}".strip())
 
             if getattr(ink, "reorder_threshold_ml", None):
                 row(t("ink.labels.reorder_threshold"), f"{ink.reorder_threshold_ml:g} ml", status_color)
@@ -347,7 +348,7 @@ class InkWidget(QWidget):
             if ink.purchase_date: row(t("ink.labels.purchase_date"), format_date(ink.purchase_date))
             loads_for_last = list(getattr(ink, "ink_loads", []) or [])
             last_loaded = max((l.loaded_date for l in loads_for_last if l.loaded_date), default=None)
-            row(t("ink.labels.last_loaded"), format_date(last_loaded) if last_loaded else t("ink.labels.never_loaded"), "#16a085" if last_loaded else "#95a5a6")
+            row(t("ink.labels.last_loaded"), format_date(last_loaded) if last_loaded else t("ink.labels.never_loaded"), "#16a085" if last_loaded else "#5f6f72")
 
             sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine); sep.setStyleSheet("color:#eee; margin:6px 0;")
             self._dbl.addWidget(sep)
@@ -405,23 +406,19 @@ class InkWidget(QWidget):
         elif empty and action == empty: self._mark_empty()
         elif delete and action == delete: self._delete()
 
-    def _add(self) -> bool:
+    def _add(self):
         dlg = InkDialog(self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
-            return False
-        session = get_session()
-        try:
-            session.add(Ink(**dlg.get_data()))
-            session.commit()
-            AppEventBus.instance().inks_changed.emit()
-            self.refresh()
-            return True
-        except Exception as e:
-            session.rollback()
-            QMessageBox.critical(self, t('ui.ink_widget.fehler_d837361b'), str(e))
-            return False
-        finally:
-            session.close()
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            session = get_session()
+            try:
+                session.add(Ink(**dlg.get_data()))
+                session.commit()
+                AppEventBus.instance().inks_changed.emit()
+                self.refresh()
+            except Exception as e:
+                QMessageBox.critical(self, t('ui.ink_widget.fehler_d837361b'), str(e))
+            finally:
+                session.close()
 
     def _edit(self):
         ink_id = self._selected_id()
@@ -497,13 +494,10 @@ class InkWidget(QWidget):
             if dlg.exec() != QDialog.DialogCode.Accepted:
                 return
             data = dlg.get_data()
-            dup = session.query(Ink).filter(
-                Ink.brand == data.get("brand"),
-                Ink.name == data.get("name"),
-                Ink.bottle_size_ml == data.get("bottle_size_ml"),
-                Ink.is_archived == False,
-                Ink.is_empty == False,
-            ).first()
+            dup = InkRepository(session).find_variant(
+                data.get("brand"), data.get("name"),
+                data.get("bottle_size_ml"), only_usable=True,
+            )
             if dup and dup.id != ink_id:
                 res = QMessageBox.question(
                     self,
@@ -575,12 +569,10 @@ class InkWidget(QWidget):
         added = updated = skipped = 0
         errors = []
         def to_float(v):
-            if not str(v or '').strip():
-                return None
-            return LocaleService.instance().parse_number(str(v))
+            return LocaleService.instance().parse_number(str(v)) if str(v).strip() else None
         def to_int(v, default=None):
-            value = to_float(v)
-            return int(value) if value is not None else default
+            parsed = LocaleService.instance().parse_number(str(v)) if str(v).strip() else None
+            return int(parsed) if parsed is not None else default
         def to_bool(v):
             return str(v).strip().lower() in ("1", "true", "yes", "ja", "x", "✓")
         def to_date(v):
@@ -635,7 +627,7 @@ class InkWidget(QWidget):
                         brand = (row.get("brand") or row.get("Marke") or "").strip()
                         name = (row.get("name") or row.get("Name") or "").strip()
                         bottle = to_float(row.get("bottle_size_ml") or row.get("Flaschengröße") or row.get("Fassgröße"))
-                        ink = session.query(Ink).filter(Ink.brand == brand, Ink.name == name, Ink.bottle_size_ml == bottle).first()
+                        ink = InkRepository(session).find_variant(brand, name, bottle)
                         data = dict(
                             brand=brand,
                             name=name,
@@ -645,7 +637,7 @@ class InkWidget(QWidget):
                             color_type=(row.get("color_type") or row.get("Farbtyp") or "").strip() or None,
                             remaining_ml=to_float(row.get("remaining_ml") or row.get("Rest")),
                             purchase_price=to_float(row.get("purchase_price") or row.get("Kaufpreis")),
-                            purchase_currency=normalize_currency_code(row.get("purchase_currency") or row.get("Kaufpreis-Währung"), LocaleService.instance().currency),
+                            purchase_currency=(row.get("purchase_currency") or row.get("Kaufpreis-Währung") or LocaleService.instance().currency).strip()[:3].upper() or None,
                             is_empty=to_bool(row.get("is_empty") or row.get("Leer") or ""),
                             is_archived=to_bool(row.get("is_archived") or row.get("Archiv") or ""),
                             wetness_level=to_int(row.get("wetness_level") or row.get("Nässe"), 3),
@@ -689,7 +681,7 @@ class InkWidget(QWidget):
             return
         session = get_session()
         try:
-            inks = session.query(Ink).order_by(Ink.brand, Ink.name).all()
+            inks = InkRepository(session).all_sorted()
             cols = [
                 "id", "brand", "name", "color_type", "color_family", "color_hex",
                 "bottle_size_ml", "remaining_ml", "is_empty", "is_archived",
@@ -724,7 +716,7 @@ def _note_label(text):
     return lbl
 
 
-class InkDialog(QDialog):
+class InkDialog(ResponsiveDialog):
     def __init__(self, parent=None, ink: Optional[Ink] = None):
         super().__init__(parent)
         self.ink = ink
@@ -733,6 +725,10 @@ class InkDialog(QDialog):
         self.setMinimumHeight(scale_px(600))
         self._setup_ui()
         if ink: self._load()
+        self.enable_responsive_layout(
+            760, 700, minimum_width=360, minimum_height=320,
+            scroll=False
+        )
 
     def _setup_ui(self):
         root = QVBoxLayout(self)
@@ -759,10 +755,11 @@ class InkDialog(QDialog):
         g2 = QGroupBox(t('ui.ink_widget.kauf_3ba87130')); f2 = QFormLayout(g2)
         self.date_edit    = QDateEdit(QDate.currentDate()); self.date_edit.setCalendarPopup(True); self.date_edit.setDisplayFormat(LocaleService.instance().qt_date_format)
         default_cur = LocaleService.instance().currency
-        self.price_spin   = QDoubleSpinBox(); self.price_spin.setRange(0,999); self.price_spin.setDecimals(2)
-        self.price_currency_combo = QComboBox(); populate_currency_combo(self.price_currency_combo, default_cur); bind_currency_combo(self.price_currency_combo, self.price_spin)
-        self.bottle_spin  = QDoubleSpinBox(); self.bottle_spin.setRange(0,1000); self.bottle_spin.setSuffix(" ml"); self.bottle_spin.setDecimals(1)
-        self.remain_spin  = QDoubleSpinBox(); self.remain_spin.setRange(0,1000); self.remain_spin.setSuffix(" ml"); self.remain_spin.setDecimals(1)
+        self.price_spin   = LocalizedDoubleSpinBox(); self.price_spin.setRange(0,999); self.price_spin.setDecimals(2)
+        self.price_currency_combo = QComboBox(); populate_currency_combo(self.price_currency_combo, default_cur)
+        bind_currency_combo(self.price_currency_combo, self.price_spin)
+        self.bottle_spin  = LocalizedDoubleSpinBox(); self.bottle_spin.setRange(0,1000); self.bottle_spin.setSuffix(" ml"); self.bottle_spin.setDecimals(1)
+        self.remain_spin  = LocalizedDoubleSpinBox(); self.remain_spin.setRange(0,1000); self.remain_spin.setSuffix(" ml"); self.remain_spin.setDecimals(1)
         self.empty_cb = QCheckBox(t('ui.ink_widget.tintenfass_ist_leer_nicht_mehr_vorschlagen_b2225d07'))
         f2.addRow(t('ui.ink_widget.kaufdatum_471e8f67'),       self.date_edit)
         f2.addRow(t('ui.ink_widget.kaufpreis_18bc5dd6'),       self.price_spin)

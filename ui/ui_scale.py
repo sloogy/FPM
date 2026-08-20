@@ -1,18 +1,18 @@
-"""Globale UI-Skalierung für FountainPen Manager.
+"""Zentrale, Qt-konforme UI-Skalierung.
 
-Ziel: Schrift, Eingabefelder, Tabellenzeilen und Dialoge sollen auf kleinen
-Laptop-Displays und HiDPI-Umgebungen lesbar bleiben. Die Einstellung wird in
-AppSettings unter ``ui_scale_mode`` gespeichert.
+Qt liefert Geometrien bereits in logischen Pixeln. Deshalb darf die
+Anwendung den Qt-DPI-Faktor nicht ein zweites Mal auf Schrift und Größen
+multiplizieren. Die App-Skalierung ist nur eine zusätzliche
+Benutzer-/Lesbarkeitsstufe.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 import re
 from typing import Optional
-from types import SimpleNamespace
 
-from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QApplication
 
 
 @dataclass(frozen=True)
@@ -23,110 +23,98 @@ class ScalePreset:
 
 
 PRESETS: list[ScalePreset] = [
-    ScalePreset("auto", "Auto – Bildschirm erkennen", 1.0),
-    ScalePreset("compact", "Kompakt", 0.92),
+    ScalePreset("auto", "Auto – Fenster und Bildschirm", 1.0),
+    ScalePreset("compact", "Kompakt", 0.90),
     ScalePreset("normal", "Normal", 1.00),
-    ScalePreset("laptop", "Laptop groß", 1.18),
-    ScalePreset("large", "Sehr groß", 1.34),
+    ScalePreset("laptop", "Laptop groß", 1.12),
+    ScalePreset("large", "Sehr groß", 1.28),
 ]
 
-_SCALE_STATE = SimpleNamespace(factor=1.0, patch_installed=False, original_set_stylesheet=None)
+_CURRENT_FACTOR = 1.0
+_PATCH_INSTALLED = False
+_ORIGINAL_SET_STYLESHEET = None
 
 
 def _scale_inline_css(css: str, factor: float) -> str:
-    """Skaliert häufige Inline-QSS-Angaben wie ``font-size:13px``.
-
-    Viele ältere Widgets setzen eigene Stylesheets. Diese würden die globale
-    App-Schrift übersteuern. Darum skalieren wir nur offensichtliche px-Werte
-    in Layout-/Schrift-Eigenschaften. Farben wie ``#2563eb`` bleiben unberührt.
-    """
+    """Skaliert nur dimensionsbezogene px-Werte in Inline-QSS."""
     if not css or abs(factor - 1.0) < 0.03:
         return css
-
-    props = (
+    properties = (
         "font-size", "padding", "margin", "min-height", "max-height",
         "min-width", "max-width", "border-radius", "width", "height",
-        "spacing", "left", "right", "top", "bottom"
+        "spacing", "left", "right", "top", "bottom",
     )
-    prop_pat = "|".join(re.escape(p) for p in props)
+    pattern = "|".join(re.escape(prop) for prop in properties)
 
-    def repl(match: re.Match) -> str:
-        prefix = match.group(1)
-        num = float(match.group(2))
-        value = max(1, int(round(num * factor)))
-        return f"{prefix}{value}px"
+    def replace(match: re.Match[str]) -> str:
+        value = max(1, round(float(match.group(2)) * factor))
+        return f"{match.group(1)}{value}px"
 
-    return re.sub(rf"((?:{prop_pat})\s*:\s*)(\d+(?:\.\d+)?)px", repl, css)
+    return re.sub(rf"((?:{pattern})\s*:\s*)(\d+(?:\.\d+)?)px", replace, css)
 
 
 def install_inline_stylesheet_scaler() -> None:
-    """Patcht QWidget.setStyleSheet, damit alte Inline-QSS mit skaliert.
-
-    QApplication.setStyleSheet bleibt unangetastet; das globale Stylesheet ist
-    bereits über ``get_stylesheet(scale)`` skaliert.
-    """
-    if _SCALE_STATE.patch_installed:
+    global _PATCH_INSTALLED, _ORIGINAL_SET_STYLESHEET
+    if _PATCH_INSTALLED:
         return
     try:
         from PySide6.QtWidgets import QWidget
-        _SCALE_STATE.original_set_stylesheet = QWidget.setStyleSheet
 
-        def _patched_set_stylesheet(self, stylesheet: str) -> None:
-            return _SCALE_STATE.original_set_stylesheet(self, _scale_inline_css(stylesheet or "", _SCALE_STATE.factor))
+        _ORIGINAL_SET_STYLESHEET = QWidget.setStyleSheet
 
-        QWidget.setStyleSheet = _patched_set_stylesheet
-        _SCALE_STATE.patch_installed = True
+        def patched(widget, stylesheet: str) -> None:
+            _ORIGINAL_SET_STYLESHEET(
+                widget, _scale_inline_css(stylesheet or "", _CURRENT_FACTOR)
+            )
+
+        QWidget.setStyleSheet = patched
+        _PATCH_INSTALLED = True
     except Exception:
-        pass
+        # Skalierung darf den Programmstart nie blockieren.
+        return
 
 
 def preset_factor(mode: str | None) -> float:
-    mode = (mode or "auto").strip().lower()
-    for preset in PRESETS:
-        if preset.key == mode:
-            return preset.factor
-    return 1.0
+    normalized = (mode or "auto").strip().lower()
+    return next((p.factor for p in PRESETS if p.key == normalized), 1.0)
 
 
 def _screen_auto_factor(app: QApplication) -> float:
+    """Zusatzskalierung anhand der *logischen* Arbeitsfläche.
+
+    Kein ``logicalDotsPerInch()/96``: Qt hat diesen Faktor bereits angewandt.
+    Kleine Arbeitsflächen werden kompakter statt größer, damit Fenstermodus
+    und Dialoge vollständig bedienbar bleiben.
+    """
     screen = app.primaryScreen()
     if screen is None:
         return 1.0
-
-    dpi = float(screen.logicalDotsPerInch() or 96.0)
-    dpi_scale = max(1.0, dpi / 96.0)
-    size = screen.availableGeometry().size()
-    height = size.height()
-
-    # Viele Laptops melden trotz hoher Pixeldichte nur 96 DPI. Dann hilft eine
-    # moderate Mindestskalierung bei 900p/1080p-Höhe, ohne Desktop-Monitore zu
-    # riesig zu machen.
-    if height <= 820:
-        size_boost = 1.22
-    elif height <= 950:
-        size_boost = 1.16
-    elif height <= 1120:
-        size_boost = 1.08
-    else:
-        size_boost = 1.0
-
-    return max(1.0, min(1.45, dpi_scale * size_boost))
+    geometry = screen.availableGeometry()
+    width, height = geometry.width(), geometry.height()
+    if width < 1100 or height < 720:
+        return 0.88
+    if width < 1360 or height < 820:
+        return 0.94
+    if width >= 2200 and height >= 1250:
+        return 1.08
+    return 1.0
 
 
-def current_scale_factor(app: Optional[QApplication] = None, mode: str | None = None) -> float:
+def current_scale_factor(
+    app: Optional[QApplication] = None, mode: str | None = None
+) -> float:
     app = app or QApplication.instance()
     if app is None:
         return preset_factor(mode)
-    mode = (mode or "auto").strip().lower()
-    if mode == "auto":
-        return _screen_auto_factor(app)
-    return preset_factor(mode)
+    normalized = (mode or "auto").strip().lower()
+    return _screen_auto_factor(app) if normalized == "auto" else preset_factor(normalized)
 
 
 def _load_mode_from_settings(default: str = "auto") -> str:
     try:
         from database.db import get_session
         from database.models import AppSettings
+
         session = get_session()
         try:
             return AppSettings.get(session, "ui_scale_mode", default) or default
@@ -136,33 +124,33 @@ def _load_mode_from_settings(default: str = "auto") -> str:
         return default
 
 
-def apply_ui_scaling(app: Optional[QApplication] = None, mode: str | None = None) -> float:
-    """Wendet Schrift und Stylesheet global neu an und liefert den Faktor zurück."""
+def apply_ui_scaling(
+    app: Optional[QApplication] = None, mode: str | None = None
+) -> float:
+    """Wendet die zusätzliche App-Skalierung global an."""
     app = app or QApplication.instance()
     if app is None:
         return 1.0
+    mode = _load_mode_from_settings() if mode is None else mode
 
-    if mode is None:
-        mode = _load_mode_from_settings("auto")
-    factor = current_scale_factor(app, mode)
-    _SCALE_STATE.factor = factor
+    global _CURRENT_FACTOR
+    _CURRENT_FACTOR = current_scale_factor(app, mode)
     install_inline_stylesheet_scaler()
 
-    # Point Size skaliert sauber mit Qt/DPI. Das Stylesheet bekommt zusätzlich
-    # skalierte Pixelwerte, damit Inline-/StyleSheet-Layouts nicht zu klein
-    # bleiben.
-    font = QFont("Segoe UI")
-    font.setPointSizeF(max(9.0, 10.0 * factor))
+    font = QFont(app.font())
+    if not font.family():
+        font.setFamily("Segoe UI")
+    font.setPointSizeF(max(8.5, 10.0 * _CURRENT_FACTOR))
     app.setFont(font)
 
     try:
         from ui.styles import get_stylesheet
-        app.setStyleSheet(get_stylesheet(factor))
+
+        app.setStyleSheet(get_stylesheet(_CURRENT_FACTOR))
     except Exception:
         pass
-    return factor
+    return _CURRENT_FACTOR
 
 
 def scale_px(value: int, mode: str | None = None) -> int:
-    app = QApplication.instance()
-    return max(1, int(round(value * current_scale_factor(app, mode))))
+    return max(1, round(value * current_scale_factor(QApplication.instance(), mode)))

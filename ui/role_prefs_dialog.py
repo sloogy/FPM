@@ -12,7 +12,7 @@ Pro Rolle konfigurierbar:
 """
 from __future__ import annotations
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QScrollArea, QWidget,
+    QVBoxLayout, QHBoxLayout, QScrollArea, QWidget,
     QGroupBox, QFormLayout, QLabel, QSpinBox, QComboBox,
     QCheckBox, QPushButton, QMessageBox, QTabWidget,
 )
@@ -23,6 +23,7 @@ from logic.role_config import (
     load_theme_configs, save_theme_configs, reset_theme_configs,
     DEFAULT_ROLE_CONFIGS, DEFAULT_THEME_CONFIGS, NIB_SIZE_CATEGORIES,
 )
+from ui.common import ResponsiveDialog
 
 
 # ── Rollen-Anzeigenamen (sync mit pen_widget ROTATION_ROLES) ─────────────────
@@ -184,7 +185,7 @@ class _RolePanel(QWidget):
         }
 
 
-class RolePrefsDialog(QDialog):
+class RolePrefsDialog(ResponsiveDialog):
     """Haupt-Dialog: Tabs pro Rolle."""
 
     def __init__(self, parent=None):
@@ -254,6 +255,10 @@ class RolePrefsDialog(QDialog):
         btn_save.clicked.connect(self._save)
         btn_row.addWidget(btn_save)
         root.addLayout(btn_row)
+        self.enable_responsive_layout(
+            760, 640, minimum_width=380, minimum_height=320,
+            scroll=True
+        )
 
     def _save(self):
         role_cfgs = {code: panel.get_config() for code, panel in self._panels.items()}

@@ -241,14 +241,18 @@ def test_db_seeds_percent_setting_not_legacy_toggle():
 
 def test_dashboard_declutter_markers():
     src = _src("ui/dashboard_widget.py")
-    # 4 Karten statt 7, Kompaktzeile vorhanden
-    assert "_card_pens" not in src and "_card_service" not in src and "_card_archived" not in src
-    assert "_inventory_line" in src
-    assert "dashboard.inventory_line" in src
-    # Timer nur fällig/bald fällig, gekürzte Listen, kompakte Höhen (Merge aus B)
-    assert '0.8 * r["max"]' in src
-    assert ".limit(8)" in src and "limit=6," in src
-    assert "setMaximumHeight(150)" in src
+    # Kacheln ersetzen die dauerhaft sichtbaren Einzelkarten und Tabellen.
+    assert "class DashboardTile" in src
+    assert "_tiles_grid" in src and "_detail_groups" in src
+    assert "_toggle_detail" in src and "_sync_detail_visibility" in src
+    assert "cellDoubleClicked.connect" in src
+    assert "setMaximumHeight(420)" in src
+    # v0.3.01: Timer-Schwelle und Listenlimits leben jetzt im Qt-freien
+    # logic.dashboard_service bzw. der Repository-Schicht (refresh() zerlegt).
+    svc = _src("logic/dashboard_service.py")
+    assert "TIMER_SOON_RATIO = 0.8" in svc and 'soon_ratio * r["max"]' in svc
+    assert "activity_limit: int = 8" in svc and "health_limit: int = 6" in svc
+    assert ".limit(limit)" in _src("database/repositories.py")
 
 
 def test_rules_page_gets_overview_level_filter_and_i18n_labels():
@@ -268,8 +272,8 @@ def test_new_i18n_keys_exist_in_all_languages():
         ("rotation", "hint_random_mode"),
         ("rotation", "random_mode_active"),
         ("rotation", "more_hints"),
-        ("dashboard", "inventory_line"),
         ("dashboard", "timer_title_counts"),
+        ("dashboard", "tiles", "interaction_hint"),
         ("dashboard", "lock_title_counts"),
         ("settings", "rotation_page_title"),
         ("settings", "rotation_random_label"),
