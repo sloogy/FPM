@@ -63,7 +63,8 @@ def load_host_theme() -> dict[str, Any] | None:
         with open(path, "r", encoding="utf-8") as handle:
             data = json.load(handle)
     except (OSError, json.JSONDecodeError) as exc:
-        log.warning("Hostdesign nicht lesbar (%s): %s", path, exc)
+        # Reine Diagnosemeldung, kein sichtbarer UI-Text - daher nicht uebersetzt.
+        log.warning("Host theme file is not readable (%s): %s", path, exc)
         return None
     if not isinstance(data, dict) or data.get("schema") != THEME_SCHEMA:
         return None

@@ -174,7 +174,7 @@ def test_unsigned_release_module_matches_lifeplanner_manual_install_contract(
 
 def test_unsigned_module_builder_rejects_unversioned_tag(tmp_path):
     runtime = _runtime(tmp_path, "linux-x86_64")
-    with pytest.raises(ValueError, match="require.*v1.0.1"):
+    with pytest.raises(ValueError, match="require.*v1.0.2"):
         build_unsigned_release_module(
             runtime_dir=runtime,
             runtime_name="FountainPenManager",
@@ -263,7 +263,7 @@ def test_release_workflow_has_one_publisher_and_no_parallel_module_release():
     assert "--output-dir modules" in workflow
     assert "--allow-unsigned" in workflow
     assert (
-        "v1.0.1" not in workflow
+        "v1.0.2" not in workflow
     )  # tag and asset names must be derived, never hard-coded here
     assert not (root / ".github/workflows/lifeplanner-module-release.yml").exists()
 

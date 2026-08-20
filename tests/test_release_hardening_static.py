@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_release_version_metadata_is_current():
     src = (ROOT / "app_info.py").read_text(encoding="utf-8")
-    assert 'APP_VERSION = "1.0.1"' in src
+    assert 'APP_VERSION = "1.0.2"' in src
     assert 'APP_BUILD = "enterprise-lifeplanner-pipeline"' in src
 
 

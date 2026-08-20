@@ -1,3 +1,8 @@
+# v1.0.2 – RELEASEGATE REPARIERT
+
+- Der i18n-Audit stufte die Diagnosemeldung in `ui/host_theme.py` als sichtbaren UI-Text ein und brach den Linux-Releasejob von v1.0.1 ab. Es ist eine reine Logmeldung; sie ist jetzt englisch und als solche gekennzeichnet.
+- Funktional identisch zu v1.0.1, dessen Release dadurch nie veröffentlicht wurde.
+
 # v1.0.1 – ZENTRALE DARSTELLUNG IM LIFEPLANNER
 
 - FPM folgt im LifePlanner dem dort zentral gewählten Designprofil: Hauptfenster, Seitenleiste, Toolbar, Tabellen, Eingabefelder, Karten und Dialoge übernehmen dessen Farben.

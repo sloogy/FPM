@@ -4,12 +4,12 @@
 
 Dieses Release erzeugt wie beim BudgetTool zwei Windows-Artefakte:
 
-- `FountainPenManager-v1.0.1-portable-windows.zip`
-- `FountainPenManager_Setup_1.0.1.exe`
+- `FountainPenManager-v1.0.2-portable-windows.zip`
+- `FountainPenManager_Setup_1.0.2.exe`
 
 Zusätzlich werden erzeugt:
 
-- `FountainPenManager_Setup_1.0.1.zip`
+- `FountainPenManager_Setup_1.0.2.zip`
 - `latest.json`
 - `SHA256SUMS.txt`
 
@@ -54,8 +54,8 @@ Der Workflow `.github/workflows/windows-release.yml` baut auf `windows-latest`:
 5. SHA256SUMS und `latest.json`
 6. Upload als Artifact und bei Tags als GitHub Release Asset
 
-Ein nummerierter Tag wie `v1.0.1-rc.2` führt die echten Windows-/Linux-Builds, den Installer und beide LifePlanner-/LiveManager-Module ohne Signier-Keys aus. Die Ergebnisse werden klar als unsigned GitHub-Prerelease veröffentlicht, jedoch ohne `latest.json`. Der exakte finale Tag `v1.0.1` veröffentlicht nach denselben Gates einen normalen unsigned Release mit `latest.json` und `UNSIGNED_RELEASE.txt`. Die `.lpmodule` benötigen bei lokaler Installation eine ausdrückliche Vertrauensbestätigung.
+Ein nummerierter Tag wie `v1.0.2-rc.2` führt die echten Windows-/Linux-Builds, den Installer und beide LifePlanner-/LiveManager-Module ohne Signier-Keys aus. Die Ergebnisse werden klar als unsigned GitHub-Prerelease veröffentlicht, jedoch ohne `latest.json`. Der exakte finale Tag `v1.0.2` veröffentlicht nach denselben Gates einen normalen unsigned Release mit `latest.json` und `UNSIGNED_RELEASE.txt`. Die `.lpmodule` benötigen bei lokaler Installation eine ausdrückliche Vertrauensbestätigung.
 
-## Enterprise-Freigabe v1.0.1
+## Enterprise-Freigabe v1.0.2
 
 Offizielle Tag-Releases werden nur mit den getrennten Hash-Locks `constraints-windows.lock` und `constraints-linux.lock` gebaut. Windows-App, Installer und `.lpmodule` sind in diesem Release ausdrücklich unsigned; Signatur-Secrets werden nicht benötigt. Fehlende Lockdateien, CI-Gates, Checksummen, Warnhinweise oder Host-Testinstallationen brechen den Workflow ab. Details stehen in `ENTERPRISE_RELEASE_RUNBOOK_DE.md`.
