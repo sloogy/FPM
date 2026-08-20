@@ -408,16 +408,16 @@ def test_packaged_linux_runtime_is_recorded_executable(tmp_path):
 
 
 def test_module_build_rejects_missing_declared_runtime(tmp_path):
-    import json
-
-    from tools.build_lifeplanner_module import _grant_runtime_execute_bit
-
-    payload = tmp_path / "payload"
-    payload.mkdir()
-    manifest = json.loads(
-        (Path(__file__).resolve().parents[1] / "module.json").read_text(
-            encoding="utf-8"
+    runtime = _runtime(tmp_path, "linux-x86_64")
+    (runtime / "FountainPenManager").unlink()
+    with pytest.raises(ValueError, match="declared runtime missing"):
+        build_unsigned_release_module(
+            runtime_dir=runtime,
+            runtime_name="FountainPenManager",
+            platform="linux-x86_64",
+            release_tag=f"v{APP_VERSION}",
+            output=tmp_path
+            / "modules"
+            / module_asset_name("fpm", APP_VERSION, "linux-x86_64"),
+            requires_host=">=0.5.0",
         )
-    )
-    with pytest.raises(ValueError, match="missing in payload"):
-        _grant_runtime_execute_bit(payload, manifest, "linux-x86_64")

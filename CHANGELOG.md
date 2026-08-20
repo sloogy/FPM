@@ -2,7 +2,7 @@
 
 - Das veröffentlichte Linux-`.lpmodule` speicherte die Programmdatei nur als `0644`. Im LifePlanner installiert, scheiterte der Modulstart mit `[Errno 13] Keine Berechtigung`.
 - Ursache: CI holt die geprüfte Runtime über `actions/download-artifact`, das keine Unix-Rechte erhält. Das Paket übernahm diesen Modus unverändert.
-- `build_lifeplanner_module.py` setzt das Execute-Bit der in `module.json` deklarierten Programmdatei jetzt vor dem Packen. Die Leserechte werden in die Ausführrechte gespiegelt, die umask bleibt wirksam, setuid/setgid/sticky werden nie eingeführt.
+- `build_lifeplanner_module.py` schreibt das Execute-Bit der in `module.json` deklarierten Programmdatei jetzt direkt in das Archiv statt es vom Dateisystem zu übernehmen. Das ist notwendig, weil das Linux-Modul auf einem Windows-Runner gepackt wird, wo `chmod` kein Execute-Bit setzen kann. Die Leserechte werden in die Ausführrechte gespiegelt; setuid/setgid/sticky werden nie eingeführt.
 - Fehlt die deklarierte Programmdatei im Payload, bricht der Build ab, statt ein unstartbares Paket zu veröffentlichen.
 - Der Releaseworkflow prüft die Ausführbarkeit jetzt echt: `test -x` auf die Hostinstallation und eine Modusprüfung im gebauten `.lpmodule`. Bisher wurde nur `test -f` geprüft, weshalb der Fehler nie auffiel.
 - Version auf 1.0.0 angehoben.

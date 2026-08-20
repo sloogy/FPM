@@ -74,24 +74,22 @@ def _validate_runtime(runtime_dir: Path, runtime_name: str) -> Path:
     return runtime
 
 
-def _grant_runtime_execute_bit(payload: Path, manifest: dict, platform: str) -> None:
-    """Make the declared runtime executable inside the payload.
+def _declared_runtime_arcname(manifest: dict, platform: str) -> str:
+    """Return the payload-relative archive path of the declared runtime.
 
     CI fetches the gated runtime with actions/download-artifact, which does not
-    preserve Unix permissions. Without this the published Linux .lpmodule
-    records the binary as 0644 and the installed module refuses to start with
-    "[Errno 13] Keine Berechtigung". Read bits are mirrored into execute so the
-    umask still applies and setuid/setgid/sticky are never introduced.
+    preserve Unix permissions, and the Linux module is packaged on a Windows
+    runner where chmod cannot set an execute bit at all. The bit is therefore
+    written straight into the archive instead of being taken from the file
+    system; otherwise the published .lpmodule records the binary as
+    non-executable and the installed module fails to start with
+    "[Errno 13] Keine Berechtigung".
     """
     key = "windows_executable" if platform.startswith("windows") else "linux_executable"
     relative = str(manifest.get(key, "")).strip()
     if not relative:
-        return
-    target = payload / Path(relative)
-    if not target.is_file():
-        raise ValueError(f"declared {key} missing in payload: {relative}")
-    mode = stat.S_IMODE(target.stat().st_mode)
-    target.chmod(mode | ((mode & 0o444) >> 2))
+        return ""
+    return (Path("payload") / Path(relative)).as_posix()
 
 
 def _write_module(
@@ -112,7 +110,10 @@ def _write_module(
         payload.mkdir()
         shutil.copy2(ROOT / "module.json", payload / "module.json")
         shutil.copytree(runtime, payload / runtime_name)
-        _grant_runtime_execute_bit(payload, manifest, platform)
+
+        runtime_arcname = _declared_runtime_arcname(manifest, platform)
+        if runtime_arcname and not (payload.parent / runtime_arcname).is_file():
+            raise ValueError(f"declared runtime missing in payload: {runtime_arcname}")
 
         metadata = {
             "schema": "lifeplanner.component.v1",
@@ -146,8 +147,18 @@ def _write_module(
             for path in sorted(
                 payload.rglob("*"), key=lambda p: p.relative_to(payload).as_posix()
             ):
-                if path.is_file():
-                    archive.write(path, Path("payload") / path.relative_to(payload))
+                if not path.is_file():
+                    continue
+                arcname = (Path("payload") / path.relative_to(payload)).as_posix()
+                info = zipfile.ZipInfo.from_file(path, arcname)
+                info.compress_type = zipfile.ZIP_DEFLATED
+                mode = stat.S_IMODE(info.external_attr >> 16) or 0o644
+                if arcname == runtime_arcname:
+                    # Mirror read bits into execute; never setuid/setgid/sticky.
+                    mode |= (mode & 0o444) >> 2
+                info.external_attr = (mode & 0o7777) << 16
+                with path.open("rb") as source, archive.open(info, "w") as target:
+                    shutil.copyfileobj(source, target, 1024 * 1024)
 
     return output
 
