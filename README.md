@@ -1,4 +1,4 @@
-# FountainPen Manager v1.0.2
+# FountainPen Manager v1.0.3
 
 FountainPen Manager ist eine lokale Desktop-App zur Verwaltung von Füllern, Tinten, Federn, Papier, Schreibproben, Rotation, Pflege, Ausgaben, Wishlist und Sammlerwert.
 

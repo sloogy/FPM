@@ -8,7 +8,12 @@ v0.2.36:
 """
 from __future__ import annotations
 
-from ui.host_theme import host_scale_factor, load_host_theme, recolor
+from ui.host_theme import (
+    host_scale_factor,
+    install_inline_theme,
+    load_host_theme,
+    recolor,
+)
 
 
 def _px(value: int | float, scale: float) -> int:
@@ -18,6 +23,9 @@ def _px(value: int | float, scale: float) -> int:
 def get_stylesheet(scale: float = 1.0) -> str:
     """Globales Stylesheet. Im LifePlanner folgt es dem zentralen Designprofil."""
     theme = load_host_theme()
+    # Auch die Inline-Stylesheets einzelner Widgets sollen dem Profil folgen;
+    # sonst blieben sie hell, waehrend der Rest der Oberflaeche wechselt.
+    install_inline_theme()
     # Die Schriftgroesse des Profils wirkt als Skalierungsfaktor; der Standard
     # 10 ergibt 1.0, also exakt das bisherige Verhalten.
     return recolor(_build_stylesheet(scale * host_scale_factor(theme)), theme)

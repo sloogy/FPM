@@ -1,3 +1,11 @@
+# v1.0.3 – INLINE-STYLES FOLGEN DEM DESIGNPROFIL
+
+- Die rund 150 `setStyleSheet`-Aufrufe einzelner Widgets führten eigene Farbliterale und schlugen damit das globale Stylesheet. Bei einem dunklen Profil blieben diese Elemente hell, während der Rest wechselte. `install_inline_theme()` schickt jeden Widget-Stylesheet jetzt durch dieselbe Farbzuordnung wie das globale.
+- **Fehler behoben:** `recolor()` ersetzte die Literale nacheinander und konnte dabei ketten — war die Zielfarbe des einen Literals selbst ein Literal, ersetzte der nächste Durchlauf sie gleich weiter. Aus `#f0f3f7` wurde so über `#ffffff` fälschlich die Panelfarbe. Die Ersetzung läuft jetzt in einem einzigen Durchgang.
+- Weitere Grautöne der Widgets (`#64748b`, `#7f8c8d`, `#34495e`) folgen dem Profil.
+- Bewusst unverändert: `#27ae60`, `#e74c3c`, `#c0392b`, `#f39c12`, `#d35400` und `#8e44ad`. Diese Farben tragen Bedeutung — Erfolg, Gefahr, Warnung, Kategorie — und nicht die Rolle einer Fläche. Eine Löschen-Schaltfläche darf nicht grün werden, weil ein Profil es so vorgibt.
+- Ohne LifePlanner ändert sich weiterhin nichts; der Patch wird dann gar nicht erst installiert.
+
 # v1.0.2 – RELEASEGATE REPARIERT
 
 - Der i18n-Audit stufte die Diagnosemeldung in `ui/host_theme.py` als sichtbaren UI-Text ein und brach den Linux-Releasejob von v1.0.1 ab. Es ist eine reine Logmeldung; sie ist jetzt englisch und als solche gekennzeichnet.

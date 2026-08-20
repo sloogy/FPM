@@ -63,3 +63,37 @@ def test_recolor_skips_invalid_colour_values():
     assert recolor(css, {"farben": {"hintergrund_app": "rot"}}) == css
     assert recolor(css, {"farben": {}}) == css
     assert recolor(css, None) == css
+
+
+def test_recolor_is_single_pass_and_never_chains():
+    """Eine Zielfarbe darf nicht erneut als Literal ersetzt werden."""
+    # hintergrund_app -> #ffffff, und #ffffff ist selbst ein Literal.
+    theme = {"farben": {"hintergrund_app": "#ffffff", "hintergrund_panel": "#222222"}}
+    assert recolor("background: #f0f3f7;", theme) == "background: #ffffff;"
+    # Das echte #ffffff wird trotzdem korrekt ersetzt.
+    assert recolor("card: #ffffff;", theme) == "card: #222222;"
+
+
+def test_semantic_colours_stay_untouched():
+    """Erfolg, Gefahr und Warnung tragen Bedeutung, nicht die Rolle einer Flaeche."""
+    from ui.host_theme import PALETTE_ROLES
+
+    for semantic in ("#27ae60", "#e74c3c", "#c0392b", "#f39c12", "#d35400", "#8e44ad"):
+        assert semantic not in PALETTE_ROLES
+
+
+def test_inline_widget_styles_follow_the_host_profile(monkeypatch, tmp_path):
+    from PySide6.QtWidgets import QApplication, QPushButton
+
+    import ui.host_theme as ht
+
+    monkeypatch.setenv("LIFEPLANNER_THEME_FILE", str(_profile(tmp_path)))
+    monkeypatch.setattr(ht, "_PATCHED", False)
+    app = QApplication.instance() or QApplication([])
+    assert ht.install_inline_theme() is True
+    button = QPushButton("x")
+    button.setStyleSheet("background:#3498db;color:white;")
+    # #3498db ist der Akzent des Profils. Der Patch bleibt danach installiert,
+    # ist ohne gesetzte Umgebungsvariable aber ein No-Op.
+    assert "#88c0d0" in button.styleSheet()
+    assert "#3498db" not in button.styleSheet()

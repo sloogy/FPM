@@ -51,7 +51,16 @@ PALETTE_ROLES: dict[str, str] = {
     "#e8f1ff": "hover_hintergrund",
     "#d6e9f8": "hover_hintergrund",
     "#1d4ed8": "auswahl_hintergrund",
+    # Weitere Grautoene aus den Widget-Inlinestyles.
+    "#64748b": "text_gedimmt",
+    "#7f8c8d": "text_gedimmt",
+    "#34495e": "hintergrund_seitenleiste",
 }
+
+# Bewusst NICHT zugeordnet: #27ae60, #e74c3c, #c0392b, #f39c12, #d35400 und
+# #8e44ad. Diese Farben tragen Bedeutung - Erfolg, Gefahr, Warnung, Kategorie -
+# und nicht die Rolle einer Flaeche. Sie an ein Designprofil zu koppeln wuerde
+# eine Loeschen-Schaltflaeche gruen faerben, wenn das Profil es so vorgibt.
 
 
 def load_host_theme() -> dict[str, Any] | None:
@@ -84,19 +93,65 @@ def host_scale_factor(theme: dict[str, Any] | None) -> float:
     return max(0.85, min(1.50, size / _REFERENCE_FONT_SIZE))
 
 
-def recolor(css: str, theme: dict[str, Any] | None) -> str:
-    """Ersetzt die Stylesheet-Literale durch die Farben des Hostprofils."""
+def build_color_map(theme: dict[str, Any] | None) -> dict[str, str]:
+    """Literal -> Zielfarbe fuer genau dieses Profil."""
     if not theme:
-        return css
+        return {}
     colors = theme.get("farben")
     if not isinstance(colors, dict):
-        return css
+        return {}
+    mapping: dict[str, str] = {}
     for literal, role in PALETTE_ROLES.items():
         value = str(colors.get(role, "") or "").strip()
-        if not _HEX.fullmatch(value):
-            continue
-        css = re.sub(re.escape(literal), value, css, flags=re.IGNORECASE)
-    return css
+        if _HEX.fullmatch(value):
+            mapping[literal.lower()] = value
+    return mapping
+
+
+def recolor(css: str, theme: dict[str, Any] | None) -> str:
+    """Ersetzt die Stylesheet-Literale durch die Farben des Hostprofils.
+
+    Ein einziger Durchgang ueber alle Literale gleichzeitig. Nacheinander
+    ausgefuehrte Einzelersetzungen wuerden ketten: waere die Zielfarbe des
+    einen Literals selbst ein Literal, ersetzte der naechste Durchlauf sie
+    gleich weiter.
+    """
+    if not css:
+        return css
+    mapping = build_color_map(theme)
+    if not mapping:
+        return css
+    pattern = re.compile("|".join(re.escape(k) for k in mapping), re.IGNORECASE)
+    return pattern.sub(lambda m: mapping[m.group(0).lower()], css)
+
+
+_PATCHED = False
+
+
+def install_inline_theme() -> bool:
+    """Laesst auch Inline-Stylesheets einzelner Widgets dem Hostprofil folgen.
+
+    FPM setzt an rund 150 Stellen ``setStyleSheet`` mit eigenen Farbliteralen.
+    Diese lokalen Stylesheets schlagen das globale, sodass die betroffenen
+    Widgets sonst hell blieben, waehrend der Rest dem Profil folgt. Statt jeden
+    Aufruf einzeln umzuschreiben, laeuft hier jeder Widget-Stylesheet durch
+    dieselbe Farbzuordnung wie das globale.
+
+    Ohne Hostprofil passiert nichts. Nur einmal wirksam.
+    """
+    global _PATCHED
+    if _PATCHED or not load_host_theme():
+        return False
+    from PySide6.QtWidgets import QWidget
+
+    original = QWidget.setStyleSheet
+
+    def themed_set_stylesheet(self, sheet):  # noqa: ANN001 - Qt-Signatur
+        return original(self, recolor(sheet, load_host_theme()))
+
+    QWidget.setStyleSheet = themed_set_stylesheet
+    _PATCHED = True
+    return True
 
 
 def is_dark(theme: dict[str, Any] | None) -> bool:
