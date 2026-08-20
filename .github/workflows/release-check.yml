@@ -1,8 +1,9 @@
 name: Enterprise Release Check
 
+# Läuft bewusst nicht auf Push nach main: beim Release werden main und Tag
+# zusammen gepusht, was sonst zwei parallele Läufe für denselben Stand ergibt.
+# Die vollständigen Gates laufen im taggesteuerten Release-Workflow.
 on:
-  push:
-    branches: [main, master]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
