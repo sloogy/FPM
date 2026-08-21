@@ -44,7 +44,13 @@ def _build_stylesheet(scale: float = 1.0) -> str:
     pad_y = _px(6, scale)
     pad_x = _px(9, scale)
     card_pad_top = _px(18, scale)
-    radius = _px(6, scale)
+    # Abgestufte Radien nach dem Vorbild des BudgetManagers: je groesser die
+    # Flaeche, desto runder die Ecke. Vorher galt ueberall derselbe Wert -
+    # dadurch wirkten Karten so eckig wie Eingabefelder.
+    radius_feld = _px(4, scale)     # Eingaben
+    radius = _px(6, scale)          # Schaltflaechen, allgemeine Flaechen
+    radius_karte = _px(8, scale)    # Gruppen und Karten
+    radius_reiter = _px(10, scale)  # Reiter
     sidebar_w_hint = _px(240, scale)
 
     c = theme.color
@@ -187,7 +193,7 @@ QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateEdit {{
     background-color: {c("eingabe_hintergrund")};
     color: {c("text")};
     border: 1px solid {c("rand")};
-    border-radius: {radius}px;
+    border-radius: {radius_feld}px;
     padding: {pad_y}px {pad_x}px;
     font-size: {base}px;
     min-height: {input_h}px;
@@ -198,7 +204,7 @@ QTextEdit, QPlainTextEdit {{
     background-color: {c("eingabe_hintergrund")};
     color: {c("text")};
     border: 1px solid {c("rand")};
-    border-radius: {radius}px;
+    border-radius: {radius_feld}px;
     padding: {pad_y}px {pad_x}px;
     font-size: {base}px;
     min-height: {_px(58, scale)}px;
@@ -251,7 +257,7 @@ QGroupBox {{
     background-color: {c("karte_hintergrund")};
     color: {c("text")};
     border: 1px solid {c("karte_rand")};
-    border-radius: {_px(7, scale)}px;
+    border-radius: {radius_karte}px;
     margin-top: {_px(12, scale)}px;
     padding: {card_pad_top}px {_px(12, scale)}px {_px(12, scale)}px {_px(12, scale)}px;
     font-weight: bold;
@@ -288,7 +294,7 @@ QSplitter::handle {{ background-color: {c("rand")}; }}
 QSplitter::handle:horizontal {{ width: 1px; }}
 
 /* ── Ausgaben-Tracker Summary / Details ─────────────────── */
-QWidget#summaryCard {{ background: {c("karte_hintergrund")}; border: 1px solid {c("karte_rand")}; border-radius: {_px(8, scale)}px; }}
+QWidget#summaryCard {{ background: {c("karte_hintergrund")}; border: 1px solid {c("karte_rand")}; border-radius: {radius_karte}px; }}
 QLabel#summaryValue {{ font-size: {_px(17, scale)}px; font-weight: 800; color: {c("text")}; border: none; }}
 QLabel#summaryLabel {{ font-size: {_px(10, scale)}px; color: {c("text_gedimmt")}; border: none; }}
 QWidget#detailPanel {{ background: {c("hintergrund_panel")}; border-left: 1px solid {c("rand")}; }}
@@ -306,9 +312,11 @@ QRadioButton {{ font-size: {base}px; spacing: {_px(8, scale)}px; min-height: {_p
 QFormLayout QLabel {{ font-size: {small}px; color: {c("text")}; min-height: {_px(24, scale)}px; }}
 
 /* ── Tabs/List ───────────────────────────────────────────── */
-QTabWidget::pane {{ border: 1px solid {c("rand")}; background: {c("hintergrund_panel")}; }}
+QTabWidget::pane {{ border: 1px solid {c("rand")}; border-radius: {radius_reiter}px;
+    background: {c("hintergrund_panel")}; }}
 QTabBar::tab {{ padding: {_px(9, scale)}px {_px(16, scale)}px; font-size: {base}px; min-height: {_px(28, scale)}px;
-    background: {c("tabelle_alt")}; color: {c("text_gedimmt")}; border: 1px solid {c("rand")}; }}
+    background: {c("tabelle_alt")}; color: {c("text_gedimmt")}; border: 1px solid {c("rand")};
+    border-radius: {radius_reiter}px; margin: {_px(2, scale)}px; }}
 QTabBar::tab:selected {{ background: {c("hintergrund_panel")}; color: {c("text")}; font-weight: bold; }}
 QListWidget {{ background-color: {c("hintergrund_panel")}; color: {c("text")}; border: 1px solid {c("rand")}; }}
 QListWidget::item {{ min-height: {_px(30, scale)}px; font-size: {base}px; }}
