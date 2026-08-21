@@ -1,10 +1,11 @@
-name: Diagnose FPM 1.0.7 promotion
+name: Snapshot recent FPM workflow runs
 
 on:
   push:
     branches:
       - fix/onboarding-theme-1.0.6
     paths-ignore:
+      - '.release/recent-runs.json'
       - '.release/v1.0.7-release-status.txt'
       - '.release/v1.0.7-promote-status.txt'
 
@@ -13,45 +14,22 @@ permissions:
   actions: read
 
 jobs:
-  diagnose:
+  snapshot:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Record promotion run result
+      - name: Snapshot recent workflow runs
         env:
           GH_TOKEN: ${{ github.token }}
-          PROMOTE_SHA: 28626e25f57f70e8db917ffde866e5a81a699c71
         shell: bash
         run: |
           set -euo pipefail
-          run_id=""
-          for _ in $(seq 1 60); do
-            run_id="$(gh run list --limit 50 --json databaseId,headSha,event,workflowName --jq '.[] | select(.headSha == env.PROMOTE_SHA and .event == "push" and .workflowName == "Promote corrected FPM 1.0.7 release") | .databaseId' | head -n1)"
-            if [ -n "$run_id" ]; then
-              break
-            fi
-            sleep 5
-          done
           mkdir -p .release
-          if [ -z "$run_id" ]; then
-            printf 'status=missing\nhead_sha=%s\n' "$PROMOTE_SHA" > .release/v1.0.7-promote-status.txt
-          else
-            set +e
-            gh run watch "$run_id" --exit-status --interval 10
-            rc=$?
-            set -e
-            status="$(gh run view "$run_id" --json status --jq '.status // "unknown"')"
-            conclusion="$(gh run view "$run_id" --json conclusion --jq '.conclusion // "unknown"')"
-            url="$(gh run view "$run_id" --json url --jq '.url // ""')"
-            printf 'status=%s\nconclusion=%s\nrun_id=%s\nhead_sha=%s\nurl=%s\nwatch_rc=%s\n' \
-              "$status" "$conclusion" "$run_id" "$PROMOTE_SHA" "$url" "$rc" \
-              > .release/v1.0.7-promote-status.txt
-          fi
+          gh run list --limit 30 --json databaseId,workflowName,status,conclusion,headSha,event,createdAt,url > .release/recent-runs.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- .release/v1.0.7-promote-status.txt
-          git commit -m "Record FPM v1.0.7 promotion result"
+          git add -- .release/recent-runs.json
+          git commit -m "Snapshot recent FPM workflow runs"
           git push origin HEAD:fix/onboarding-theme-1.0.6
