@@ -9,3 +9,4 @@ typing_extensions>=4.12.0
 
 
 packaging>=23.0         # SemVer-Vergleich für Updater
+cryptography>=43.0,<47.0  # Ed25519-Prüfung der Update-Manifest-Signatur

@@ -219,3 +219,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Update-Signierung
+# Der Vertrauensanker entsteht im Build aus der CI-Variable
+# UPDATE_SIGNING_PUBLIC_KEY_B64 und gehoert nicht ins Repo.
+resources/update_signing_public_key.b64
+# Ausgabeordner von tools/generate_update_signing_key.py - enthaelt den
+# privaten Schluessel. Der darf nie committet werden.
+update-signing-key/

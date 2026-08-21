@@ -92,6 +92,12 @@ jobs:
           python tools/i18n_visible_text_audit.py
           python tools/killcritic_1000_loop_audit.py
 
+      - name: Embed update trust anchor
+        shell: bash
+        env:
+          UPDATE_SIGNING_PUBLIC_KEY_B64: ${{ vars.UPDATE_SIGNING_PUBLIC_KEY_B64 }}
+        run: python tools/materialize_update_public_key.py
+
       - name: Build with PyInstaller
         shell: bash
         run: python -m PyInstaller FPM.spec --noconfirm --clean
@@ -284,10 +290,17 @@ jobs:
             --module-windows "modules/${FPM_MODULE_WINDOWS}" \
             --module-linux "modules/${FPM_MODULE_LINUX}" \
             --out-dir release_assets
+        env:
+          UPDATE_SIGNING_PRIVATE_KEY_B64: ${{ secrets.UPDATE_SIGNING_PRIVATE_KEY_B64 }}
+          UPDATE_SIGNING_PUBLIC_KEY_B64: ${{ vars.UPDATE_SIGNING_PUBLIC_KEY_B64 }}
 
       - name: Verify final release assets, checksums and manifest names
         if: ${{ !contains(github.ref_name, '-') }}
         shell: bash
+        env:
+          # Der Anker wird im build-Job in die App eingebettet; dieser Job hat
+          # ihn nicht auf der Platte und bekommt ihn darum ueber die Umgebung.
+          FPM_UPDATE_PUBLIC_KEY_B64: ${{ vars.UPDATE_SIGNING_PUBLIC_KEY_B64 }}
         run: |
           set -euo pipefail
           (cd release_assets && sha256sum -c SHA256SUMS.txt)
@@ -298,7 +311,19 @@ jobs:
           manifest = json.loads((root / "latest.json").read_text(encoding="utf-8"))
           assert manifest["version"] == os.environ["FPM_APP_VERSION"]
           assert manifest["release_tag"] == os.environ["FPM_RELEASE_TAG"]
+          # Meint Authenticode und die .lpmodule-Pakete - nicht das Manifest.
           assert manifest["signature_policy"] == "allow-unsigned"
+          # Das Manifest selbst muss signiert sein: die ausgelieferte App prueft
+          # fail-closed, ein Release ohne .sig waere fuer jeden Client tot.
+          signature = root / "latest.json.sig"
+          assert signature.is_file(), (
+              "latest.json.sig fehlt - sind UPDATE_SIGNING_PRIVATE_KEY_B64 "
+              "(Secret) und UPDATE_SIGNING_PUBLIC_KEY_B64 (Variable) gesetzt?")
+          import sys
+          sys.path.insert(0, ".")
+          from updater.manifest_signing import verify_manifest_signature
+          verify_manifest_signature(
+              (root / "latest.json").read_bytes(), signature.read_bytes())
           assets = manifest["assets"]
           assert (root / "UNSIGNED_RELEASE.txt").is_file()
           assert assets["windows"]["type"] == "portable-zip"

@@ -36,11 +36,26 @@ datas = [
     (str(ROOT / "docs" / "MANUEL_UTILISATEUR_FR.md"), "docs"),
 ]
 
+# Vertrauensanker fuer die Update-Manifest-Signatur. Der Release-Workflow legt
+# die Datei vorher mit tools/materialize_update_public_key.py an. Fehlt sie,
+# entsteht ein Build, der jedes Update ablehnt - das ist gewollt fail-closed,
+# aber es soll niemandem unbemerkt passieren, darum der Hinweis.
+_update_public_key = ROOT / "resources" / "update_signing_public_key.b64"
+if _update_public_key.is_file():
+    datas.append((str(_update_public_key), "resources"))
+else:
+    print(
+        "Hinweis: Build ohne Update-Vertrauensanker - dieser Stand nimmt keine "
+        "Updates an. Fuer ein Release zuerst "
+        "tools/materialize_update_public_key.py ausfuehren."
+    )
+
 hiddenimports = [
     "sqlalchemy.dialects.sqlite",
     "updater.check_update",
     "updater.apply_update",
     "updater.common",
+    "updater.manifest_signing",
     "packaging.version",
 ]
 

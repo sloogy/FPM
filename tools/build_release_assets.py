@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import stat
 import sys
@@ -344,6 +345,12 @@ def main() -> int:
     parser.add_argument("--module-linux", type=Path)
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--prerelease", action="store_true")
+    parser.add_argument(
+        "--signing-private-key-env", default="UPDATE_SIGNING_PRIVATE_KEY_B64"
+    )
+    parser.add_argument(
+        "--signing-public-key-env", default="UPDATE_SIGNING_PUBLIC_KEY_B64"
+    )
     args = parser.parse_args()
 
     expected_tag = f"v{args.version}"
@@ -484,6 +491,35 @@ def main() -> int:
         encoding="utf-8",
     )
 
+    # Das Manifest traegt die SHA256-Werte aller Artefakte - ohne Signatur
+    # haengt die ganze Kette an nichts. Beide Schluessel muessen zusammen
+    # gesetzt sein: mit nur einem entstuende entweder ein unsigniertes Release
+    # oder eine Signatur, die zu keinem ausgelieferten Client passt.
+    private_key_b64 = os.environ.get(args.signing_private_key_env, "").strip()
+    public_key_b64 = os.environ.get(args.signing_public_key_env, "").strip()
+    if bool(private_key_b64) != bool(public_key_b64):
+        raise SystemExit(
+            "Fuer eine Manifest-Signatur muessen Private- und Public-Key "
+            "gemeinsam gesetzt sein."
+        )
+    if private_key_b64:
+        from updater.manifest_signing import sign_manifest_file
+
+        signature = sign_manifest_file(
+            latest_json,
+            private_key_b64=private_key_b64,
+            expected_public_key_b64=public_key_b64,
+        )
+        print(f"Manifest signiert: {signature.name}")
+    else:
+        # Lokale Testbauten kommen ohne Schluessel aus. Der Release-Workflow
+        # prueft hinterher, dass die Signatur da ist - ein Release ohne sie
+        # wuerde von jedem aktuellen FPM abgelehnt.
+        print(
+            "Update-Signierschluessel nicht gesetzt; latest.json bleibt "
+            "unsigniert und taugt nicht als Release."
+        )
+
     (output_dir / "UNSIGNED_RELEASE.txt").write_text(
         f"FountainPen Manager {args.release_tag}\n"
         "=====================================\n\n"
@@ -493,7 +529,8 @@ def main() -> int:
         "LifePlanner-/LiveManager-.lpmodule-Pakete enthalten keine "
         "component.json.sig und benötigen bei lokaler Installation eine "
         "ausdrückliche Vertrauensbestätigung. Integrität und Downloadnamen "
-        "werden durch SHA256SUMS.txt und latest.json geprüft.\n",
+        "werden durch SHA256SUMS.txt und latest.json geprüft; latest.json "
+        "selbst ist mit latest.json.sig Ed25519-signiert.\n",
         encoding="utf-8",
     )
 

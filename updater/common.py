@@ -30,6 +30,9 @@ from logic.network_security import open_public_http_url
 
 DEFAULT_MANIFEST_URL = "https://github.com/sloogy/FPM/releases/latest/download/latest.json"
 MAX_MANIFEST_BYTES = 1_000_000
+# Eine Ed25519-Signatur in Base64 ist 88 Zeichen. Das Limit ist grosszuegig
+# gegen Zeilenenden und trotzdem eng genug, dass niemand hier etwas ablaedt.
+MAX_SIGNATURE_BYTES = 1_024
 MAX_UPDATE_BYTES = 1_500_000_000
 
 
@@ -282,20 +285,55 @@ def parse_manifest(data: dict) -> Manifest:
     )
 
 
-def fetch_manifest(manifest_url: str = DEFAULT_MANIFEST_URL, timeout_s: int = 10) -> Manifest:
-    """Fetch the release manifest through the central public-network policy."""
+def _fetch_public_bytes(
+    url: str, *, timeout_s: int, limit: int, accept: str, label: str
+) -> bytes:
+    """Lädt eine kleine Datei über die zentrale Netzwerk-Policy."""
     response = open_public_http_url(
-        manifest_url,
+        url,
         timeout_s=timeout_s,
         headers={
             "User-Agent": "FountainPenManager/updater-manifest",
-            "Accept": "application/json",
+            "Accept": accept,
         },
     )
     with response:
-        raw = response.read(MAX_MANIFEST_BYTES + 1)
-    if len(raw) > MAX_MANIFEST_BYTES:
-        raise ValueError("Manifest überschreitet das Größenlimit")
+        raw = response.read(limit + 1)
+    if len(raw) > limit:
+        raise ValueError(f"{label} überschreitet das Größenlimit")
+    if not raw:
+        raise ValueError(f"{label} ist leer")
+    return raw
+
+
+def fetch_manifest(manifest_url: str = DEFAULT_MANIFEST_URL, timeout_s: int = 10) -> Manifest:
+    """Lädt und verifiziert Manifest samt abgetrennter Ed25519-Signatur.
+
+    Die SHA256-Werte im Manifest sichern die Artefakte - das Manifest selbst
+    war bis dahin ungeschützt. Wer es austauschen kann, tauscht die Prüfsummen
+    gleich mit. Darum wird ``latest.json.sig`` mitgeladen und gegen den beim
+    Build eingebetteten Public-Key geprüft.
+
+    Fail-closed: fehlt Signatur oder Schlüssel, gibt es kein Update.
+    """
+    from updater.manifest_signing import SIGNATURE_SUFFIX, verify_manifest_signature
+
+    raw = _fetch_public_bytes(
+        manifest_url,
+        timeout_s=timeout_s,
+        limit=MAX_MANIFEST_BYTES,
+        accept="application/json",
+        label="Manifest",
+    )
+    signature = _fetch_public_bytes(
+        manifest_url + SIGNATURE_SUFFIX,
+        timeout_s=timeout_s,
+        limit=MAX_SIGNATURE_BYTES,
+        accept="application/octet-stream",
+        label="Manifest-Signatur",
+    )
+    verify_manifest_signature(raw, signature)
+
     try:
         data = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:

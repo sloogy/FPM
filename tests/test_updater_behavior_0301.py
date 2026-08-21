@@ -47,20 +47,52 @@ def test_parse_manifest_tolerates_missing_fields():
 
 
 def test_fetch_manifest_uses_central_guard_and_validates(monkeypatch):
+    """Manifest und Signatur laufen beide durch die zentrale Netzwerk-Policy.
+
+    Seit der Signaturpflicht holt fetch_manifest zwei Dateien. Der Test
+    signiert darum mit einem Wegwerfschluessel; die Signaturpruefung selbst
+    steht in test_update_manifest_signature.py.
+    """
+    import base64
+
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+
+    from updater.manifest_signing import (
+        PUBLIC_KEY_ENV,
+        SIGNATURE_SUFFIX,
+        sign_manifest_bytes,
+    )
+
+    schluessel = Ed25519PrivateKey.generate()
+    monkeypatch.setenv(
+        PUBLIC_KEY_ENV,
+        base64.b64encode(
+            schluessel.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+        ).decode("ascii"),
+    )
+
     class FakeResp:
-        def __init__(self, payload):
-            self.payload = payload
+        def __init__(self, inhalt: bytes):
+            self.inhalt = inhalt
         def __enter__(self):
             return self
         def __exit__(self, *args):
             return False
         def read(self, _size):
-            return json.dumps(self.payload).encode("utf-8")
+            return self.inhalt
+
+    def antwort(payload, url: str) -> FakeResp:
+        roh = json.dumps(payload).encode("utf-8")
+        if url.endswith(SIGNATURE_SUFFIX):
+            return FakeResp(sign_manifest_bytes(roh, schluessel))
+        return FakeResp(roh)
 
     calls = {}
     def fake_open(url, *, timeout_s, headers):
-        calls.update(url=url, timeout=timeout_s, headers=headers)
-        return FakeResp({"version": "9.9.9", "assets": {}})
+        if not url.endswith(SIGNATURE_SUFFIX):
+            calls.update(url=url, timeout=timeout_s, headers=headers)
+        return antwort({"version": "9.9.9", "assets": {}}, url)
     monkeypatch.setattr(common, "open_public_http_url", fake_open)
     m = common.fetch_manifest("https://example.invalid/latest.json", timeout_s=5)
     assert m.version == "9.9.9"
@@ -69,7 +101,7 @@ def test_fetch_manifest_uses_central_guard_and_validates(monkeypatch):
 
     monkeypatch.setattr(
         common, "open_public_http_url",
-        lambda *a, **k: FakeResp(["kein", "dict"]),
+        lambda url, **k: antwort(["kein", "dict"], url),
     )
     with pytest.raises(ValueError):
         common.fetch_manifest("https://example.invalid/latest.json")
