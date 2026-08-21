@@ -87,11 +87,23 @@ class BudgetManagerSavingsGoal:
 
 
 def default_bridge_dir() -> Path:
-    """Gemeinsamer Bridge-Ordner mit sicherem Standalone-Fallback."""
+    """Gemeinsamer Bridge-Ordner mit sicherem Standalone-Fallback.
+
+    Im LifePlanner gibt der Host den Ordner vor; er liegt dann im bereits
+    geschützten Profil. Eigenständig landet er im Benutzerverzeichnis - dort
+    wird er beim Anlegen auf 0700 gesetzt, denn was darin liegt, sind
+    Buchungen.
+    """
     override = os.environ.get("LIFEPLANNER_BRIDGE_DIR", "").strip()
     if override:
         return Path(override).expanduser().resolve()
-    return Path.home() / BRIDGE_DIR_NAME
+    ordner = Path.home() / BRIDGE_DIR_NAME
+    if not ordner.exists():
+        ordner.mkdir(parents=True, exist_ok=True)
+        from logic.file_permissions import secure_dir
+
+        secure_dir(ordner)
+    return ordner
 
 
 def default_fpm_to_budgetmanager_path() -> Path:
@@ -217,6 +229,12 @@ def export_expenses_jsonl(
             count += 1
             total += float(record["amount"] or 0.0)
             currencies.add(str(record["currency"] or "CHF"))
+    # Die Datei trägt Beträge, Händler und Beschreibungen. Sie liegt im
+    # Standalone-Betrieb offen im Benutzerverzeichnis; mit dem üblichen umask
+    # wäre sie dort für jedes andere Konto lesbar.
+    from logic.file_permissions import secure_file
+
+    secure_file(out)
     return BudgetExportResult(
         path=out,
         count=count,

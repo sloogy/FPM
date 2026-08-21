@@ -74,3 +74,46 @@ def test_der_inhalt_bleibt_lesbar(tmp_path):
     pfad.write_text("inhalt", encoding="utf-8")
     secure_file(pfad)
     assert pfad.read_text(encoding="utf-8") == "inhalt"
+
+
+# ── Die Bruecke zum BudgetManager ───────────────────────────────────────────
+
+@posix_only
+def test_der_brueckenordner_ist_geschlossen(tmp_path, monkeypatch):
+    """Eigenstaendig liegt er offen im Benutzerverzeichnis. Was darin steht,
+    sind Buchungen mit Betraegen, Haendlern und Beschreibungen."""
+    from logic import budget_export_service as bridge
+
+    monkeypatch.delenv("LIFEPLANNER_BRIDGE_DIR", raising=False)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+
+    ordner = bridge.default_bridge_dir()
+
+    assert ordner.is_dir()
+    assert stat.S_IMODE(ordner.stat().st_mode) == OWNER_ONLY_DIR
+
+
+@posix_only
+def test_die_bridge_datei_gehoert_nur_dem_eigentuemer(tmp_path):
+    from logic.budget_export_service import export_expenses_jsonl
+
+    class _Ausgabe:
+        id = 1
+        item_type = "pen"
+        currency = "CHF"
+        total = 320.0
+        amount = 320.0
+        shipping = 0
+        customs = 0
+        purchase_date = "2026-07-04"
+        description = "Pilot Custom 823"
+        vendor = "Fontoplumo"
+        notes = ""
+        order_number = ""
+        payment_method = ""
+        pen_id = ink_id = nib_id = paper_id = None
+
+    ergebnis = export_expenses_jsonl([_Ausgabe()], tmp_path / "out.jsonl")
+
+    assert stat.S_IMODE(ergebnis.path.stat().st_mode) == OWNER_ONLY_FILE
+    assert not is_world_accessible(ergebnis.path)
