@@ -407,6 +407,50 @@ def import_budgetmanager_proposals(session: Any, proposals: Iterable[FpmImportPr
     return count
 
 
+@dataclass(frozen=True)
+class BridgeDateiBefund:
+    """Was in einer der drei Brückendateien steht."""
+
+    name: str
+    pfad: Path
+    vorhanden: bool
+    eintraege: int
+
+
+def bridge_zustand() -> tuple[Path, tuple[BridgeDateiBefund, ...]]:
+    """Der aktive Brückenordner und was darin liegt.
+
+    Warum das sichtbar sein muss: Der Ordner hängt davon ab, wie FPM gestartet
+    wurde. Im LifePlanner gibt der Host ihn über LIFEPLANNER_BRIDGE_DIR vor,
+    eigenständig liegt er im Benutzerverzeichnis. Wer beides gemischt nutzt,
+    hat zwei getrennte Brücken - und wundert sich, warum nichts ankommt.
+
+    Unterschieden wird zwischen "Datei fehlt" (das andere Programm hat noch
+    nichts geschrieben) und "leer": Fehlt sie, liegt es dort und nicht hier.
+    """
+    ordner = default_bridge_dir()
+    befunde = []
+    for name, dateiname, schemas in (
+        ("FPM → BudgetManager", FPM_TO_BUDGETMANAGER_FILE, {"budgetmanager.import.v1"}),
+        ("BudgetManager → FPM", BUDGETMANAGER_TO_FPM_FILE, {"fpm.import.v1", "fpm.expense.v1"}),
+        ("Sparziele → FPM", BUDGETMANAGER_SAVINGS_GOALS_FILE, set(SAVINGS_GOAL_SCHEMAS)),
+    ):
+        pfad = ordner / dateiname
+        if not pfad.is_file():
+            befunde.append(BridgeDateiBefund(name, pfad, False, 0))
+            continue
+        try:
+            anzahl = sum(
+                1 for rec in _iter_jsonl_records(pfad) if rec.get("schema") in schemas
+            )
+        except ValueError:
+            # Eine unlesbare Zeile soll die Anzeige nicht sprengen; dass etwas
+            # nicht stimmt, sieht man an der Null.
+            anzahl = 0
+        befunde.append(BridgeDateiBefund(name, pfad, True, anzahl))
+    return ordner, tuple(befunde)
+
+
 def load_budgetmanager_savings_goals(
     path: str | Path | None = None, *, visible_only: bool = True
 ) -> list[BudgetManagerSavingsGoal]:

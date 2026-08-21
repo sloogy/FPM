@@ -713,6 +713,21 @@ class SettingsWidget(QWidget):
         bm_import_btn = self._styled_button(t('settings.budget_import_button'), 'primary')
         bm_import_btn.clicked.connect(self._import_budgetmanager_jsonl)
         bm_layout.addWidget(bm_import_btn)
+
+        # Zustand der Bruecke. Ohne diese Anzeige ist nicht zu erkennen, ob der
+        # Austausch ueberhaupt stattfindet - und vor allem nicht, welcher
+        # Ordner gerade gilt. Wer FPM mal eigenstaendig und mal im LifePlanner
+        # startet, hat zwei getrennte Bruecken und sieht die andere nie.
+        self._bridge_status = QLabel()
+        self._bridge_status.setWordWrap(True)
+        self._bridge_status.setStyleSheet(theme.hint_text())
+        bm_layout.addWidget(self._bridge_status)
+        bm_status_btn = self._styled_button(
+            t('settings.bridge_status_refresh'), 'secondary')
+        bm_status_btn.clicked.connect(self._refresh_bridge_status)
+        bm_layout.addWidget(bm_status_btn)
+        bm_layout.addWidget(self._note(t('settings.bridge_status_hint')))
+        self._refresh_bridge_status()
         root.addWidget(bm_grp)
 
         root.addWidget(self._note(t('ui.settings_widget.legacy_exact.text_027')))
@@ -1163,6 +1178,24 @@ class SettingsWidget(QWidget):
             QMessageBox.critical(self, t('ui.settings_widget.fehler_a1fcc21e'), str(e))
         finally:
             session.close()
+
+    def _refresh_bridge_status(self) -> None:
+        """Zeigt Ordner und Inhalt der drei Brueckendateien."""
+        from logic.budget_export_service import bridge_zustand
+
+        try:
+            ordner, befunde = bridge_zustand()
+        except OSError as fehler:
+            self._bridge_status.setText(str(fehler))
+            return
+        zeilen = [t('settings.bridge_status_folder', pfad=ordner)]
+        for befund in befunde:
+            if befund.vorhanden:
+                zeilen.append(t('settings.bridge_status_entries',
+                                name=befund.name, anzahl=befund.eintraege))
+            else:
+                zeilen.append(t('settings.bridge_status_missing', name=befund.name))
+        self._bridge_status.setText("\n".join(zeilen))
 
     def _import_budgetmanager_jsonl(self):
         default_path = default_budgetmanager_to_fpm_path()

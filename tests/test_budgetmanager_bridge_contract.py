@@ -252,3 +252,48 @@ def test_die_oberflaeche_ruft_ueberall_die_sichere_variante(tmp_path):
             if re.search(r"sync_default_outbox_from_session(?!_safely)", zeile):
                 strikt.append(f"{datei.name}:{nr}")
     assert not strikt, f"strikter Bridge-Sync in der Oberflaeche: {strikt}"
+
+
+# ── Der Zustand der Bruecke ist sichtbar ────────────────────────────────────
+
+def test_der_zustand_nennt_alle_drei_dateien(tmp_path, monkeypatch):
+    """Ohne diese Anzeige ist nicht zu erkennen, ob der Austausch stattfindet -
+    und vor allem nicht, welcher Ordner gerade gilt."""
+    from logic.budget_export_service import bridge_zustand
+
+    monkeypatch.setenv("LIFEPLANNER_BRIDGE_DIR", str(tmp_path))
+    ordner, befunde = bridge_zustand()
+
+    assert ordner == tmp_path
+    assert len(befunde) == 3
+    assert all(not b.vorhanden for b in befunde)
+
+
+def test_der_zustand_zaehlt_die_eintraege(tmp_path, monkeypatch):
+    from logic.budget_export_service import bridge_zustand
+
+    monkeypatch.setenv("LIFEPLANNER_BRIDGE_DIR", str(tmp_path))
+    _jsonl(tmp_path, "budgetmanager_savings_goals.jsonl",
+           BUDGETMANAGER_SPARZIEL_MANIFEST, BUDGETMANAGER_SPARZIEL)
+    _jsonl(tmp_path, "budgetmanager_to_fpm.jsonl", BUDGETMANAGER_AUSGABE)
+
+    _, befunde = bridge_zustand()
+    nach_name = {b.name: b for b in befunde}
+
+    assert nach_name["Sparziele → FPM"].eintraege == 1
+    assert nach_name["BudgetManager → FPM"].eintraege == 1
+    # Die dritte gibt es noch nicht - das ist etwas anderes als leer.
+    assert not nach_name["FPM → BudgetManager"].vorhanden
+
+
+def test_eine_kaputte_zeile_sprengt_die_anzeige_nicht(tmp_path, monkeypatch):
+    from logic.budget_export_service import bridge_zustand
+
+    monkeypatch.setenv("LIFEPLANNER_BRIDGE_DIR", str(tmp_path))
+    (tmp_path / "budgetmanager_to_fpm.jsonl").write_text(
+        "kein json\n", encoding="utf-8")
+
+    _, befunde = bridge_zustand()
+    nach_name = {b.name: b for b in befunde}
+    assert nach_name["BudgetManager → FPM"].vorhanden
+    assert nach_name["BudgetManager → FPM"].eintraege == 0
