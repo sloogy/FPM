@@ -1,6 +1,8 @@
 """v1.0.3 release-readiness hardening checks."""
 from pathlib import Path
 
+from app_info import APP_VERSION
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -9,14 +11,14 @@ def read(rel: str) -> str:
 
 
 def test_readme_and_windows_docs_are_current_version():
-    assert "# FountainPen Manager v1.0.3" in read("README.md")
+    assert f"# FountainPen Manager v{APP_VERSION}" in read("README.md")
     for rel in (
         "docs/WINDOWS_RELEASE_DE.md",
         "docs/WINDOWS_RELEASE_EN.md",
         "docs/WINDOWS_RELEASE_FR.md",
     ):
         text = read(rel)
-        assert "1.0.3" in text
+        assert APP_VERSION in text
         assert "0.2.67" not in text
         assert "FPM_DATA_DIR" in text
 

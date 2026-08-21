@@ -1,41 +1,70 @@
-# v1.0.3 – INLINE-STYLES FOLGEN DEM DESIGNPROFIL
+## 1.0.4 – Gemeinsamer Designkatalog
 
-- Die rund 150 `setStyleSheet`-Aufrufe einzelner Widgets führten eigene Farbliterale und schlugen damit das globale Stylesheet. Bei einem dunklen Profil blieben diese Elemente hell, während der Rest wechselte. `install_inline_theme()` schickt jeden Widget-Stylesheet jetzt durch dieselbe Farbzuordnung wie das globale.
-- **Fehler behoben:** `recolor()` ersetzte die Literale nacheinander und konnte dabei ketten — war die Zielfarbe des einen Literals selbst ein Literal, ersetzte der nächste Durchlauf sie gleich weiter. Aus `#f0f3f7` wurde so über `#ffffff` fälschlich die Panelfarbe. Die Ersetzung läuft jetzt in einem einzigen Durchgang.
-- Weitere Grautöne der Widgets (`#64748b`, `#7f8c8d`, `#34495e`) folgen dem Profil.
-- Bewusst unverändert: `#27ae60`, `#e74c3c`, `#c0392b`, `#f39c12`, `#d35400` und `#8e44ad`. Diese Farben tragen Bedeutung — Erfolg, Gefahr, Warnung, Kategorie — und nicht die Rolle einer Fläche. Eine Löschen-Schaltfläche darf nicht grün werden, weil ein Profil es so vorgibt.
-- Ohne LifePlanner ändert sich weiterhin nichts; der Patch wird dann gar nicht erst installiert.
+### Ein gemeinsamer Designkatalog
 
-# v1.0.2 – RELEASEGATE REPARIERT
+LifePlanner, BudgetManager, FountainPen Manager und FreizeitManager liefern
+jetzt dieselben **26 Designs** aus — byteweise dieselben Profildateien, erzeugt
+und geprüft von `tools/design_sync.py`.
 
-- Der i18n-Audit stufte die Diagnosemeldung in `ui/host_theme.py` als sichtbaren UI-Text ein und brach den Linux-Releasejob von v1.0.1 ab. Es ist eine reine Logmeldung; sie ist jetzt englisch und als solche gekennzeichnet.
-- Funktional identisch zu v1.0.1, dessen Release dadurch nie veröffentlicht wurde.
+**Warum das nötig war.** Vorher kannten BudgetManager und LifePlanner 26 Designs
+mit 29 Rollen, FPM und FreizeitManager sieben mit 38–40. Wer im LifePlanner ein
+Design wählte, das ein Modul nicht selbst mitbrachte, bekam dort dessen
+Hintergrund, aber Standardblau für Akzent, Karten und Statusfarben — was der
+Host nicht mitliefert, fällt im Modul auf das eingebaute Profil zurück. Und drei
+Designs trugen in beiden Lagern verschiedene Namen (`Kontrast - Schwarz/Weiß`
+gegen `Kontrast Schwarzweiss`, `Hell - Warm (Sepia)` gegen `Warm Sepia - Hell`,
+`Dunkel - OLED (Kontrastarm)` gegen `OLED Schwarz`), sodass das Modul das
+Hostprofil unter einem Namen suchte, den es selbst nicht führte.
 
-# v1.0.1 – ZENTRALE DARSTELLUNG IM LIFEPLANNER
+- **55 Rollen je Profil** — ein Kern von 33 für alle Programme plus die
+  Bedeutungsfarben der einzelnen. Fehlende Rollen wurden nicht erfunden, sondern
+  aus vorhandenen Farben desselben Profils abgeleitet; handverlesene Werte
+  blieben unangetastet. Wo zwei Programme dieselbe Rolle unterschiedlich
+  führten, gilt der Wert des Hosts.
+- **Der Name des Hosts gilt.** Gespeicherte Einstellungen lösen über Aliase
+  weiterhin auf.
+- **Die Schriftgröße bedeutet überall dasselbe:** 10 heißt normal. Der
+  FreizeitManager zeichnet dabei weiterhin 14 Punkt und rechnet den gemeinsamen
+  Wert als Faktor darauf um.
 
-- FPM folgt im LifePlanner dem dort zentral gewählten Designprofil: Hauptfenster, Seitenleiste, Toolbar, Tabellen, Eingabefelder, Karten und Dialoge übernehmen dessen Farben.
-- Die Schriftgröße des Profils wirkt als Skalierungsfaktor auf das bestehende UI-Scaling. Der Standardwert 10 ergibt exakt das bisherige Schriftbild.
-- Neu: `ui/host_theme.py` liest das Profil aus `LIFEPLANNER_THEME_FILE` (Format `lifeplanner.theme.v1`). `PALETTE_ROLES` ordnet jedem Farbliteral des Stylesheets die Rolle zu, die es dort tatsächlich hat, statt das Stylesheet vollständig umzubauen.
-- **Ohne LifePlanner ändert sich nichts.** Ist die Variable leer, liefert `get_stylesheet()` unverändert die bisherigen Farben; ein Regressionstest sichert das ab.
-- Nicht enthalten: Inline-`setStyleSheet`-Aufrufe einzelner Widgets führen weiterhin eigene Farben und folgen dem Profil noch nicht.
+### Lesbarkeit ist jetzt Bedingung, nicht Zufall
 
-# v1.0.0 – EXECUTE-BIT-FIX UND ERSTER STABILER RELEASE
+- **4,5:1 für jede Schrift auf jedem Grund** — die strengste der vier bisherigen
+  Schwellen, übernommen aus dem BudgetManager.
+- **Die Seitenleiste folgt der Helligkeit des Profils.** Schrift, die auf ihr
+  nicht lesbar ist, wird verworfen und neu abgeleitet — in „Solarized – Hell“
+  war sie exakt die Farbe der Leiste selbst.
+- **Signalfarben heben sich mit mindestens 2,6:1 von der Karte ab.** Ein
+  abgeleitetes Gelb erreichte 1,77:1 und war als Ampelfarbe wertlos.
+- **Gedimmte Schrift unterscheidet sich messbar von der normalen.** In
+  „Solarized – Dunkel“ waren `text` und `text_gedimmt` buchstäblich derselbe Wert.
+- **Farbfehlsichtigkeit wird geprüft.** Erfolg/Warnung/Gefahr, die Budget-Typen,
+  die vier FPM-Bereiche und die fünf Dringlichkeitsstufen müssen auch bei
+  Protanopie, Deuteranopie und Tritanopie unterscheidbar bleiben (Simulation nach
+  Viénot/Brettel/Mollon 1999). Vorher waren **348 von 1716 Farbpaaren** nicht
+  auseinanderzuhalten, teils sogar identisch — jetzt keines. Repariert wird über
+  Helligkeit und Sättigung, nie über den Farbton; der geht dabei gerade verloren.
 
-- Das veröffentlichte Linux-`.lpmodule` speicherte die Programmdatei nur als `0644`. Im LifePlanner installiert, scheiterte der Modulstart mit `[Errno 13] Keine Berechtigung`.
-- Ursache: CI holt die geprüfte Runtime über `actions/download-artifact`, das keine Unix-Rechte erhält. Das Paket übernahm diesen Modus unverändert.
-- `build_lifeplanner_module.py` schreibt das Execute-Bit der in `module.json` deklarierten Programmdatei jetzt direkt in das Archiv statt es vom Dateisystem zu übernehmen. Das ist notwendig, weil das Linux-Modul auf einem Windows-Runner gepackt wird, wo `chmod` kein Execute-Bit setzen kann. Die Leserechte werden in die Ausführrechte gespiegelt; setuid/setgid/sticky werden nie eingeführt.
-- Fehlt die deklarierte Programmdatei im Payload, bricht der Build ab, statt ein unstartbares Paket zu veröffentlichen.
-- Der Releaseworkflow prüft die Ausführbarkeit jetzt echt: `test -x` auf die Hostinstallation und eine Modusprüfung im gebauten `.lpmodule`. Bisher wurde nur `test -f` geprüft, weshalb der Fehler nie auffiel.
-- Version auf 1.0.0 angehoben.
+### Werkzeug
 
-# v0.3.05 – ENTERPRISE + LIFEPLANNER RELEASE PIPELINE
+- `tools/design_sync.py check` prüft die eigenen Profile, `build` erzeugt den
+  Katalog in allen vier Programmen, `preview` schreibt eine HTML-Übersicht (mit
+  den Signalfarben, wie Farbfehlsichtige sie sehen), und `new --name … --akzent …`
+  baut aus einer Akzentfarbe ein vollständiges, regelkonformes Design.
+- **`build` ist ein Fixpunkt.** Jede Profildatei führt mit, welche Rollen erzeugt
+  (`_abgeleitet`) und welche nur nachjustiert wurden (`_vorlage`) — sonst wanderte
+  der Katalog mit jedem Lauf ein Stück weiter, statt reproduzierbar zu sein.
+- `tests/test_shared_design.py` hält den Katalog zusammen;
+  `docs/GEMEINSAMES_DESIGN.md` erklärt Aufbau und Regeln.
 
-- LifePlanner-Modulbau in die vollständige Enterprise-Release-Pipeline integriert.
-- Separate Modul-Release-Pipeline entfernt; GitHub Release wird nur noch im zentralen Publishjob erzeugt.
-- Module werden ausschließlich aus zuvor geprüften und kryptografisch signierten Runtime-Artefakten gebaut.
-- App-Version, Tag, module.json und Assetnamen werden aus einer zentralen Versionsquelle abgeleitet und geprüft.
-- LifePlanner-Übersetzungsschlüssel in DE/EN/FR korrekt unter `settings` verschachtelt.
-- Echte Modulbau-, Signatur-, Manipulations- und Host-Installationstests ergänzt.
+
+### Weiteres
+- Die eingebauten Rückfallprofile heißen jetzt wie der Katalog: `Standard - Hell`
+  und `Standard - Dunkel`.
+- FPMs dunkle Seitenleiste in hellen Designs weicht der gemeinsamen Regel.
+- `tools/sync_version.py` zieht jetzt auch README und die drei
+  Windows-Anleitungen nach; die Release-Gates lesen die Version aus
+  `app_info.APP_VERSION`, statt sie einzutragen.
 
 ## LifePlanner compatibility integration
 

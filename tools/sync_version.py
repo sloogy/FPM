@@ -9,6 +9,8 @@ Aktualisiert/prueft:
 - module.json
 - latest.json.template
 - docs/latest.json.template
+- README.md (Titelzeile)
+- docs/WINDOWS_RELEASE_{DE,EN,FR}.md
 """
 from __future__ import annotations
 
@@ -167,6 +169,50 @@ def sync_latest_template(rel_path: str, check: bool) -> bool:
     return True
 
 
+def sync_readme(check: bool) -> bool:
+    """Die Titelzeile der README. Aeltere Versionsnummern im Text bleiben.
+
+    Sie stehen dort als Verlauf ("Release-Fokus v1.0.0") und waeren als
+    Versionsangabe falsch ersetzt.
+    """
+    p = ROOT / "README.md"
+    if not p.exists():
+        return True
+    src = p.read_text(encoding="utf-8")
+    new = re.sub(rf"^# {re.escape(APP_NAME)} v\d+\.\d+\.\d+",
+                 f"# {APP_NAME} v{APP_VERSION}", src, count=1, flags=re.MULTILINE)
+    ok = new == src
+    if check or ok:
+        return ok
+    p.write_text(new, encoding="utf-8")
+    return True
+
+
+def sync_windows_docs(check: bool) -> bool:
+    """Die drei Windows-Anleitungen nennen die Version im Fliesstext."""
+    ok = True
+    for name in ("DE", "EN", "FR"):
+        p = ROOT / "docs" / f"WINDOWS_RELEASE_{name}.md"
+        if not p.exists():
+            continue
+        src = p.read_text(encoding="utf-8")
+        # Nur die aktuelle Reihe anfassen: 1.0.x wird zu APP_VERSION, aeltere
+        # Nebenversionen bleiben als Verlauf stehen.
+        major_minor = APP_VERSION.rsplit(".", 1)[0]
+        # Weder Wortgrenze noch Punktverbot am Rand: die Version steht dort
+        # als "v1.0.3" mitten im Wort und als "_1.0.3.exe" vor einer Endung.
+        # Der Blick nach vorn wehrt nur laengere Versionen ab (1.0.30, 1.0.3.4).
+        new = re.sub(rf"(?<![\d.]){re.escape(major_minor)}\.\d+(?!\.?\d)",
+                     APP_VERSION, src)
+        if new == src:
+            continue
+        ok = False
+        if not check:
+            p.write_text(new, encoding="utf-8")
+            ok = True
+    return ok
+
+
 def main() -> int:
     check = "--check" in sys.argv
     results = {
@@ -176,6 +222,8 @@ def main() -> int:
         "module.json": sync_module_manifest(check),
         "latest.json.template": sync_latest_template("latest.json.template", check),
         "docs/latest.json.template": sync_latest_template("docs/latest.json.template", check),
+        "README.md": sync_readme(check),
+        "docs/WINDOWS_RELEASE_*.md": sync_windows_docs(check),
     }
     if check:
         bad = [name for name, ok in results.items() if not ok]

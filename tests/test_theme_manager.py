@@ -61,8 +61,8 @@ def test_jedes_profil_liefert_jede_rolle(name):
 def test_fehlende_rolle_faellt_auf_die_passende_helligkeit_zurueck():
     """Ein dunkles Profil darf nie eine helle Rueckfallfarbe bekommen."""
     sparse = ThemeProfile("Knapp", {"modus": MODE_DARK})
-    assert sparse.color("hintergrund_app") == BUILTIN_PROFILES["Standard Dunkel"]["hintergrund_app"]
-    assert sparse.color("text") == BUILTIN_PROFILES["Standard Dunkel"]["text"]
+    assert sparse.color("hintergrund_app") == BUILTIN_PROFILES["Standard - Dunkel"]["hintergrund_app"]
+    assert sparse.color("text") == BUILTIN_PROFILES["Standard - Dunkel"]["text"]
 
 
 def test_kaputtes_profil_wird_uebersprungen_nicht_verschwiegen(tmp_path, monkeypatch):
@@ -109,7 +109,7 @@ def test_hostprofil_wird_zu_einem_vollwertigen_profil():
     assert "text" not in payload
     # Was fehlt, kommt aus dem dunklen Standard - nicht aus dem hellen.
     profile = ThemeProfile("X", payload)
-    assert profile.color("text") == BUILTIN_PROFILES["Standard Dunkel"]["text"]
+    assert profile.color("text") == BUILTIN_PROFILES["Standard - Dunkel"]["text"]
 
 
 def test_programmstandard_ist_immer_aufloesbar():

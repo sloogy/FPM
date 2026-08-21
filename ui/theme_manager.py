@@ -82,7 +82,7 @@ COLOR_KEYS = (
 )
 
 BUILTIN_PROFILES: dict[str, dict[str, Any]] = {
-    "Standard Hell": {
+    "Standard - Hell": {
         "modus": MODE_LIGHT,
         "hintergrund_app": "#f0f3f7",
         "hintergrund_panel": "#ffffff",
@@ -123,7 +123,7 @@ BUILTIN_PROFILES: dict[str, dict[str, Any]] = {
         "bereich_aktivitaet": "#2563eb",
         "schriftgroesse": DEFAULT_FONT_SIZE,
     },
-    "Standard Dunkel": {
+    "Standard - Dunkel": {
         "modus": MODE_DARK,
         "hintergrund_app": "#0f172a",
         "hintergrund_panel": "#1e293b",
@@ -169,10 +169,21 @@ BUILTIN_PROFILES: dict[str, dict[str, Any]] = {
     },
 }
 
-DEFAULT_PROFILE = "Standard Hell"
+DEFAULT_PROFILE = "Standard - Hell"
 
 # Umbenannte Profile: alte Einstellung weiterhin aufloesen.
-ALIASES: dict[str, str] = {}
+ALIASES: dict[str, str] = {
+    # Dieselben Designs trugen in den Programmen verschiedene Namen - wer im
+    # LifePlanner "Kontrast - Schwarz/Weiss" waehlte, fand hier nur
+    # "Kontrast Schwarzweiss" und bekam deshalb ein halb uebernommenes Design.
+    # Ab jetzt gilt der Name des Hosts; gespeicherte Einstellungen loesen
+    # weiterhin auf.
+    "Standard Hell": "Standard - Hell",
+    "Standard Dunkel": "Standard - Dunkel",
+    "Kontrast Schwarzweiss": "Kontrast - Schwarz/Weiß",
+    "Warm Sepia - Hell": "Hell - Warm (Sepia)",
+    "OLED Schwarz": "Dunkel - OLED (Kontrastarm)",
+}
 
 
 @dataclass
@@ -209,7 +220,7 @@ class ThemeProfile:
         value = self.data.get(key)
         if is_hex_color(value):
             return str(value).strip()
-        fallback = BUILTIN_PROFILES["Standard Dunkel" if self.is_dark else "Standard Hell"]
+        fallback = BUILTIN_PROFILES["Standard - Dunkel" if self.is_dark else "Standard - Hell"]
         return str(fallback.get(key, "#808080"))
 
     def to_dict(self) -> dict[str, Any]:

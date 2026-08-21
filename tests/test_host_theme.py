@@ -16,7 +16,10 @@ def _fresh_theme():
     ThemeManager.reset()
 
 
-def _profile(tmp_path, name="Nord - Dunkel", modus="dunkel", size=10, **farben):
+# Bewusst ein Name, den FPM nicht selbst mitliefert: Kennt FPM das Profil,
+# hat die eigene, vollstaendige Fassung Vorrang - dann pruefte der Test die
+# lokale Datei statt der Uebergabe vom Host.
+def _profile(tmp_path, name="Host-Design", modus="dunkel", size=10, **farben):
     path = tmp_path / "theme.json"
     path.write_text(json.dumps({
         "schema": "lifeplanner.theme.v1",
@@ -35,15 +38,19 @@ def test_without_host_the_local_profile_applies(monkeypatch):
     Genau daran lag es, dass ein dunkles Design im eigenstaendigen Betrieb
     gar nicht erst zur Verfuegung stand.
     """
-    from ui.theme_manager import BUILTIN_PROFILES, DEFAULT_PROFILE
+    from ui.theme_manager import DEFAULT_PROFILE, ThemeManager
 
     monkeypatch.delenv("LIFEPLANNER_THEME_FILE", raising=False)
+    ThemeManager.reset()
     css = get_stylesheet()
     assert load_host_theme() is None
-    standard = BUILTIN_PROFILES[DEFAULT_PROFILE]
-    assert standard["hintergrund_app"] in css
-    assert standard["text"] in css
-    assert standard["akzent"] in css
+    # Das Standardprofil kommt aus dem gemeinsamen Katalog, nicht mehr aus dem
+    # eingebauten Rueckfall - der greift nur noch, wenn keine Datei da ist.
+    standard = ThemeManager.instance().get_profile(DEFAULT_PROFILE)
+    assert standard is not None
+    assert standard.color("hintergrund_app") in css
+    assert standard.color("text") in css
+    assert standard.color("akzent") in css
     # Keine Farbe mehr, die kein Profil kennt.
     assert "#3498db" not in css
 
@@ -53,6 +60,25 @@ def test_host_profile_recolours_main_window_and_accent(monkeypatch, tmp_path):
     css = get_stylesheet()
     assert "#2e3440" in css and "#d8dee9" in css and "#88c0d0" in css
     assert "#f0f3f7" not in css and "#3498db" not in css
+
+
+def test_a_design_fpm_ships_itself_wins_over_the_host_excerpt(monkeypatch, tmp_path):
+    """Der Host liefert einen Auszug, FPM das vollstaendige Profil.
+
+    Deshalb hat die eigene Fassung Vorrang - sonst faellt alles, was der Host
+    nicht mitschickt, auf das eingebaute Standardprofil zurueck.
+    """
+    from ui.theme_manager import ThemeManager
+
+    monkeypatch.setenv("LIFEPLANNER_THEME_FILE",
+                       str(_profile(tmp_path, name="Nord - Dunkel")))
+    ThemeManager.reset()
+    profile = ThemeManager.instance().current_profile()
+    assert profile.name == "Nord - Dunkel"
+    local = ThemeManager.instance().get_profile("Nord - Dunkel")
+    assert profile.color("text") == local.color("text")
+    # Und zwar vollstaendig: auch Rollen, die der Host gar nicht mitschickt.
+    assert profile.color("karte_rand") == local.color("karte_rand")
 
 
 def test_font_size_drives_the_scale_factor():
@@ -92,11 +118,11 @@ def test_recolor_without_argument_uses_the_active_profile(monkeypatch):
 
     Die Inline-Stylesheets der Widgets laufen genau so hier durch.
     """
-    from ui.theme_manager import BUILTIN_PROFILES, DEFAULT_PROFILE
+    from ui.theme_manager import DEFAULT_PROFILE, ThemeManager
 
     monkeypatch.delenv("LIFEPLANNER_THEME_FILE", raising=False)
     ThemeManager.reset()
-    expected = BUILTIN_PROFILES[DEFAULT_PROFILE]["hintergrund_app"]
+    expected = ThemeManager.instance().get_profile(DEFAULT_PROFILE).color("hintergrund_app")
     assert recolor("background: #f0f3f7;") == f"background: {expected};"
 
 

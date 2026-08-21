@@ -1,12 +1,17 @@
 """Release-hardening checks for GitHub-ready source packages."""
 from pathlib import Path
 
+from app_info import APP_VERSION
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_release_version_metadata_is_current():
+    """Die Version steht in app_info.py - hier wird nur geprueft, dass sie
+    dort als Literal steht und nicht berechnet wird. Der Wert selbst kommt aus
+    derselben Quelle, damit ein Release keine Testdatei zu aendern zwingt."""
     src = (ROOT / "app_info.py").read_text(encoding="utf-8")
-    assert 'APP_VERSION = "1.0.3"' in src
+    assert f'APP_VERSION = "{APP_VERSION}"' in src
     assert 'APP_BUILD = "enterprise-lifeplanner-pipeline"' in src
 
 
