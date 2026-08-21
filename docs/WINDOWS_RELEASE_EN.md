@@ -4,12 +4,12 @@
 
 This release produces two Windows artifacts, following the BudgetTool release model:
 
-- `FountainPenManager-v1.0.4-portable-windows.zip`
-- `FountainPenManager_Setup_1.0.4.exe`
+- `FountainPenManager-v1.0.5-portable-windows.zip`
+- `FountainPenManager_Setup_1.0.5.exe`
 
 It also creates:
 
-- `FountainPenManager_Setup_1.0.4.zip`
+- `FountainPenManager_Setup_1.0.5.zip`
 - `latest.json`
 - `SHA256SUMS.txt`
 
@@ -54,8 +54,8 @@ The workflow `.github/workflows/windows-release.yml` builds on `windows-latest`:
 5. SHA256SUMS and `latest.json`
 6. Artifact upload and GitHub Release upload for tags
 
-A numbered tag such as `v1.0.4-rc.2` runs the real Windows/Linux builds, installer, and both LifePlanner/LiveManager modules without signing keys. The results are published as a clearly marked unsigned GitHub Prerelease without `latest.json`. The exact final tag `v1.0.4` publishes a normal unsigned release after the same gates, including `latest.json` and `UNSIGNED_RELEASE.txt`. Local `.lpmodule` installation requires explicit trust confirmation.
+A numbered tag such as `v1.0.5-rc.2` runs the real Windows/Linux builds, installer, and both LifePlanner/LiveManager modules without signing keys. The results are published as a clearly marked unsigned GitHub Prerelease without `latest.json`. The exact final tag `v1.0.5` publishes a normal unsigned release after the same gates, including `latest.json` and `UNSIGNED_RELEASE.txt`. Local `.lpmodule` installation requires explicit trust confirmation.
 
-## Enterprise release gate v1.0.4
+## Enterprise release gate v1.0.5
 
 Official tagged releases are built only from the separate hash locks `constraints-windows.lock` and `constraints-linux.lock`. The Windows application, installer, and `.lpmodule` files are explicitly unsigned for this release; signing secrets are not required. Missing locks, CI gates, checksums, warnings, or host test installations stop the workflow.

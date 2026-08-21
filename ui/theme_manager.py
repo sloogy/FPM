@@ -378,15 +378,19 @@ class ThemeManager:
         Stylesheet-Aufbau -, gilt ebenfalls der Standard: das Hostprofil selbst
         braucht keine Datenbank, nur diese Frage.
         """
+        from sqlalchemy.exc import SQLAlchemyError
+
         from database.db import get_session
         from database.models import AppSettings
         try:
+            # get_session wirft RuntimeError, solange init_db nicht gelaufen ist.
             session = get_session()
-        except Exception:
+        except RuntimeError:
             return True
         try:
             return str(AppSettings.get(session, SETTING_FOLLOW_SHARED, "1")) not in ("0", "false")
-        except Exception:
+        except SQLAlchemyError:
+            # Die Datei ist da, die Tabelle noch nicht - beim ersten Start.
             return True
         finally:
             session.close()
@@ -426,6 +430,8 @@ class ThemeManager:
         Reihenfolge: gemeinsames Theme des Hosts (wenn eingeschaltet und
         vorhanden), sonst die lokale Wahl, sonst das eingebaute helle Profil.
         """
+        from sqlalchemy.exc import SQLAlchemyError
+
         if self._current is not None:
             return self._current
 
@@ -439,7 +445,7 @@ class ThemeManager:
         if profile is None:
             try:
                 profile = self.get_profile(self.current_name())
-            except Exception as exc:
+            except (RuntimeError, SQLAlchemyError) as exc:
                 # Beim ersten Stylesheet-Aufbau ist die Datenbank noch zu.
                 # Dann gilt das Standardprofil - aber es wird NICHT gemerkt,
                 # sonst bliebe die Sitzung darauf stehen, obwohl der Nutzer

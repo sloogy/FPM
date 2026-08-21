@@ -1,3 +1,13 @@
+## 1.0.5 – Releasegate: engere Ausnahmen
+
+- Der Releaselauf zu 1.0.4 scheiterte am Ausnahmen-Ratchet: `ui/theme_manager.py`
+  fing an drei Stellen `Exception` ab, wo nur zwei Fälle auftreten können.
+  `get_session()` wirft `RuntimeError`, solange `init_db()` nicht gelaufen ist,
+  und eine noch fehlende Tabelle meldet sich als `SQLAlchemyError`. Genau diese
+  beiden werden jetzt gefangen — ein Tippfehler im Zugriff wird nicht mehr
+  stillschweigend zum Standardwert.
+- `tools/design_sync.py` liest `Iterable` aus `collections.abc`.
+
 ## 1.0.4 – Gemeinsamer Designkatalog
 
 ### Ein gemeinsamer Designkatalog
