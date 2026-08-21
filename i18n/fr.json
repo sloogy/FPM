@@ -2095,6 +2095,11 @@
       "theme_apply": "Appliquer le design",
       "theme_follow_shared": "Suivre le design commun du LifePlanner",
       "theme_follow_hint": "Lorsque FPM tourne dans le LifePlanner, le profil défini là-bas s'applique. Sans la coche, votre choix est conservé.",
+      "theme_follow_system": "Suivre le réglage clair/sombre du système",
+      "theme_system_hint": "Lorsque le système passe en sombre, FPM suit. Choisissez ci-dessous les designs concernés.",
+      "theme_system_light": "Design pour un réglage système clair",
+      "theme_system_dark": "Design pour un réglage système sombre",
+      "theme_system_unavailable": "Ce système n'indique aucun réglage clair/sombre. Votre choix reste appliqué.",
       "theme_applied": "Design « {name} » appliqué.",
       "theme_page_body": "Palette de couleurs, taille de police et d'interface. Les modifications s'appliquent immédiatement à toutes les fenêtres ouvertes.",
       "theme_broken": "{count} profil(s) ont été ignorés car défectueux."

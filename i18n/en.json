@@ -2095,6 +2095,11 @@
       "theme_apply": "Apply design",
       "theme_follow_shared": "Follow the shared design of the LifePlanner",
       "theme_follow_hint": "When FPM runs inside the LifePlanner, the profile chosen there applies. Without the tick your own choice stays.",
+      "theme_follow_system": "Follow the system's light/dark setting",
+      "theme_system_hint": "When the operating system switches to dark, FPM follows. Choose below which designs apply.",
+      "theme_system_light": "Design for a light system setting",
+      "theme_system_dark": "Design for a dark system setting",
+      "theme_system_unavailable": "This system reports no light/dark setting. Your own choice stays in effect.",
       "theme_applied": "Design “{name}” applied.",
       "theme_page_body": "Colour scheme, font and UI size. Changes apply immediately to all open windows.",
       "theme_broken": "{count} profile(s) were skipped because they are faulty."

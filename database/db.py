@@ -16,6 +16,7 @@ from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 from sqlalchemy import create_engine, event, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker, Session, close_all_sessions
 from database.models import Base
 
@@ -189,6 +190,7 @@ def _connect(db_path: Path) -> None:
         _run_migration(name, migration)
     _insert_default_rules()
     _initialize_onboarding_state(is_new_database)
+    _initialize_theme(is_new_database)
     _apply_initial_config_settings()
     _validate_database_integrity()
 
@@ -265,6 +267,36 @@ def _validate_database_integrity() -> None:
                 f"Beispiele: {sample}"
             )
 
+
+
+def _initialize_theme(is_new_database: bool) -> None:
+    """Auslieferungsdesign einer neuen Installation einmalig festhalten.
+
+    Nur bei einer frisch angelegten Datenbank: Eine bestehende Installation
+    behaelt ihre Wahl, auch wenn sie nie eine getroffen hat - dort gilt
+    weiterhin der Rueckfall, und ein Update soll niemandem die Farben
+    umstellen.
+    """
+    if not is_new_database or SessionLocal is None:
+        return
+    from database.models import AppSettings
+    from ui.theme_manager import (INITIAL_DARK_PROFILE, INITIAL_PROFILE,
+                                  SETTING_THEME, SETTING_THEME_DARK,
+                                  SETTING_THEME_LIGHT)
+
+    session = SessionLocal()
+    try:
+        for key, value in ((SETTING_THEME, INITIAL_PROFILE),
+                           (SETTING_THEME_LIGHT, INITIAL_PROFILE),
+                           (SETTING_THEME_DARK, INITIAL_DARK_PROFILE)):
+            if AppSettings.get(session, key) is None:
+                session.add(AppSettings(key=key, value=value))
+        session.commit()
+    except SQLAlchemyError:
+        session.rollback()
+        logger.warning("Auslieferungsdesign konnte nicht gesetzt werden")
+    finally:
+        session.close()
 
 
 def _apply_initial_config_settings() -> None:

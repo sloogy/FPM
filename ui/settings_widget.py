@@ -37,7 +37,8 @@ from logic.log_utils import create_diagnostics_bundle, diagnostics_dir
 from ui.locale_widgets import LocalizedDoubleSpinBox as QDoubleSpinBox, set_money_affix
 from ui.ui_scale import PRESETS, apply_ui_scaling, scale_px
 from ui import theme
-from ui.theme_manager import DEFAULT_PROFILE, ThemeManager
+from ui.theme_manager import (DEFAULT_PROFILE, INITIAL_DARK_PROFILE,
+                              INITIAL_PROFILE, ThemeManager, system_mode)
 from ui.common import ResponsiveDialog
 
 def _restyle_application():
@@ -506,11 +507,15 @@ class SettingsWidget(QWidget):
         grp, fl = self._form_card(t('ui.settings_widget.theme_card'))
 
         self.theme_combo = QComboBox()
+        # "Programmstandard" meint den Auslieferungszustand, nicht den
+        # Rueckfall im Code - sonst fuehrte der Eintrag woandershin als eine
+        # frische Installation.
+        shipped = (INITIAL_PROFILE if manager.get_profile(INITIAL_PROFILE) is not None
+                   else DEFAULT_PROFILE)
         self.theme_combo.addItem(
-            t('ui.settings_widget.theme_default_option', name=DEFAULT_PROFILE),
-            DEFAULT_PROFILE)
+            t('ui.settings_widget.theme_default_option', name=shipped), shipped)
         for name in manager.available_profiles():
-            if name != DEFAULT_PROFILE:
+            if name != shipped:
                 self.theme_combo.addItem(name, name)
         current = manager.current_name()
         index = self.theme_combo.findData(current)
@@ -525,6 +530,44 @@ class SettingsWidget(QWidget):
         hint.setWordWrap(True)
         hint.setStyleSheet(theme.hint_text())
         fl.addRow('', hint)
+
+        # Dem Betriebssystem folgen. Welche Designs dabei gelten, steht
+        # getrennt: zu "Nord - Dunkel" gibt es kein helles Gegenstueck, das
+        # FPM erfinden koennte.
+        self.theme_system_check = QCheckBox(t('ui.settings_widget.theme_follow_system'))
+        self.theme_system_check.setChecked(manager.follows_system())
+        fl.addRow('', self.theme_system_check)
+
+        light_name, dark_name = manager.system_pair()
+        self.theme_system_light = QComboBox()
+        self.theme_system_dark = QComboBox()
+        for combo, chosen in ((self.theme_system_light, light_name),
+                              (self.theme_system_dark, dark_name)):
+            for name in manager.available_profiles():
+                combo.addItem(name, name)
+            index = combo.findData(chosen)
+            combo.setCurrentIndex(max(0, index))
+        fl.addRow(t('ui.settings_widget.theme_system_light'), self.theme_system_light)
+        fl.addRow(t('ui.settings_widget.theme_system_dark'), self.theme_system_dark)
+
+        system_hint = QLabel(t('ui.settings_widget.theme_system_hint'))
+        system_hint.setWordWrap(True)
+        system_hint.setStyleSheet(theme.hint_text())
+        fl.addRow('', system_hint)
+
+        # Meldet die Plattform nichts, waere das Haekchen wirkungslos - dann
+        # sagt es das, statt still nichts zu tun.
+        if system_mode() is None:
+            self.theme_system_check.setEnabled(False)
+            fl.addRow('', self._note(
+                t('ui.settings_widget.theme_system_unavailable'), 'warn'))
+
+        def _toggle_system(active: bool) -> None:
+            self.theme_system_light.setEnabled(active)
+            self.theme_system_dark.setEnabled(active)
+
+        self.theme_system_check.toggled.connect(_toggle_system)
+        _toggle_system(self.theme_system_check.isChecked())
 
         apply_theme = self._styled_button(t('ui.settings_widget.theme_apply'), 'primary')
         apply_theme.clicked.connect(self._save_theme)
@@ -542,6 +585,9 @@ class SettingsWidget(QWidget):
         manager = ThemeManager.instance()
         name = self.theme_combo.currentData() or DEFAULT_PROFILE
         manager.set_follows_shared(self.theme_follow_check.isChecked())
+        manager.set_system_pair(self.theme_system_light.currentData() or INITIAL_PROFILE,
+                                self.theme_system_dark.currentData() or INITIAL_DARK_PROFILE)
+        manager.set_follows_system(self.theme_system_check.isChecked())
         profile = manager.set_current(name)
         _restyle_application()
         QMessageBox.information(

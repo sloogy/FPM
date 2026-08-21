@@ -29,6 +29,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy.exc import SQLAlchemyError
+
 _log = logging.getLogger(__name__)
 
 MODE_LIGHT = "hell"
@@ -44,6 +46,35 @@ _HEX = re.compile(r"#[0-9a-fA-F]{6}")
 # Einstellungsschluessel in app_settings.
 SETTING_THEME = "ui.theme"
 SETTING_FOLLOW_SHARED = "ui.theme_follow_shared"
+# Dem Hell/Dunkel-Wechsel des Betriebssystems folgen. Welche Designs dabei
+# gelten, steht getrennt - sonst muesste FPM zu "Nord - Dunkel" ein helles
+# Gegenstueck erfinden, das es nicht gibt.
+SETTING_FOLLOW_SYSTEM = "ui.theme_follow_system"
+SETTING_THEME_LIGHT = "ui.theme_light"
+SETTING_THEME_DARK = "ui.theme_dark"
+
+
+def system_mode() -> str | None:
+    """Hell oder dunkel nach dem Betriebssystem - None, wenn es nichts sagt.
+
+    Qt meldet ``Unknown``, solange die Plattform keine Auskunft gibt (aeltere
+    Desktops, manche Wayland-Sitzungen). Dann bleibt es bei der eigenen Wahl,
+    statt auf gut Glueck hell anzunehmen.
+    """
+    try:
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QGuiApplication
+    except ImportError:
+        return None
+    app = QGuiApplication.instance()
+    if app is None:
+        return None
+    scheme = app.styleHints().colorScheme()
+    if scheme == Qt.ColorScheme.Dark:
+        return MODE_DARK
+    if scheme == Qt.ColorScheme.Light:
+        return MODE_LIGHT
+    return None
 
 
 def is_hex_color(value: Any) -> bool:
@@ -169,7 +200,17 @@ BUILTIN_PROFILES: dict[str, dict[str, Any]] = {
     },
 }
 
+# Rueckfall im Code. Er muss in BUILTIN_PROFILES stehen, denn er greift genau
+# dann, wenn keine Profildatei gelesen werden kann.
 DEFAULT_PROFILE = "Standard - Hell"
+DEFAULT_DARK_PROFILE = "Standard - Dunkel"
+
+# Auslieferungszustand einer neuen Installation. Bewusst getrennt vom Rueckfall:
+# ein frisch installiertes FPM soll nicht nach Rueckfall aussehen. Bestehende
+# Installationen behalten ihre Wahl - der Wert wird nur beim Anlegen der
+# Datenbank einmal geschrieben.
+INITIAL_PROFILE = "V2 Hell – Neon Cyan"
+INITIAL_DARK_PROFILE = "V2 Dunkel – Graphite Cyan"
 
 # Umbenannte Profile: alte Einstellung weiterhin aufloesen.
 ALIASES: dict[str, str] = {
@@ -371,6 +412,31 @@ class ThemeManager:
         finally:
             session.close()
 
+    def _flag(self, key: str, *, default: bool) -> bool:
+        """Ja/Nein-Einstellung; ohne offene Datenbank gilt der Standard."""
+        from database.db import get_session
+        from database.models import AppSettings
+        try:
+            session = get_session()
+        except RuntimeError:
+            return default
+        try:
+            raw = AppSettings.get(session, key, "1" if default else "0")
+        except SQLAlchemyError:
+            return default
+        finally:
+            session.close()
+        return str(raw) not in ("0", "false")
+
+    def _set_flag(self, key: str, value: bool) -> None:
+        from database.db import get_session
+        from database.models import AppSettings
+        session = get_session()
+        try:
+            AppSettings.set(session, key, "1" if value else "0")
+        finally:
+            session.close()
+
     def follows_shared(self) -> bool:
         """Uebernimmt FPM das gemeinsame Theme des LifePlanners?
 
@@ -378,32 +444,69 @@ class ThemeManager:
         Stylesheet-Aufbau -, gilt ebenfalls der Standard: das Hostprofil selbst
         braucht keine Datenbank, nur diese Frage.
         """
-        from sqlalchemy.exc import SQLAlchemyError
+        return self._flag(SETTING_FOLLOW_SHARED, default=True)
 
+    def set_follows_shared(self, value: bool) -> None:
+        self._set_flag(SETTING_FOLLOW_SHARED, value)
+        self._current = None
+
+    # ── Systemdesign ─────────────────────────────────────────────────────────
+    def follows_system(self) -> bool:
+        """Folgt FPM dem Hell/Dunkel-Wechsel des Betriebssystems?
+
+        Standard ist nein: Wer sich ein Design ausgesucht hat, soll es behalten,
+        bis er etwas anderes sagt.
+        """
+        return self._flag(SETTING_FOLLOW_SYSTEM, default=False)
+
+    def set_follows_system(self, value: bool) -> None:
+        self._set_flag(SETTING_FOLLOW_SYSTEM, value)
+        self._current = None
+
+    def follows_shared_and_hosted(self) -> bool:
+        """Gilt gerade das Profil des LifePlanners?
+
+        Dann hat ein Systemwechsel keine Wirkung - der Host bestimmt, und ein
+        stiller Wechsel waere gegen seine Wahl.
+        """
+        return self.follows_shared() and self.shared_profile() is not None
+
+    def system_pair(self) -> tuple[str, str]:
+        """Die beiden Designs fuer helle und dunkle Systemeinstellung."""
         from database.db import get_session
         from database.models import AppSettings
         try:
-            # get_session wirft RuntimeError, solange init_db nicht gelaufen ist.
             session = get_session()
         except RuntimeError:
-            return True
+            return INITIAL_PROFILE, INITIAL_DARK_PROFILE
         try:
-            return str(AppSettings.get(session, SETTING_FOLLOW_SHARED, "1")) not in ("0", "false")
+            light = AppSettings.get(session, SETTING_THEME_LIGHT, INITIAL_PROFILE)
+            dark = AppSettings.get(session, SETTING_THEME_DARK, INITIAL_DARK_PROFILE)
         except SQLAlchemyError:
-            # Die Datei ist da, die Tabelle noch nicht - beim ersten Start.
-            return True
+            return INITIAL_PROFILE, INITIAL_DARK_PROFILE
         finally:
             session.close()
+        return (self._resolve(light or INITIAL_PROFILE),
+                self._resolve(dark or INITIAL_DARK_PROFILE))
 
-    def set_follows_shared(self, value: bool) -> None:
+    def set_system_pair(self, light: str, dark: str) -> None:
         from database.db import get_session
         from database.models import AppSettings
         session = get_session()
         try:
-            AppSettings.set(session, SETTING_FOLLOW_SHARED, "1" if value else "0")
+            AppSettings.set(session, SETTING_THEME_LIGHT, self._resolve(light))
+            AppSettings.set(session, SETTING_THEME_DARK, self._resolve(dark))
         finally:
             session.close()
         self._current = None
+
+    def system_profile(self) -> ThemeProfile | None:
+        """Das Design, das zur Systemeinstellung passt - oder None."""
+        mode = system_mode()
+        if mode is None:
+            return None
+        light, dark = self.system_pair()
+        return self.get_profile(dark if mode == MODE_DARK else light)
 
     def shared_profile(self) -> ThemeProfile | None:
         """Das Profil des Hosts als vollwertiges Themeprofil - oder None."""
@@ -430,8 +533,6 @@ class ThemeManager:
         Reihenfolge: gemeinsames Theme des Hosts (wenn eingeschaltet und
         vorhanden), sonst die lokale Wahl, sonst das eingebaute helle Profil.
         """
-        from sqlalchemy.exc import SQLAlchemyError
-
         if self._current is not None:
             return self._current
 
@@ -440,6 +541,10 @@ class ThemeManager:
             # Das Hostprofil kommt aus einer Datei und steht auch dann zur
             # Verfuegung, wenn die Datenbank noch nicht offen ist.
             profile = self.shared_profile()
+        if profile is None and self.follows_system():
+            # Im LifePlanner gilt dessen Wahl; eigenstaendig darf das
+            # Betriebssystem entscheiden.
+            profile = self.system_profile()
 
         settled = True
         if profile is None:
@@ -476,6 +581,8 @@ class ThemeManager:
 
     def reset_to_default(self) -> ThemeProfile:
         """Zurueck auf den Auslieferungszustand des Programms."""
+        if self.get_profile(INITIAL_PROFILE) is not None:
+            return self.set_current(INITIAL_PROFILE)
         return self.set_current(DEFAULT_PROFILE)
 
     # ── Eigene Fassungen ─────────────────────────────────────────────────────

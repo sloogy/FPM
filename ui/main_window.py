@@ -27,6 +27,38 @@ class MainWindow(QMainWindow):
         self._widgets: dict[int, QWidget | None] = {}
         self._setup_ui()
         self._setup_shortcuts()
+        self._watch_system_color_scheme()
+
+    def _watch_system_color_scheme(self) -> None:
+        """Auf den Hell/Dunkel-Wechsel des Betriebssystems reagieren.
+
+        Ohne diese Verbindung wuerde die Einstellung "dem System folgen" erst
+        beim naechsten Start greifen - und genau das ist die Situation, in der
+        sie niemandem hilft.
+        """
+        app = QApplication.instance()
+        if app is None:
+            return
+        hints = app.styleHints()
+        signal = getattr(hints, "colorSchemeChanged", None)
+        if signal is None:  # Qt aelter als 6.5
+            return
+        signal.connect(self._system_color_scheme_changed)
+
+    def _system_color_scheme_changed(self, _scheme) -> None:
+        from ui.theme_manager import ThemeManager
+
+        manager = ThemeManager.instance()
+        if not manager.follows_system() or manager.follows_shared_and_hosted():
+            return
+        ThemeManager.reset()
+        self._restyle()
+
+    def _restyle(self) -> None:
+        """Stylesheet neu setzen und die Seiten neu aufbauen."""
+        from ui.settings_widget import _restyle_application
+
+        _restyle_application()
 
     def _apply_responsive_window_geometry(self) -> None:
         """Setzt eine nutzbare Fenstergröße innerhalb der Arbeitsfläche."""

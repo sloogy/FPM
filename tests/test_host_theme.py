@@ -38,16 +38,16 @@ def test_without_host_the_local_profile_applies(monkeypatch):
     Genau daran lag es, dass ein dunkles Design im eigenstaendigen Betrieb
     gar nicht erst zur Verfuegung stand.
     """
-    from ui.theme_manager import DEFAULT_PROFILE, ThemeManager
+    from ui.theme_manager import ThemeManager
 
     monkeypatch.delenv("LIFEPLANNER_THEME_FILE", raising=False)
     ThemeManager.reset()
     css = get_stylesheet()
     assert load_host_theme() is None
-    # Das Standardprofil kommt aus dem gemeinsamen Katalog, nicht mehr aus dem
-    # eingebauten Rueckfall - der greift nur noch, wenn keine Datei da ist.
-    standard = ThemeManager.instance().get_profile(DEFAULT_PROFILE)
-    assert standard is not None
+    # Welches Profil aktiv ist, haengt an der Einstellung - eine frische
+    # Installation traegt das Auslieferungsdesign. Der Test prueft, dass die
+    # Farben von genau diesem Profil im Stylesheet stehen.
+    standard = ThemeManager.instance().current_profile()
     assert standard.color("hintergrund_app") in css
     assert standard.color("text") in css
     assert standard.color("akzent") in css
@@ -118,11 +118,11 @@ def test_recolor_without_argument_uses_the_active_profile(monkeypatch):
 
     Die Inline-Stylesheets der Widgets laufen genau so hier durch.
     """
-    from ui.theme_manager import DEFAULT_PROFILE, ThemeManager
+    from ui.theme_manager import ThemeManager
 
     monkeypatch.delenv("LIFEPLANNER_THEME_FILE", raising=False)
     ThemeManager.reset()
-    expected = ThemeManager.instance().get_profile(DEFAULT_PROFILE).color("hintergrund_app")
+    expected = ThemeManager.instance().current_profile().color("hintergrund_app")
     assert recolor("background: #f0f3f7;") == f"background: {expected};"
 
 
