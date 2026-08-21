@@ -7,12 +7,17 @@ SQLite database.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
 import os
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
+
+_log = logging.getLogger(__name__)
 
 
 DEFAULT_CATEGORY_MAP = {
@@ -32,6 +37,13 @@ FPM_TO_BUDGETMANAGER_FILE = "fpm_to_budgetmanager.jsonl"
 BUDGETMANAGER_TO_FPM_FILE = "budgetmanager_to_fpm.jsonl"
 BUDGETMANAGER_SAVINGS_GOALS_FILE = "budgetmanager_savings_goals.jsonl"
 FPM_IMPORT_MARKER = "#bridge_id="
+
+# BudgetManager schreibt Sparziele als "fpm.savings-goal.v1" mit Bindestrich.
+# FPM las lange nur die Unterstrich-Form - die Spiegelung kam nie an, ohne dass
+# irgendwo ein Fehler auftauchte. Beide Schreibweisen gelten jetzt, damit eine
+# aeltere Bridge-Datei nicht wertlos wird, wenn nur eines der beiden Programme
+# aktualisiert ist.
+SAVINGS_GOAL_SCHEMAS = frozenset({"fpm.savings-goal.v1", "fpm.savings_goal.v1"})
 
 
 @dataclass(frozen=True)
@@ -124,6 +136,24 @@ def _label(exp: Any) -> str:
     return str(getattr(exp, "item_type", None) or "FPM-Ausgabe")
 
 
+# BudgetManager nimmt in externen IDs nur diese Zeichen an und weist eine Zeile
+# mit Leerzeichen oder Umlaut nicht etwa einzeln ab - der ganze Importlauf
+# bricht ab. Ein Label wie "Pilot Custom 823" darf also nicht roh in die ID.
+_ID_SAFE = re.compile(r"[^A-Za-z0-9:._/@+-]+")
+
+
+def _id_fragment(text: str) -> str:
+    """Aus einem Freitext ein ID-Stueck, das die Gegenseite annimmt.
+
+    Der Kurzhash haengt dran, weil das Saeubern verschiedene Labels
+    zusammenfallen lassen kann - "Pilot 823" und "Pilot #823" ergaeben sonst
+    dieselbe ID und damit ein stilles Upsert auf den falschen Datensatz.
+    """
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:8]
+    lesbar = _ID_SAFE.sub("-", text).strip("-")[:64]
+    return f"{lesbar}-{digest}" if lesbar else digest
+
+
 def expense_to_budgetmanager_record(exp: Any, *, source: str = "FPM") -> dict[str, Any]:
     """Konvertiert eine Ausgabe in einen stabilen BudgetManager-Vorschlag."""
     item_type = (getattr(exp, "item_type", None) or "other").lower()
@@ -135,7 +165,7 @@ def expense_to_budgetmanager_record(exp: Any, *, source: str = "FPM") -> dict[st
     else:
         external_id = (
             f"{source.lower()}:expense:"
-            f"{_iso_date(getattr(exp, 'purchase_date', None))}:{_label(exp)}"
+            f"{_iso_date(getattr(exp, 'purchase_date', None))}:{_id_fragment(_label(exp))}"
         )
     return {
         "schema": "budgetmanager.import.v1",
@@ -212,19 +242,39 @@ def sync_default_outbox_from_session(session: Any) -> BudgetExportResult:
     return sync_default_outbox(expenses)
 
 
+def sync_default_outbox_from_session_safely(session: Any) -> BudgetExportResult | None:
+    """Outbox-Sync nach einem Commit; ein Fehler bleibt folgenlos.
+
+    Die Oberfläche ruft das direkt hinter ``session.commit()`` auf. Würde hier
+    etwas hochschlagen, liefe es in den umgebenden ``except``-Zweig: der Nutzer
+    sähe eine Fehlermeldung und ein ``rollback()``, das nach dem Commit ohnehin
+    nichts mehr zurücknimmt. Die Ausgabe wäre gespeichert und die Meldung
+    trotzdem alarmierend. Ein unbeschreibbarer Bridge-Ordner - ein getrenntes
+    Netzlaufwerk, ein falsch gesetztes ``LIFEPLANNER_BRIDGE_DIR`` - reicht dafür.
+
+    Die Bridge ist eine Spiegelung; sie darf die Sammlung nie blockieren. Der
+    Fehler geht ins Log, damit er auffindbar bleibt statt zu verschwinden.
+    """
+    try:
+        return sync_default_outbox_from_session(session)
+    except Exception:
+        _log.warning("Bridge-Outbox konnte nicht geschrieben werden", exc_info=True)
+        return None
+
+
 def sync_default_outbox_safely() -> None:
-    """Best-effort Outbox-Sync nach UI-Commits; Fehler dürfen die App nicht blockieren."""
+    """Wie oben, aber mit eigener Session - für Aufrufer ohne offene Session."""
     try:
         from database.db import get_session
 
         session = get_session()
-        try:
-            sync_default_outbox_from_session(session)
-        finally:
-            session.close()
     except Exception:
-        # Bridge darf niemals die eigentliche Sammlung beschädigen oder blockieren.
-        pass
+        _log.warning("Bridge-Outbox: keine Datenbanksitzung", exc_info=True)
+        return
+    try:
+        sync_default_outbox_from_session_safely(session)
+    finally:
+        session.close()
 
 
 def _iter_jsonl_records(path: str | Path) -> list[dict[str, Any]]:
@@ -350,7 +400,7 @@ def load_budgetmanager_savings_goals(
     src = Path(path) if path else default_budgetmanager_savings_goals_path()
     goals: list[BudgetManagerSavingsGoal] = []
     for rec in _iter_jsonl_records(src):
-        if rec.get("schema") != "fpm.savings_goal.v1":
+        if rec.get("schema") not in SAVINGS_GOAL_SCHEMAS:
             continue
         if visible_only and rec.get("visible") is False:
             continue

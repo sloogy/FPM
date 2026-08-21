@@ -24,7 +24,7 @@ from database.models import Paper, Expense
 from i18n.translator import LocaleService, t
 from ui.common import EmptyStateWidget, ResponsiveDialog
 from logic.event_bus import AppEventBus
-from logic.budget_export_service import sync_default_outbox_from_session
+from logic.budget_export_service import sync_default_outbox_from_session_safely
 from ui.theme import btn_muted, btn_primary, btn_success
 
 PAPER_TYPE_KEYS = ["notebook", "loose", "pad", "other"]
@@ -197,7 +197,7 @@ class PaperWidget(QWidget):
                 session.flush()
                 _sync_paper_expense(session, paper)
                 session.commit()
-                sync_default_outbox_from_session(session)
+                sync_default_outbox_from_session_safely(session)
                 AppEventBus.instance().papers_changed.emit()
                 AppEventBus.instance().expenses_changed.emit()
                 self.refresh()
@@ -216,7 +216,7 @@ class PaperWidget(QWidget):
                 for k,v in dlg.get_data().items(): setattr(p,k,v)
                 _sync_paper_expense(session, p)
                 session.commit()
-                sync_default_outbox_from_session(session)
+                sync_default_outbox_from_session_safely(session)
                 AppEventBus.instance().papers_changed.emit()
                 AppEventBus.instance().expenses_changed.emit()
                 self.refresh()

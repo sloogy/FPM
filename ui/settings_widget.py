@@ -30,7 +30,7 @@ from database.db import (
 from i18n.translator import REGION_PRESETS, DEFAULT_EXCHANGE_RATES, DATE_FORMAT_OPTIONS, LocaleService, Translator, t
 from i18n.qt_i18n import apply_widget_tree, translate_source_text
 from database.models import AppSettings, Pen, Ink, Nib, Paper, InkLoad, Expense
-from logic.budget_export_service import export_expenses_jsonl, default_budgetmanager_to_fpm_path, existing_fpm_bridge_ids, import_budgetmanager_proposals, load_budgetmanager_expense_proposals, sync_default_outbox_from_session
+from logic.budget_export_service import export_expenses_jsonl, default_budgetmanager_to_fpm_path, existing_fpm_bridge_ids, import_budgetmanager_proposals, load_budgetmanager_expense_proposals, sync_default_outbox_from_session_safely
 from ui.navigation import NavigationSettingsDialog
 from logic.app_mode import APP_MODE_KEY, EXPERT_MODE, SIMPLE_MODE, get_app_mode, normalize_app_mode
 from logic.log_utils import create_diagnostics_bundle, diagnostics_dir
@@ -1147,7 +1147,7 @@ class SettingsWidget(QWidget):
         try:
             expenses = session.query(Expense).order_by(Expense.purchase_date.asc().nullslast(), Expense.id.asc()).all()
             result = export_expenses_jsonl(expenses, dest)
-            sync_default_outbox_from_session(session)
+            sync_default_outbox_from_session_safely(session)
             QMessageBox.information(
                 self,
                 t('settings.budget_export_done_title'),
@@ -1200,7 +1200,7 @@ class SettingsWidget(QWidget):
                 return
             imported = import_budgetmanager_proposals(session, proposals)
             session.commit()
-            sync_default_outbox_from_session(session)
+            sync_default_outbox_from_session_safely(session)
             _refresh_all_widgets()
             QMessageBox.information(
                 self,

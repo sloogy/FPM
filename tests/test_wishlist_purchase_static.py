@@ -50,5 +50,9 @@ def test_wishlist_widget_imports_all_button_styles_it_uses():
 def test_wishlist_purchase_refreshes_budgetmanager_bridge_outbox():
     src = (ROOT / "ui" / "wishlist_widget.py").read_text(encoding="utf-8")
     assert "def _sync_budget_bridge_after_purchase" in src
-    assert "sync_default_outbox_from_session(session)" in src
     assert "self._sync_budget_bridge_after_purchase(s)" in src
+    # Die sichere Variante, nicht die strikte: der Aufruf steht hinter dem
+    # Commit. Wuerde er werfen, liefe er in den umgebenden except-Zweig und der
+    # Nutzer saehe einen Fehler samt wirkungslosem Rollback, obwohl die
+    # Uebernahme laengst gespeichert ist.
+    assert "sync_default_outbox_from_session_safely(session)" in src

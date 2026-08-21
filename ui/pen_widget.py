@@ -22,7 +22,7 @@ from i18n.translator import format_money, format_date, LocaleService, t
 from i18n.qt_i18n import translate_source_text
 from database.models import Pen, Ink, InkLoad, Nib, PenNibSetup, Expense
 from logic.event_bus import AppEventBus
-from logic.budget_export_service import sync_default_outbox_from_session
+from logic.budget_export_service import sync_default_outbox_from_session_safely
 from logic.media_storage_service import import_pen_image
 from ui.ui_scale import scale_px
 from ui.theme import btn_accent, btn_primary, btn_secondary
@@ -739,7 +739,7 @@ class PenWidget(QWidget):
             pen.image_path = imported or str(path)
             pen.updated_at = datetime.now()
             session.commit()
-            sync_default_outbox_from_session(session)
+            sync_default_outbox_from_session_safely(session)
             AppEventBus.instance().pens_changed.emit()
             AppEventBus.instance().expenses_changed.emit()
             self.refresh()
@@ -1123,7 +1123,7 @@ class PenWidget(QWidget):
             if data['cost']:
                 session.add(Expense(item_type='service', pen_id=pen.id, amount=data['cost'], shipping=0.0, customs=0.0, currency=pen.service_currency or LocaleService.instance().currency, purchase_date=data['start'], description=f'Service: {pen.brand} {pen.model}', notes=data['notes']))
             session.commit()
-            sync_default_outbox_from_session(session)
+            sync_default_outbox_from_session_safely(session)
             AppEventBus.instance().pens_changed.emit()
             AppEventBus.instance().expenses_changed.emit()
             self.refresh()

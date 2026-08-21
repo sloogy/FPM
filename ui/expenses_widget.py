@@ -36,7 +36,7 @@ from database.db import get_session
 from database.models import Expense, Pen, Ink, Nib, Paper
 from i18n.translator import LocaleService, format_money, format_date, t
 from logic.event_bus import AppEventBus
-from logic.budget_export_service import sync_default_outbox_from_session
+from logic.budget_export_service import sync_default_outbox_from_session_safely
 
 ITEM_TYPE_KEYS = ["pen", "ink", "nib", "service", "paper", "accessory", "shipping", "customs", "other"]
 
@@ -343,7 +343,7 @@ class ExpensesWidget(QWidget):
                 session.add(exp)
                 session.flush()
                 _sync_pen_values_from_expenses(session, data.get("pen_id"))
-                session.commit(); sync_default_outbox_from_session(session); self.refresh()
+                session.commit(); sync_default_outbox_from_session_safely(session); self.refresh()
                 bus = AppEventBus.instance(); bus.expenses_changed.emit(); bus.pens_changed.emit()
             except Exception as e:
                 session.rollback(); QMessageBox.critical(self, t('ui.expenses_widget.fehler_41b1f911'), str(e))
@@ -365,7 +365,7 @@ class ExpensesWidget(QWidget):
                 session.flush()
                 _sync_pen_values_from_expenses(session, old_pen_id)
                 _sync_pen_values_from_expenses(session, data.get("pen_id"))
-                session.commit(); sync_default_outbox_from_session(session); self.refresh(); self._show_details(exp_id)
+                session.commit(); sync_default_outbox_from_session_safely(session); self.refresh(); self._show_details(exp_id)
                 bus = AppEventBus.instance(); bus.expenses_changed.emit(); bus.pens_changed.emit()
         except Exception as e:
             session.rollback(); QMessageBox.critical(self, t('ui.expenses_widget.fehler_41b1f911'), str(e))
@@ -384,7 +384,7 @@ class ExpensesWidget(QWidget):
                 session.delete(exp)
                 session.flush()
                 _sync_pen_values_from_expenses(session, old_pen_id)
-                session.commit(); sync_default_outbox_from_session(session); self.refresh(); self._clear_details(); self._detail_title.setText(t('ui.expenses_widget.ausgabe_auswahlen_420faa03'))
+                session.commit(); sync_default_outbox_from_session_safely(session); self.refresh(); self._clear_details(); self._detail_title.setText(t('ui.expenses_widget.ausgabe_auswahlen_420faa03'))
                 bus = AppEventBus.instance(); bus.expenses_changed.emit(); bus.pens_changed.emit()
         finally:
             session.close()

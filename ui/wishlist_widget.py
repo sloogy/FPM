@@ -17,7 +17,7 @@ from database.models import WishlistItem, Expense, Pen, Ink, Nib, NibFormat, Pap
 from i18n.translator import LocaleService, t
 from logic.article_card_service import ensure_article_card
 from logic.event_bus import AppEventBus
-from logic.budget_export_service import sync_default_outbox_from_session
+from logic.budget_export_service import sync_default_outbox_from_session_safely
 from ui.theme import btn_danger, btn_primary, btn_secondary, btn_success
 from ui.localized_inputs import LocalizedDoubleSpinBox
 from ui.locale_widgets import (
@@ -355,7 +355,7 @@ class WishlistWidget(QWidget):
         rückgängig machen.
         """
         try:
-            sync_default_outbox_from_session(session)
+            sync_default_outbox_from_session_safely(session)
         except Exception:
             pass
 
