@@ -94,6 +94,27 @@ def _func_name(node: ast.AST) -> str:
     return ""
 
 
+# Empfaenger, deren warning/error/info nie auf dem Bildschirm landen. Die
+# Methodennamen ueberschneiden sich mit QMessageBox.warning und wuerden sonst
+# jede deutschsprachige Logzeile als unuebersetzten UI-Text melden. Logtexte
+# sind fuer die Diagnose da und bleiben bewusst deutsch.
+_LOGGER_EMPFAENGER = {"_log", "log", "logger", "logging", "_logger", "LOG", "LOGGER"}
+
+
+def _ist_logaufruf(func: ast.AST) -> bool:
+    if not isinstance(func, ast.Attribute):
+        return False
+    empfaenger = func.value
+    if isinstance(empfaenger, ast.Name):
+        return empfaenger.id in _LOGGER_EMPFAENGER
+    if isinstance(empfaenger, ast.Attribute):
+        return empfaenger.attr in _LOGGER_EMPFAENGER
+    # logging.getLogger(__name__).warning(...) - der Aufruf selbst verraet es.
+    if isinstance(empfaenger, ast.Call):
+        return _func_name(empfaenger.func) == "getLogger"
+    return False
+
+
 def _strings_from(node: ast.AST) -> list[str]:
     out: list[str] = []
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
@@ -139,6 +160,8 @@ def extract_candidates() -> dict[str, set[tuple[str, int, str]]]:
         rel = str(path.relative_to(ROOT))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
+                continue
+            if _ist_logaufruf(node.func):
                 continue
             name = _func_name(node.func)
             if name in BRIDGE_CALLS:

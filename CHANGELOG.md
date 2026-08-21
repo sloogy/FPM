@@ -1,5 +1,50 @@
 # Changelog
 
+## 1.0.8 — 2026-08-21
+
+### Das Update-Manifest wird jetzt signiert und geprüft
+
+`latest.json` trägt die SHA256-Werte aller Release-Artefakte — und war selbst
+ungeschützt. Wer das Manifest austauschen kann, tauscht die Prüfsummen gleich
+mit. Der Updater prüfte bis hierher überhaupt keine Signatur.
+
+- Das Release enthält neben `latest.json` die abgetrennte Ed25519-Signatur
+  `latest.json.sig`. FPM vertraut nur einem beim Build eingebetteten
+  öffentlichen Schlüssel und lehnt fail-closed ab, wenn Signatur oder
+  Vertrauensanker fehlen.
+- Der Release-Workflow bricht ab, wenn die Signatur hinterher fehlt oder sich
+  nicht verifizieren lässt.
+- Unverändert bleibt `signature_policy: allow-unsigned` im Manifest: das meint
+  Authenticode für die Windows-Binaries und die `.lpmodule`-Pakete.
+
+### Die Brücke zum BudgetManager funktioniert wieder
+
+Drei Fehler mit einer gemeinsamen Ursache — beide Programme haben ihre Seite
+der Brücke mit selbst erzeugten Daten getestet und dabei aneinander vorbei
+gesprochen.
+
+- **Sparziele kamen nie an.** BudgetManager schreibt `fpm.savings-goal.v1` mit
+  Bindestrich, FPM las nur die Unterstrich-Form. Die Spiegelung wurde stumm
+  verworfen — kein Fehler, nur eine leere Anzeige. Beide Schreibweisen gelten
+  jetzt.
+- **Eine Ausgabe ohne Datenbank-ID konnte den ganzen Importlauf stoppen.** Die
+  externe ID enthielt das Label im Klartext; BudgetManager lässt darin keine
+  Leerzeichen zu und bricht bei einer ungültigen ID den kompletten Lauf ab.
+- **Ein Brücken-Fehler sah aus wie Datenverlust.** Der Outbox-Abgleich steht
+  hinter dem Speichern. Schlug er fehl — ein getrenntes Netzlaufwerk reicht —,
+  erschien eine Fehlermeldung, obwohl die Ausgabe längst gespeichert war.
+
+### Das Design folgt auf Wunsch dem Betriebssystem
+
+- Neue Einstellung: FPM wechselt mit, wenn das System auf dunkel umstellt.
+  Weil es zu „Nord – Dunkel" kein helles Gegenstück gibt, wählen Sie beide
+  Seiten selbst.
+- Standard ist aus — eine getroffene Wahl bleibt bestehen. Meldet die Plattform
+  nichts, wird nicht auf gut Glück hell angenommen. Im LifePlanner behält
+  dessen zentrale Darstellung den Vorrang.
+- Eine frische Installation startet im Auslieferungsdesign statt im
+  Rückfallprofil. Bestehende Installationen behalten ihre Wahl.
+
 ## 1.0.7 — 2026-08-21
 
 - Release-Gate korrigiert: stabiler Build-Identifier `enterprise-lifeplanner-pipeline` wiederhergestellt.
