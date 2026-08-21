@@ -56,7 +56,7 @@ def _missing_package_message(package: str) -> str:
 
 
 try:
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication, QMessageBox
     from PySide6.QtGui import QFont, QGuiApplication
     from PySide6.QtCore import Qt
 except ModuleNotFoundError as exc:
@@ -70,7 +70,7 @@ except ModuleNotFoundError as exc:
     raise SystemExit(1) from exc
 
 try:
-    from database.db import init_db, close_db
+    from database.db import get_db_path, init_db, close_db
     from ui.main_window import MainWindow
     from ui.styles import get_stylesheet
     from ui.ui_scale import apply_ui_scaling
@@ -102,6 +102,21 @@ def main() -> None:
     app.setOrganizationName(ORG_NAME)
 
     app.setFont(QFont("Segoe UI", 10))
+
+    # Nur eine Instanz je Datenordner. Zwei Instanzen lesen den Stand beim
+    # Start und schreiben unabhaengig weiter - wer zuletzt speichert gewinnt,
+    # und der Nutzer merkt es erst, wenn Eintraege verschwunden sind.
+    from logic.single_instance import SingleInstanceGuard
+
+    guard = SingleInstanceGuard(
+        get_db_path().parent / "fpm.instance.lock", app_id="FPM"
+    )
+    frei, grund = guard.acquire()
+    if not frei:
+        QMessageBox.information(None, APP_NAME, grund)
+        return
+    app.aboutToQuit.connect(guard.release)
+
     # Datenbank initialisieren (nutzt konfigurierbaren Pfad aus ~/.fpm_data/config.json)
     init_db()
     app.aboutToQuit.connect(close_db)
