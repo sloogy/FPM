@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.9 — 2026-08-21
+
+### Die Oberfläche wächst mit der Schriftgröße
+
+- Abgestufte Radien nach dem Vorbild des BudgetManagers: Eingaben 4,
+  Schaltflächen 6, Karten und Gruppen 8, Reiter 10. Vorher galt überall
+  derselbe Wert, wodurch Karten so eckig wirkten wie Eingabefelder.
+- Bei 10pt — dem Auslieferungszustand — sieht alles aus wie bisher.
+
 ## 1.0.8 — 2026-08-21
 
 ### Das Update-Manifest wird jetzt signiert und geprüft
