@@ -588,11 +588,39 @@ def _backup_before_schema_migration(db_path: Path) -> Path | None:
     schema_tag = re.sub(r"[^A-Za-z0-9_.-]+", "_", SCHEMA_VERSION)
     target = backup_dir / f"{db_path.stem}_before_{schema_tag}_{stamp}{db_path.suffix}"
     try:
-        return create_consistent_backup(db_path, target)
+        ergebnis = create_consistent_backup(db_path, target)
     except (OSError, RuntimeError, sqlite3.Error) as exc:
         raise RuntimeError(
             f"Sicherheitsbackup vor der Datenbankmigration fehlgeschlagen: {exc}"
         ) from exc
+    _alte_migrationsbackups_entfernen(backup_dir)
+    return ergebnis
+
+
+# Wie viele Migrationsbackups aufgehoben werden. Sie entstehen bei jedem
+# Update mit Schemaaenderung und wachsen sonst ueber die Jahre mit; bei einer
+# grossen Sammlung ist jedes davon so gross wie die Datenbank selbst.
+MIGRATION_BACKUPS_AUFBEWAHREN = 10
+
+
+def _alte_migrationsbackups_entfernen(backup_dir: Path) -> None:
+    """Behaelt die juengsten automatischen Sicherungen, entfernt aeltere.
+
+    Nur die selbst erzeugten Migrationsbackups: Was der Nutzer ueber den
+    Sicherungsdialog an einen eigenen Ort gelegt hat, wird nie angefasst.
+    """
+    vorhanden = sorted(
+        (p for p in backup_dir.glob("*_before_*") if p.is_file()),
+        key=lambda p: p.name,
+        reverse=True,
+    )
+    for veraltet in vorhanden[MIGRATION_BACKUPS_AUFBEWAHREN:]:
+        try:
+            veraltet.unlink()
+        except OSError as exc:
+            logger.debug("Altes Migrationsbackup %s bleibt liegen: %s",
+                         veraltet.name, exc)
+            break
 
 
 def _migrate_schema():
