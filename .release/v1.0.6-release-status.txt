@@ -1,0 +1,7 @@
+status=completed
+conclusion=failure
+run_id=32472218106
+version=1.0.6
+sha=73965fcd01a9b5d2dfd268853b538340d4c8dfae
+url=https://github.com/sloogy/FPM/actions/runs/32472218106
+watch_rc=1
