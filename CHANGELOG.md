@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.1.0 — 2026-08-22
+
+### Sicherheit
+
+- **Update-Archive** werden beim Entpacken vollständig geprüft: Neben
+  Pfad-Traversal und Symlinks jetzt auch Größe, Anzahl der Einträge und
+  Kompressionsrate. Ein Archiv kann harmlos aussehen und beim Entpacken die
+  Platte füllen.
+- **Persönliche Daten liegen nicht mehr offen.** Die Datenbank wird auf 0600
+  gesetzt, sobald sie angelegt ist. Vorher galt der Standard-umask, auf
+  typischen Linux-Systemen also weltlesbar.
+- **Die Brücke zum BudgetManager** liegt eigenständig offen im
+  Benutzerverzeichnis. Ordner und Dateien bekommen jetzt 0700 bzw. 0600 — es
+  sind dieselben Buchungen wie in der Datenbank.
+
+### Stabilität
+
+- **Nur eine Instanz je Datenordner.** Zwei Instanzen lasen den Stand beim
+  Start und schrieben unabhängig weiter; wer zuletzt speicherte, gewann.
+- **Migrationsbackups** wachsen nicht mehr unbegrenzt. Vor jeder
+  Schemaänderung entsteht eines, so groß wie die Datenbank selbst.
+
+### Brücke zum BudgetManager
+
+- **Der Zustand ist sichtbar.** Die Einstellungsseite zeigt den aktiven
+  Brückenordner und alle drei Dateien einzeln. Der Ordner hängt davon ab, wie
+  FPM gestartet wurde — wer beides gemischt nutzt, hatte zwei getrennte
+  Brücken und sah die andere nie.
+
+### Darstellung
+
+- Abgestufte Radien nach dem Vorbild des BudgetManagers, überall mit der
+  Schriftgröße wachsend.
+
 ## 1.0.9 — 2026-08-21
 
 ### Die Oberfläche wächst mit der Schriftgröße

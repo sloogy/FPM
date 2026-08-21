@@ -196,14 +196,22 @@ def sync_windows_docs(check: bool) -> bool:
         if not p.exists():
             continue
         src = p.read_text(encoding="utf-8")
-        # Nur die aktuelle Reihe anfassen: 1.0.x wird zu APP_VERSION, aeltere
-        # Nebenversionen bleiben als Verlauf stehen.
-        major_minor = APP_VERSION.rsplit(".", 1)[0]
         # Weder Wortgrenze noch Punktverbot am Rand: die Version steht dort
         # als "v1.0.3" mitten im Wort und als "_1.0.3.exe" vor einer Endung.
         # Der Blick nach vorn wehrt nur laengere Versionen ab (1.0.30, 1.0.3.4).
-        new = re.sub(rf"(?<![\d.]){re.escape(major_minor)}\.\d+(?!\.?\d)",
-                     APP_VERSION, src)
+        muster = r"(?<![\d.])\d+\.\d+\.\d+(?!\.?\d)"
+        gefunden = set(re.findall(muster, src))
+        # Diese Anleitungen beschreiben den aktuellen Release-Vorgang, nicht
+        # die Historie: Solange genau eine Version darin steht, ist sie der
+        # aktuelle Stand und wird nachgezogen. Kommen mehrere vor, ist Verlauf
+        # im Spiel - dann haelt sich das Werkzeug heraus und meldet es, statt
+        # blind zu ersetzen.
+        if len(gefunden - {APP_VERSION}) > 1:
+            print(f"  {p.relative_to(ROOT)}: mehrere Versionen "
+                  f"({', '.join(sorted(gefunden))}) - bitte von Hand pruefen")
+            ok = False
+            continue
+        new = re.sub(muster, APP_VERSION, src)
         if new == src:
             continue
         ok = False
