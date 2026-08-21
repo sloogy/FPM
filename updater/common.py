@@ -404,12 +404,31 @@ def download_file(url: str, dest: Path, timeout_s: int = 30) -> None:
         raise
 
 
+# Grenzen fuers Entpacken. Pfad und Symlink allein reichen nicht: Ein Archiv
+# kann harmlos aussehen und beim Entpacken die Platte fuellen. Dieselben Werte
+# gelten im BudgetManager und im LifePlanner - ein Update-Archiv der Suite ist
+# ueberall gleich gross.
+MAX_ZIP_ENTRIES = 100_000
+MAX_UPDATE_MEMBER_BYTES = 512 * 1024 * 1024
+MAX_UPDATE_UNCOMPRESSED_BYTES = 2 * 1024 * 1024 * 1024
+MAX_UPDATE_COMPRESSION_RATIO = 250
+
+
 def safe_extract_zip(zip_path: Path, dest_dir: Path) -> None:
-    """Extrahiert ZIP ohne ZipSlip (Pfad-Traversal)."""
+    """Extrahiert ein ZIP ohne Pfad-Traversal, Symlinks und Zip-Bomben.
+
+    Die Signatur des Manifests deckt die Pruefsumme des Archivs ab, aber sie
+    sagt nichts darueber, was beim Entpacken passiert. Ein Archiv mit hoher
+    Kompressionsrate fuellt sonst die Platte, bevor irgendetwas auffaellt.
+    """
     destination_root = dest_dir.resolve()
     with zipfile.ZipFile(zip_path, "r") as archive:
+        eintraege = archive.infolist()
+        if len(eintraege) > MAX_ZIP_ENTRIES:
+            raise ValueError("Update-Archiv enthaelt zu viele Eintraege")
+        gesamt = 0
         validated: list[tuple[zipfile.ZipInfo, PurePosixPath]] = []
-        for member in archive.infolist():
+        for member in eintraege:
             raw_name = member.filename.replace("\\", "/")
             if not raw_name:
                 continue
@@ -427,6 +446,22 @@ def safe_extract_zip(zip_path: Path, dest_dir: Path) -> None:
                 and destination_root not in target.parents
             ):
                 raise ValueError(f"Unsicherer Pfad im Update-Archiv: {member.filename}")
+
+            if member.file_size > MAX_UPDATE_MEMBER_BYTES:
+                raise ValueError(
+                    f"Datei im Update-Archiv zu gross: {member.filename}"
+                )
+            gesamt += member.file_size
+            if gesamt > MAX_UPDATE_UNCOMPRESSED_BYTES:
+                raise ValueError("Update-Archiv ist entpackt unplausibel gross")
+            if (
+                member.compress_size > 0
+                and member.file_size / member.compress_size
+                > MAX_UPDATE_COMPRESSION_RATIO
+            ):
+                raise ValueError(
+                    f"Auffaellige Kompressionsrate im Update-Archiv: {member.filename}"
+                )
             validated.append((member, member_path))
 
         dest_dir.mkdir(parents=True, exist_ok=True)
