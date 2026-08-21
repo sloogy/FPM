@@ -1,52 +1,52 @@
 {
   "app": "FountainPen Manager",
   "channel": "stable",
-  "version": "1.0.5",
-  "release_tag": "v1.0.5",
+  "version": "1.0.6",
+  "release_tag": "v1.0.6",
   "assets": {
     "windows": {
       "type": "portable-zip",
-      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.5/FountainPenManager-v1.0.5-portable-windows.zip",
+      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.6/FountainPenManager-v1.0.6-portable-windows.zip",
       "sha256": "PUT_SHA256_HERE"
     },
     "linux": {
       "type": "portable-zip",
-      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.5/FountainPenManager-v1.0.5-portable-linux.zip",
+      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.6/FountainPenManager-v1.0.6-portable-linux.zip",
       "sha256": "PUT_SHA256_HERE"
     },
     "portable_windows_zip": {
       "type": "portable-zip",
-      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.5/FountainPenManager-v1.0.5-portable-windows.zip",
+      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.6/FountainPenManager-v1.0.6-portable-windows.zip",
       "sha256": "PUT_SHA256_HERE"
     },
     "portable_linux_zip": {
       "type": "portable-zip",
-      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.5/FountainPenManager-v1.0.5-portable-linux.zip",
+      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.6/FountainPenManager-v1.0.6-portable-linux.zip",
       "sha256": "PUT_SHA256_HERE"
     },
     "portable_zip": {
       "type": "portable-zip",
-      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.5/FountainPenManager-v1.0.5-portable-windows.zip",
+      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.6/FountainPenManager-v1.0.6-portable-windows.zip",
       "sha256": "PUT_SHA256_HERE"
     },
     "windows_installer": {
       "type": "installer",
-      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.5/FountainPenManager_Setup_1.0.5.exe",
+      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.6/FountainPenManager_Setup_1.0.6.exe",
       "sha256": "PUT_SHA256_HERE"
     },
     "windows_installer_zip": {
       "type": "installer-zip",
-      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.5/FountainPenManager_Setup_1.0.5.zip",
+      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.6/FountainPenManager_Setup_1.0.6.zip",
       "sha256": "PUT_SHA256_HERE"
     },
     "lifeplanner_windows": {
       "type": "lifeplanner-module",
-      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.5/fpm_1.0.5_Windows_x86_64.lpmodule",
+      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.6/fpm_1.0.6_Windows_x86_64.lpmodule",
       "sha256": "PUT_SHA256_HERE"
     },
     "lifeplanner_linux": {
       "type": "lifeplanner-module",
-      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.5/fpm_1.0.5_Linux_x86_64.lpmodule",
+      "url": "https://github.com/sloogy/FPM/releases/download/v1.0.6/fpm_1.0.6_Linux_x86_64.lpmodule",
       "sha256": "PUT_SHA256_HERE"
     }
   }

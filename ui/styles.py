@@ -320,6 +320,38 @@ QMenu::item:selected {{ background-color: {c("auswahl_hintergrund")}; color: {c(
 QMenuBar {{ background-color: {c("hintergrund_panel")}; color: {c("text")}; }}
 QMenuBar::item:selected {{ background-color: {c("hover_hintergrund")}; color: {c("hover_text")}; }}
 
+/* ── Einführung / Tour / Onboarding ─────────────────────── */
+QFrame#tourBubble {{
+    background-color: {c("karte_hintergrund")};
+    color: {c("text")};
+    border: 1px solid {c("karte_rand")};
+    border-radius: {_px(12, scale)}px;
+}}
+QLabel#tourTitle {{ font-size: {_px(15, scale)}px; font-weight: 800; color: {c("text")}; border: none; background: transparent; }}
+QLabel#tourBody {{ color: {c("text")}; border: none; background: transparent; }}
+QPushButton#tourSkipButton {{ color: {c("gefahr")}; border: 1px solid {c("gefahr")}; padding: {_px(6, scale)}px {_px(10, scale)}px; background: {c("karte_hintergrund")}; }}
+QPushButton#tourSkipButton:hover {{ background: {c("hover_hintergrund")}; color: {c("gefahr")}; }}
+QPushButton#tourBackButton {{ color: {c("text")}; border: 1px solid {c("rand")}; padding: {_px(6, scale)}px {_px(14, scale)}px; background: {c("hintergrund_panel")}; }}
+QPushButton#tourBackButton:hover {{ background: {c("hover_hintergrund")}; color: {c("hover_text")}; }}
+QPushButton#tourNextButton {{ background: {c("erfolg")}; color: {c("erfolg_text")}; border: none; padding: {_px(6, scale)}px {_px(16, scale)}px; font-weight: 800; }}
+QPushButton#tourNextButton:hover {{ background: {theme.hover("erfolg")}; color: {c("erfolg_text")}; }}
+QPushButton#tourAbortButton {{ background: {c("gefahr")}; color: {c("gefahr_text")}; border: none; border-radius: {_px(7, scale)}px; padding: {_px(8, scale)}px {_px(14, scale)}px; font-weight: 800; }}
+QPushButton#tourAbortButton:hover {{ background: {theme.hover("gefahr")}; color: {c("gefahr_text")}; }}
+
+QProgressBar#onboardingProgress {{ border: none; background: {c("tabelle_alt")}; }}
+QProgressBar#onboardingProgress::chunk {{ background: {c("akzent")}; }}
+QLabel#onboardingStepLabel {{ font-size: {_px(12, scale)}px; color: {c("text_gedimmt")}; }}
+QLabel#onboardingIcon {{ font-size: {_px(52, scale)}px; color: {c("text")}; }}
+QLabel#onboardingTitle {{ font-size: {_px(20, scale)}px; font-weight: 800; color: {c("text")}; }}
+QFrame#onboardingDivider {{ color: {c("rand")}; background: {c("rand")}; }}
+QLabel#onboardingBody {{ font-size: {_px(13, scale)}px; color: {c("text")}; }}
+QPushButton#onboardingActionButton {{ background: {c("akzent")}; color: {c("akzent_text")}; border: none; padding: {_px(10, scale)}px {_px(24, scale)}px; font-weight: 800; font-size: {_px(13, scale)}px; }}
+QPushButton#onboardingActionButton:hover {{ background: {theme.hover("akzent")}; color: {c("akzent_text")}; }}
+QPushButton#onboardingSkipButton {{ color: {c("text_gedimmt")}; border: none; padding: {_px(8, scale)}px; background: transparent; }}
+QPushButton#onboardingBackButton {{ border: 1px solid {c("rand")}; padding: {_px(8, scale)}px {_px(18, scale)}px; color: {c("text")}; background: {c("hintergrund_panel")}; }}
+QPushButton#onboardingNextButton {{ background: {c("erfolg")}; color: {c("erfolg_text")}; border: none; padding: {_px(8, scale)}px {_px(18, scale)}px; font-weight: 800; }}
+QPushButton#onboardingNextButton:hover {{ background: {theme.hover("erfolg")}; color: {c("erfolg_text")}; }}
+
 /* ── Dialog ─────────────────────────────────────────────── */
 QDialog {{ background-color: {c("hintergrund_app")}; color: {c("text")}; }}
 """

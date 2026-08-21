@@ -71,32 +71,32 @@ def _make_page(
 
     # Schritt-Indikator
     step_lbl = QLabel(t("tour.wizard.step_indicator", step=step, total=total))
-    step_lbl.setStyleSheet("font-size:12px; color:#5f6f72;")
+    step_lbl.setObjectName("onboardingStepLabel")
     vl.addWidget(step_lbl)
 
     # Icon
     icon_lbl = QLabel(icon)
-    icon_lbl.setStyleSheet("font-size:52px;")
+    icon_lbl.setObjectName("onboardingIcon")
     icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
     vl.addWidget(icon_lbl)
 
     # Titel
     title_lbl = QLabel(title)
-    title_lbl.setStyleSheet("font-size:20px; font-weight:bold; color:#1e2a38;")
+    title_lbl.setObjectName("onboardingTitle")
     title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
     title_lbl.setWordWrap(True)
     vl.addWidget(title_lbl)
 
     # Trennlinie
     line = QFrame()
+    line.setObjectName("onboardingDivider")
     line.setFrameShape(QFrame.Shape.HLine)
-    line.setStyleSheet("color:#d5dce6;")
     vl.addWidget(line)
 
     # Erklärungstext
     body_lbl = QLabel(body)
+    body_lbl.setObjectName("onboardingBody")
     body_lbl.setWordWrap(True)
-    body_lbl.setStyleSheet("font-size:13px; color:#34495e; line-height:1.6;")
     body_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
     vl.addWidget(body_lbl)
 
@@ -106,11 +106,7 @@ def _make_page(
     action_btn = None
     if action_label:
         action_btn = QPushButton(action_label)
-        action_btn.setStyleSheet(
-            "background:#3498db; color:white; border:none;"
-            " padding:10px 24px; border-radius:6px;"
-            " font-weight:bold; font-size:13px;"
-        )
+        action_btn.setObjectName("onboardingActionButton")
         vl.addWidget(action_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
     return page, action_btn
@@ -152,13 +148,10 @@ class OnboardingWizard(ResponsiveDialog):
 
         # ── Fortschrittsbalken oben ───────────────────────────────────
         self._progress = QProgressBar()
+        self._progress.setObjectName("onboardingProgress")
         self._progress.setRange(0, self.TOTAL_STEPS)
         self._progress.setTextVisible(False)
         self._progress.setFixedHeight(6)
-        self._progress.setStyleSheet(
-            "QProgressBar { border:none; background:#ecf0f1; }"
-            "QProgressBar::chunk { background:#3498db; }"
-        )
         root.addWidget(self._progress)
 
         # ── Seiten-Stack ──────────────────────────────────────────────
@@ -211,25 +204,19 @@ class OnboardingWizard(ResponsiveDialog):
         nav.setContentsMargins(24, 12, 24, 20)
 
         self._btn_skip = QPushButton(t("tour.wizard.skip"))
-        self._btn_skip.setStyleSheet("color:#5f6f72; border:none; padding:8px;")
+        self._btn_skip.setObjectName("onboardingSkipButton")
         self._btn_skip.clicked.connect(self._finish)
         nav.addWidget(self._btn_skip)
 
         nav.addStretch()
 
         self._btn_back = QPushButton(t("tour.wizard.back"))
-        self._btn_back.setStyleSheet(
-            "border:1px solid #bdc3c7; padding:8px 18px; border-radius:5px;"
-            " color:#34495e; background:white;"
-        )
+        self._btn_back.setObjectName("onboardingBackButton")
         self._btn_back.clicked.connect(self._go_back)
         nav.addWidget(self._btn_back)
 
         self._btn_next = QPushButton(t("tour.wizard.next"))
-        self._btn_next.setStyleSheet(
-            "background:#27ae60; color:white; border:none;"
-            " padding:8px 18px; border-radius:5px; font-weight:bold;"
-        )
+        self._btn_next.setObjectName("onboardingNextButton")
         self._btn_next.clicked.connect(self._go_next)
         nav.addWidget(self._btn_next)
 
@@ -243,10 +230,6 @@ class OnboardingWizard(ResponsiveDialog):
         self._btn_back.setVisible(index > 0)
         is_last = (index == self.TOTAL_STEPS - 1)
         self._btn_next.setText(t("tour.wizard.done") if is_last else t("tour.wizard.next"))
-        self._btn_next.setStyleSheet(
-            ("background:#27ae60;" if not is_last else "background:#2ecc71;")
-            + " color:white; border:none; padding:8px 18px; border-radius:5px; font-weight:bold;"
-        )
 
     def _go_next(self):
         idx = self._stack.currentIndex()

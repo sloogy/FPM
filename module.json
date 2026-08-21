@@ -2,7 +2,7 @@
   "schema": "lifeplanner.module.v1",
   "id": "fpm",
   "name": "FPM - Fountain Pen Manager",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Füller, Tinten, Federn, Papier, Rotation und Sammlungswissen.",
   "source_entry": "main.py",
   "windows_executable": "FountainPenManager/FountainPenManager.exe",

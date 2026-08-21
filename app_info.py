@@ -6,13 +6,13 @@ Eine einzige Versionsquelle fuer UI, Installer, Portable-ZIP und Updater.
 """
 
 APP_NAME = "FountainPen Manager"
-APP_VERSION = "1.0.5"
-APP_RELEASE_DATE = "20. August 2026"
-APP_BUILD = "enterprise-lifeplanner-pipeline"
+APP_VERSION = "1.0.6"
+APP_RELEASE_DATE = "21. August 2026"
+APP_BUILD = "enterprise-onboarding-theme-fix"
 APP_DESCRIPTION = (
-    "Enterprise-gehärteter Stand mit zentralem SSRF-Schutz, sicher abbrechbaren "
-    "Downloads, atomaren SQLite-Sicherheitsbackups, Produktionsdiagnostik und "
-    "fail-closed Cross-Platform-Release-Pipeline inklusive signierter LifePlanner-Module."
+    "Enterprise-gehärteter Stand mit vollständig themefähiger Einführung und "
+    "Onboarding-UI, zentralem SSRF-Schutz, atomaren SQLite-Sicherheitsbackups, "
+    "Produktionsdiagnostik und fail-closed Cross-Platform-Release-Pipeline."
 )
 APP_TITLE = f"✒ {APP_NAME} v{APP_VERSION}"
 ORG_NAME = "FountainPen Community"

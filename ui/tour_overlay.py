@@ -12,6 +12,7 @@ und Windows gleich.
 from __future__ import annotations
 
 from ui.ui_scale import scale_px
+from ui import theme
 from i18n.translator import t
 
 from PySide6.QtCore import Qt, Signal, QRect, QEvent
@@ -30,13 +31,6 @@ class TourBubble(QFrame):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("tourBubble")
-        self.setStyleSheet("""
-            QFrame#tourBubble {
-                background: white;
-                border: 1px solid #bdc3c7;
-                border-radius: 12px;
-            }
-        """)
         self.setMinimumWidth(scale_px(360))
         self.setMaximumWidth(scale_px(460))
 
@@ -45,12 +39,12 @@ class TourBubble(QFrame):
         lay.setSpacing(10)
 
         self._title_lbl = QLabel()
+        self._title_lbl.setObjectName("tourTitle")
         self._title_lbl.setWordWrap(True)
-        self._title_lbl.setStyleSheet("font-size:15px; font-weight:bold; color:#2c3e50; border:none; background:transparent;")
         self._body_lbl = QLabel()
+        self._body_lbl.setObjectName("tourBody")
         self._body_lbl.setWordWrap(True)
         self._body_lbl.setTextFormat(Qt.TextFormat.RichText)
-        self._body_lbl.setStyleSheet("color:#34495e; border:none; background:transparent;")
 
         lay.addWidget(self._title_lbl)
         lay.addWidget(self._body_lbl)
@@ -58,18 +52,18 @@ class TourBubble(QFrame):
         nav = QHBoxLayout()
         nav.setSpacing(8)
         self._skip_btn = QPushButton(t("tour.buttons.abort"))
-        self._skip_btn.setStyleSheet("color:#c0392b; border:1px solid #e6b0aa; padding:6px 10px; border-radius:5px; background:#fff5f5;")
+        self._skip_btn.setObjectName("tourSkipButton")
         self._skip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._skip_btn.clicked.connect(self.skip_clicked)
         nav.addWidget(self._skip_btn)
         nav.addStretch()
         self._back_btn = QPushButton(t("tour.buttons.back"))
-        self._back_btn.setStyleSheet("border:1px solid #bdc3c7; padding:6px 14px; border-radius:5px; color:#34495e; background:white;")
+        self._back_btn.setObjectName("tourBackButton")
         self._back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._back_btn.clicked.connect(self.back_clicked)
         nav.addWidget(self._back_btn)
         self._next_btn = QPushButton(t("tour.buttons.next"))
-        self._next_btn.setStyleSheet("background:#27ae60; color:white; border:none; padding:6px 16px; border-radius:5px; font-weight:bold;")
+        self._next_btn.setObjectName("tourNextButton")
         self._next_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._next_btn.clicked.connect(self.next_clicked)
         nav.addWidget(self._next_btn)
@@ -96,8 +90,7 @@ class SpotlightOverlay(QWidget):
     back_clicked = Signal()
     skip_clicked = Signal()
 
-    DIM_COLOR = QColor(0, 0, 0, 170)
-    HALO_COLOR = QColor("#3498db")
+    DIM_ALPHA = 170
     HALO_WIDTH = 3
     HALO_PADDING = 8
 
@@ -124,17 +117,6 @@ class SpotlightOverlay(QWidget):
         self._abort_btn.setObjectName("tourAbortButton")
         self._abort_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._abort_btn.setToolTip(t("tour.buttons.abort_tooltip"))
-        self._abort_btn.setStyleSheet("""
-            QPushButton#tourAbortButton {
-                background: #c0392b;
-                color: white;
-                border: none;
-                border-radius: 7px;
-                padding: 8px 14px;
-                font-weight: bold;
-            }
-            QPushButton#tourAbortButton:hover { background: #a93226; }
-        """)
         self._abort_btn.clicked.connect(self.skip_clicked)
         self._abort_btn.hide()
 
@@ -200,13 +182,25 @@ class SpotlightOverlay(QWidget):
         self._esc_shortcut.setEnabled(False)
 
     # ── Painting & Layout ───────────────────────────────────────────────
+    @staticmethod
+    def _dim_color() -> QColor:
+        """Theme-nahe Abdunklung; Alpha bleibt bewusst konstant."""
+        color = QColor(theme.color("hintergrund_seitenleiste"))
+        color.setAlpha(SpotlightOverlay.DIM_ALPHA)
+        return color
+
+    @staticmethod
+    def _halo_color() -> QColor:
+        """Spotlight-Rahmen folgt immer der Akzentfarbe des aktiven Profils."""
+        return QColor(theme.color("akzent"))
+
     def paintEvent(self, _event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         tr = self._target_rect
         if tr is None or tr.isNull():
-            p.fillRect(self.rect(), self.DIM_COLOR)
+            p.fillRect(self.rect(), self._dim_color())
             return
 
         # Padding um das Target legen
@@ -218,20 +212,20 @@ class SpotlightOverlay(QWidget):
         w, h = self.width(), self.height()
         # Oben
         if halo.top() > 0:
-            p.fillRect(0, 0, w, halo.top(), self.DIM_COLOR)
+            p.fillRect(0, 0, w, halo.top(), self._dim_color())
         # Unten
         if halo.bottom() < h:
-            p.fillRect(0, halo.bottom() + 1, w, h - halo.bottom() - 1, self.DIM_COLOR)
+            p.fillRect(0, halo.bottom() + 1, w, h - halo.bottom() - 1, self._dim_color())
         # Links
         if halo.left() > 0:
-            p.fillRect(0, halo.top(), halo.left(), halo.height(), self.DIM_COLOR)
+            p.fillRect(0, halo.top(), halo.left(), halo.height(), self._dim_color())
         # Rechts
         if halo.right() < w:
             p.fillRect(halo.right() + 1, halo.top(),
-                       w - halo.right() - 1, halo.height(), self.DIM_COLOR)
+                       w - halo.right() - 1, halo.height(), self._dim_color())
 
         # Rahmen um das Target
-        pen = QPen(self.HALO_COLOR, self.HALO_WIDTH)
+        pen = QPen(self._halo_color(), self.HALO_WIDTH)
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         p.setPen(pen)
         p.setBrush(Qt.BrushStyle.NoBrush)

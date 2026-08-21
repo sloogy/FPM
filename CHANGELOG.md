@@ -1,3 +1,13 @@
+# Changelog
+
+## 1.0.6 — 2026-08-21
+
+- Einführung/Tour folgt jetzt vollständig dem aktiven FPM-/LifePlanner-Theme.
+- Tour-Bubble, Titel, Text, Navigation und Abbruchknopf nutzen zentrale Theme-Rollen statt fest codierter Hellfarben.
+- Spotlight-Rahmen folgt der Akzentfarbe; die Abdunklung wird aus dem aktiven Seitenleisten-Hintergrund abgeleitet.
+- Der ältere Onboarding-Wizard wurde als Fallback ebenfalls auf zentrale Theme-Styles umgestellt.
+- Regressionstests verhindern neue hart codierte Tour-/Onboarding-Farben.
+
 ## 1.0.5 – Releasegate: engere Ausnahmen
 
 - Der Releaselauf zu 1.0.4 scheiterte am Ausnahmen-Ratchet: `ui/theme_manager.py`
