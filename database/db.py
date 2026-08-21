@@ -174,6 +174,12 @@ def _connect(db_path: Path) -> None:
             cursor.close()
 
     Base.metadata.create_all(engine)
+    # Erst jetzt liegt die Datei sicher auf der Platte. Sie traegt Kaufpreise,
+    # Haendler und persoenliche Notizen und wurde bis hierher mit dem
+    # Standard-umask angelegt - auf typischen Linux-Systemen weltlesbar.
+    from logic.file_permissions import secure_file
+
+    secure_file(db_path)
     SessionLocal = sessionmaker(
         autocommit=False, autoflush=False,
         bind=engine, expire_on_commit=False,
