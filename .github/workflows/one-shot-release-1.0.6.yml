@@ -1,92 +1,63 @@
-name: One-shot FPM 1.0.6 theme release
+name: Verify FPM 1.0.6 release
 
 on:
   push:
     branches:
       - fix/onboarding-theme-1.0.6
+    paths-ignore:
+      - '.release/v1.0.6-release-status.txt'
 
 permissions:
   contents: write
-  actions: write
+  actions: read
 
 concurrency:
-  group: fpm-one-shot-1.0.6
+  group: fpm-verify-release-1.0.6
   cancel-in-progress: true
 
 jobs:
-  publish:
+  verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout automation branch
+      - name: Checkout verification branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Verify exact base and materialize fix
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin main --tags
-          test "$(git rev-parse origin/main)" = "4ffc6af0fc33f9437395d2ad9dd03f1dbfc8e06e"
-          if git ls-remote --exit-code --tags origin refs/tags/v1.0.6 >/dev/null 2>&1; then
-            echo "Tag v1.0.6 already exists; refusing to overwrite it." >&2
-            exit 1
-          fi
-          base64 --decode .release/onboarding-theme-1.0.6.patch.gz.b64 | gzip -dc > /tmp/onboarding-theme.patch
-          git reset --hard origin/main
-          git apply --check /tmp/onboarding-theme.patch
-          git apply /tmp/onboarding-theme.patch
-
-      - name: Synchronize version and run pre-publish gates
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install --disable-pip-version-check -q pytest
-          python tools/sync_version.py
-          python -m pytest -q tests/test_onboarding_theme_1006.py
-          python tools/sync_version.py --check
-          python tools/check_windows_paths.py
-          python tools/name_audit.py
-          python tools/exception_audit.py
-          python tools/db_access_audit.py
-          python tools/i18n_audit.py
-          python tools/i18n_quality_audit.py
-          python tools/i18n_key_wiring_audit.py
-          python tools/i18n_visible_text_audit.py
-          python tools/killcritic_1000_loop_audit.py
-          python -m compileall -q .
-
-      - name: Commit exact release source and push main
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- \
-            app_info.py CHANGELOG.md \
-            ui/tour_overlay.py ui/onboarding_wizard.py ui/styles.py \
-            tests/test_onboarding_theme_1006.py \
-            version.json VERSION_INFO.txt installer/FountainPenManager_Setup.iss \
-            module.json latest.json.template docs/latest.json.template README.md \
-            docs/WINDOWS_RELEASE_DE.md docs/WINDOWS_RELEASE_EN.md docs/WINDOWS_RELEASE_FR.md
-          git diff --cached --check
-          python tools/sync_version.py --check
-          test -z "$(git diff --name-only)"
-          test -z "$(git ls-files --others --exclude-standard)"
-          git commit -m "FPM 1.0.6: Einführung folgt dem Theme"
-          git push origin HEAD:main
-
-      - name: Tag and start gated cross-platform release
+      - name: Wait for the gated v1.0.6 release run and record result
         env:
           GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: 73965fcd01a9b5d2dfd268853b538340d4c8dfae
         shell: bash
         run: |
           set -euo pipefail
-          git tag v1.0.6
-          git push origin v1.0.6
-          gh workflow run windows-release.yml --ref v1.0.6
+          run_id=""
+          for _ in $(seq 1 60); do
+            run_id="$(gh run list --workflow windows-release.yml --limit 40 --json databaseId,headSha,event --jq '.[] | select(.headSha == env.EXPECTED_SHA and .event == "workflow_dispatch") | .databaseId' | head -n1)"
+            if [ -n "$run_id" ]; then
+              break
+            fi
+            sleep 5
+          done
+
+          mkdir -p .release
+          if [ -z "$run_id" ]; then
+            printf 'status=missing\nversion=1.0.6\nsha=%s\n' "$EXPECTED_SHA" > .release/v1.0.6-release-status.txt
+          else
+            set +e
+            gh run watch "$run_id" --exit-status --interval 10
+            watch_rc=$?
+            set -e
+            conclusion="$(gh run view "$run_id" --json conclusion --jq '.conclusion // "unknown"')"
+            status="$(gh run view "$run_id" --json status --jq '.status // "unknown"')"
+            url="$(gh run view "$run_id" --json url --jq '.url // ""')"
+            printf 'status=%s\nconclusion=%s\nrun_id=%s\nversion=1.0.6\nsha=%s\nurl=%s\nwatch_rc=%s\n' \
+              "$status" "$conclusion" "$run_id" "$EXPECTED_SHA" "$url" "$watch_rc" \
+              > .release/v1.0.6-release-status.txt
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- .release/v1.0.6-release-status.txt
+          git commit -m "Record FPM v1.0.6 release result"
+          git push origin HEAD:fix/onboarding-theme-1.0.6
