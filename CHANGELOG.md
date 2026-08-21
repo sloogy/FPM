@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.7 — 2026-08-21
+
+- Release-Gate korrigiert: stabiler Build-Identifier `enterprise-lifeplanner-pipeline` wiederhergestellt.
+- Der Theme-Fix aus 1.0.6 bleibt unverändert enthalten.
+- Vollständige Windows- und Linux-Release-Gates laufen vor dem Tagging.
+
 ## 1.0.6 — 2026-08-21
 
 - Einführung/Tour folgt jetzt vollständig dem aktiven FPM-/LifePlanner-Theme.

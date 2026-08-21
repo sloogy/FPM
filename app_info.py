@@ -6,9 +6,9 @@ Eine einzige Versionsquelle fuer UI, Installer, Portable-ZIP und Updater.
 """
 
 APP_NAME = "FountainPen Manager"
-APP_VERSION = "1.0.6"
+APP_VERSION = "1.0.7"
 APP_RELEASE_DATE = "21. August 2026"
-APP_BUILD = "enterprise-onboarding-theme-fix"
+APP_BUILD = "enterprise-lifeplanner-pipeline"
 APP_DESCRIPTION = (
     "Enterprise-gehärteter Stand mit vollständig themefähiger Einführung und "
     "Onboarding-UI, zentralem SSRF-Schutz, atomaren SQLite-Sicherheitsbackups, "
