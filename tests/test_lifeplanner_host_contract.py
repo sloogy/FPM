@@ -9,8 +9,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_manifest_and_host_paths(monkeypatch, tmp_path):
     manifest = json.loads((ROOT / "module.json").read_text(encoding="utf-8"))
-    assert manifest["schema"] == "lifeplanner.module.v1"
+    assert manifest["schema"] == "lifeplanner.module.v2"
     assert manifest["id"] == "fpm"
+    assert manifest["requires_host"] == ">=0.5.15,<0.6"
+    assert manifest["bridge"]["publishes"][0]["file"] == "fpm_to_budgetmanager.jsonl"
     monkeypatch.setenv("FPM_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("LIFEPLANNER_BRIDGE_DIR", str(tmp_path / "bridge"))
     assert _data_dir() == tmp_path / "data"
