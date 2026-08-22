@@ -1,0 +1,74 @@
+name: Prepare Release Tag
+
+on:
+  push:
+    branches:
+      - 'release-trigger/v*'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: fpm-release-prepare-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Version aus Release-Branch übernehmen
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#release-trigger/}"
+          VERSION="${TAG#v}"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          python - "$VERSION" <<'PY'
+          import re, sys
+          from pathlib import Path
+          p = Path('app_info.py')
+          text = p.read_text(encoding='utf-8')
+          text, count = re.subn(r'^APP_VERSION\s*=\s*"[^"]+"', f'APP_VERSION = "{sys.argv[1]}"', text, count=1, flags=re.M)
+          if count != 1:
+              raise SystemExit('APP_VERSION nicht eindeutig gefunden')
+          p.write_text(text, encoding='utf-8')
+          PY
+          python tools/sync_version.py
+          python tools/sync_version.py --check
+
+      - name: Synchronisierten Release-Commit erzeugen
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "release: FPM ${GITHUB_REF_NAME#release-trigger/v}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+
+      - name: Tag einmalig erzeugen und bestehenden Release-Workflow starten
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#release-trigger/}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} existiert bereits; Abbruch statt Überschreiben." >&2
+            exit 1
+          fi
+          git tag "$TAG" HEAD
+          git push origin "$TAG"
+          gh workflow run windows-release.yml --ref "$TAG"
