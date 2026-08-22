@@ -11,10 +11,39 @@ construction time, with small fallback passes only for dialogs/menus.
 from __future__ import annotations
 
 from functools import lru_cache
+import logging
 import re
 from typing import Any, Iterable
 
 from i18n.translator import Translator
+
+logger = logging.getLogger(__name__)
+
+# Je Ursache einmal gemeldet. Der Uebersetzungslauf geht bei jedem
+# Sprachwechsel ueber hunderte Qt-Objekte; eine Meldung je Objekt wuerde das
+# Log fluten und die eine interessante Zeile darin begraben.
+_gemeldet: set[str] = set()
+
+
+def _uebersprungen(was: str, fehler: Exception) -> None:
+    """Ein widerspenstiges Objekt haelt den Uebersetzungslauf nicht auf.
+
+    Es darf ihn aber auch nicht spurlos verlassen: Bis Loop 25 verschwand
+    jeder Fehler hier stumm, und eine unuebersetzt gebliebene Stelle sah aus
+    wie eine fehlende Uebersetzung - obwohl der Text vorhanden war und nur
+    nicht ankam.
+
+    Gefangen wird bewusst weiterhin breit. Der Lauf geht ueber hunderte
+    fremde Widgets, auch benutzerdefinierte; ein Sprachwechsel, der die
+    Oberflaeche halb uebersetzt zuruecklaesst, waere schlimmer als ein
+    Fehler, der im Log steht. Praezisiert wird hier erst, wenn das Log
+    zeigt, was tatsaechlich auftritt.
+    """
+    schluessel = f"{was}:{type(fehler).__name__}"
+    if schluessel in _gemeldet:
+        return
+    _gemeldet.add(schluessel)
+    logger.debug("%s uebersprungen: %s", was, fehler)
 
 
 _TAG_RE = re.compile(r"(<[^>]+>)")
@@ -869,8 +898,8 @@ def _source_property(obj, prop_name: str, current: str) -> str:
         if isinstance(stored, str):
             return stored
         obj.setProperty(prop_name, current)
-    except Exception:
-        pass
+    except Exception as fehler:
+        _uebersprungen("_source_property", fehler)
     return current
 
 
@@ -881,8 +910,8 @@ def _set_translated(obj, prop_name: str, getter, setter):
         new_value = translate_source_text(source)
         if isinstance(new_value, str) and new_value != current:
             setter(new_value)
-    except Exception:
-        pass
+    except Exception as fehler:
+        _uebersprungen("_set_translated", fehler)
 
 
 def _translate_action(action) -> None:
@@ -892,15 +921,15 @@ def _translate_action(action) -> None:
         if tip:
             source = _source_property(action, "_fpm_i18n_action_tooltip", tip)
             action.setToolTip(translate_source_text(source))
-    except Exception:
-        pass
+    except Exception as fehler:
+        _uebersprungen("_translate_action", fehler)
     try:
         stat = action.statusTip()
         if stat:
             source = _source_property(action, "_fpm_i18n_action_status", stat)
             action.setStatusTip(translate_source_text(source))
-    except Exception:
-        pass
+    except Exception as fehler:
+        _uebersprungen("_translate_action", fehler)
 
 
 def _translate_combo(combo) -> None:
@@ -931,8 +960,8 @@ def _translate_combo(combo) -> None:
             new_value = translate_source_text(source)
             if new_value != current:
                 combo.setItemText(i, new_value)
-    except Exception:
-        pass
+    except Exception as fehler:
+        _uebersprungen("_translate_combo", fehler)
 
 
 def _translate_list_widget(list_widget) -> None:
@@ -950,8 +979,8 @@ def _translate_list_widget(list_widget) -> None:
             new_value = translate_source_text(source)
             if new_value != item.text():
                 item.setText(new_value)
-    except Exception:
-        pass
+    except Exception as fehler:
+        _uebersprungen("_translate_list_widget", fehler)
 
 
 def _translate_table_headers(table) -> None:
@@ -978,8 +1007,8 @@ def _translate_table_headers(table) -> None:
                 new_value = translate_source_text(source)
                 if new_value != item.text():
                     item.setText(new_value)
-    except Exception:
-        pass
+    except Exception as fehler:
+        _uebersprungen("_translate_table_headers", fehler)
 
 
 def apply_widget_tree(root) -> None:
@@ -1009,8 +1038,8 @@ def apply_widget_tree(root) -> None:
             if title:
                 source = _source_property(widget, "_fpm_i18n_window_title", title)
                 widget.setWindowTitle(translate_source_text(source))
-        except Exception:
-            pass
+        except Exception as fehler:
+            _uebersprungen("apply_widget_tree", fehler)
 
         if isinstance(widget, QLabel):
             _set_translated(widget, "_fpm_i18n_text", widget.text, widget.setText)
@@ -1028,8 +1057,8 @@ def apply_widget_tree(root) -> None:
                 if ph:
                     source = _source_property(widget, "_fpm_i18n_placeholder", ph)
                     widget.setPlaceholderText(translate_source_text(source))
-            except Exception:
-                pass
+            except Exception as fehler:
+                _uebersprungen("apply_widget_tree", fehler)
         elif isinstance(widget, QComboBox):
             _translate_combo(widget)
         elif isinstance(widget, QTabWidget):
@@ -1043,8 +1072,8 @@ def apply_widget_tree(root) -> None:
                     new_txt = translate_source_text(sources[i])
                     if new_txt != txt:
                         widget.setTabText(i, new_txt)
-            except Exception:
-                pass
+            except Exception as fehler:
+                _uebersprungen("apply_widget_tree", fehler)
         elif isinstance(widget, QListWidget):
             _translate_list_widget(widget)
         elif isinstance(widget, QTableWidget):
@@ -1053,15 +1082,15 @@ def apply_widget_tree(root) -> None:
             try:
                 source = _source_property(widget, "_fpm_i18n_menu_title", widget.title())
                 widget.setTitle(translate_source_text(source))
-            except Exception:
-                pass
+            except Exception as fehler:
+                _uebersprungen("apply_widget_tree", fehler)
 
         # Actions live on toolbars, menus and some widgets.
         try:
             for action in widget.actions():
                 _translate_action(action)
-        except Exception:
-            pass
+        except Exception as fehler:
+            _uebersprungen("apply_widget_tree", fehler)
 
         if isinstance(widget, QToolBar):
             _set_translated(widget, "_fpm_i18n_toolbar_title", widget.windowTitle, widget.setWindowTitle)
@@ -1131,8 +1160,8 @@ def install_qt_i18n_hooks() -> None:
     for name in ("information", "warning", "critical", "question"):
         try:
             _wrap_msgbox(name)
-        except Exception:
-            pass
+        except Exception as fehler:
+            _uebersprungen("install_qt_i18n_hooks", fehler)
 
     def _wrap_file_dialog(fn_name: str):
         original = getattr(QFileDialog, fn_name)
@@ -1150,8 +1179,8 @@ def install_qt_i18n_hooks() -> None:
     for name in ("getOpenFileName", "getSaveFileName", "getExistingDirectory"):
         try:
             _wrap_file_dialog(name)
-        except Exception:
-            pass
+        except Exception as fehler:
+            _uebersprungen("install_qt_i18n_hooks", fehler)
 
     def _wrap_input_dialog(fn_name: str):
         original = getattr(QInputDialog, fn_name)
@@ -1169,5 +1198,5 @@ def install_qt_i18n_hooks() -> None:
     for name in ("getText", "getItem", "getInt", "getDouble"):
         try:
             _wrap_input_dialog(name)
-        except Exception:
-            pass
+        except Exception as fehler:
+            _uebersprungen("install_qt_i18n_hooks", fehler)
