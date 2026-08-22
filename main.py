@@ -4,6 +4,7 @@ Starte mit:  python main.py
 """
 from __future__ import annotations
 
+import logging
 import sys
 import traceback
 from pathlib import Path
@@ -93,8 +94,13 @@ def main() -> None:
         QGuiApplication.setHighDpiScaleFactorRoundingPolicy(
             Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
         )
-    except Exception:
-        pass
+    except (AttributeError, RuntimeError) as fehler:
+        # Aeltere Qt-Fassungen kennen die Richtlinie nicht. Kein Grund, den
+        # Start abzubrechen - aber wer eine unscharfe Oberflaeche meldet,
+        # soll den Grund im Log finden.
+        logging.getLogger(__name__).warning(
+            "HighDPI-Rundungsrichtlinie nicht gesetzt: %s", fehler
+        )
     install_qt_message_handler()
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)

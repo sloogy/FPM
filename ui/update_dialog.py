@@ -5,6 +5,7 @@ externen Apply-Prozess. Fuer Installer-Installationen wird das Setup-Asset
 bevorzugt, fuer Portable-Builds das portable ZIP.
 """
 from __future__ import annotations
+import logging
 
 import sys
 from pathlib import Path
@@ -199,8 +200,14 @@ class UpdateDialog(ResponsiveDialog):
         if self.parent() is not None:
             try:
                 self.parent().close()
-            except Exception:
-                pass
+            except RuntimeError as fehler:
+                # Das Hauptfenster kann schon zerstoert sein. Das Update laeuft
+                # trotzdem weiter - aber ein Fenster, das sich nicht schliessen
+                # laesst, bleibt beim Neustart im Weg.
+                logging.getLogger(__name__).warning(
+                    "Hauptfenster liess sich vor dem Update nicht schliessen: %s",
+                    fehler,
+                )
         self.accept()
         app = QApplication.instance()
         if app is not None:
