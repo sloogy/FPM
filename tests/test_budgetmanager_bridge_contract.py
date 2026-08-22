@@ -297,3 +297,66 @@ def test_eine_kaputte_zeile_sprengt_die_anzeige_nicht(tmp_path, monkeypatch):
     nach_name = {b.name: b for b in befunde}
     assert nach_name["BudgetManager → FPM"].vorhanden
     assert nach_name["BudgetManager → FPM"].eintraege == 0
+
+
+# ── Loop 31: Zwei Startarten, eine Bruecke ──────────────────────────────────
+
+def test_sparziele_kommen_auch_aus_der_anderen_bruecke(tmp_path, monkeypatch):
+    """Der Fall, um den es geht: BudgetManager lief im LifePlanner und legte
+    seine Sparziele im Profilordner ab. FPM wird danach eigenstaendig
+    gestartet - und sah bis Loop 31 ein leeres Dashboard."""
+    from logic.bridge_registry import eintragen
+    from logic.budget_export_service import load_budgetmanager_savings_goals
+
+    host = tmp_path / "profil" / "bridge"
+    host.mkdir(parents=True)
+    _jsonl(host, "budgetmanager_savings_goals.jsonl",
+           BUDGETMANAGER_SPARZIEL_MANIFEST, BUDGETMANAGER_SPARZIEL)
+    eintragen(host)
+
+    allein = tmp_path / "eigenstaendig"
+    allein.mkdir()
+    monkeypatch.setenv("LIFEPLANNER_BRIDGE_DIR", str(allein))
+
+    ziele = load_budgetmanager_savings_goals()
+    assert [z.external_id for z in ziele] == [BUDGETMANAGER_SPARZIEL["external_id"]]
+
+
+def test_dasselbe_ziel_in_zwei_bruecken_erscheint_einmal(tmp_path, monkeypatch):
+    """Und zwar so, wie es im aktiven Ordner steht: Der ist der juengere Stand."""
+    from logic.bridge_registry import eintragen
+    from logic.budget_export_service import load_budgetmanager_savings_goals
+
+    alt = tmp_path / "alt"
+    alt.mkdir()
+    _jsonl(alt, "budgetmanager_savings_goals.jsonl",
+           BUDGETMANAGER_SPARZIEL_MANIFEST,
+           {**BUDGETMANAGER_SPARZIEL, "label": "Alter Stand"})
+    eintragen(alt)
+
+    aktiv = tmp_path / "aktiv"
+    aktiv.mkdir()
+    _jsonl(aktiv, "budgetmanager_savings_goals.jsonl",
+           BUDGETMANAGER_SPARZIEL_MANIFEST,
+           {**BUDGETMANAGER_SPARZIEL, "label": "Neuer Stand"})
+    monkeypatch.setenv("LIFEPLANNER_BRIDGE_DIR", str(aktiv))
+
+    ziele = load_budgetmanager_savings_goals()
+    assert len(ziele) == 1
+    assert ziele[0].label == "Neuer Stand"
+
+
+def test_der_zustand_zeigt_auch_die_andere_bruecke(tmp_path, monkeypatch):
+    from logic.bridge_registry import eintragen
+    from logic.budget_export_service import bridge_zustand_alle
+
+    andere = tmp_path / "andere"
+    andere.mkdir()
+    eintragen(andere)
+    aktiv = tmp_path / "aktiv"
+    aktiv.mkdir()
+    monkeypatch.setenv("LIFEPLANNER_BRIDGE_DIR", str(aktiv))
+
+    alle = bridge_zustand_alle()
+    assert [ordner for ordner, _ in alle] == [andere, aktiv]
+    assert all(len(befunde) == 3 for _, befunde in alle)

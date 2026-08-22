@@ -96,16 +96,32 @@ def default_bridge_dir() -> Path:
     wird er beim Anlegen auf 0700 gesetzt, denn was darin liegt, sind
     Buchungen.
     """
+    from logic.bridge_registry import eintragen
+
     override = os.environ.get("LIFEPLANNER_BRIDGE_DIR", "").strip()
     if override:
-        return Path(override).expanduser().resolve()
-    ordner = Path.home() / BRIDGE_DIR_NAME
-    if not ordner.exists():
-        ordner.mkdir(parents=True, exist_ok=True)
-        from logic.file_permissions import secure_dir
+        ordner = Path(override).expanduser().resolve()
+    else:
+        ordner = Path.home() / BRIDGE_DIR_NAME
+        if not ordner.exists():
+            ordner.mkdir(parents=True, exist_ok=True)
+            from logic.file_permissions import secure_dir
 
-        secure_dir(ordner)
+            secure_dir(ordner)
+    eintragen(ordner)
     return ordner
+
+
+def alle_bridge_ordner() -> tuple[Path, ...]:
+    """Alle Brueckenordner, aus denen gelesen wird - der aktive zuletzt.
+
+    Wer FPM mal eigenstaendig und mal im LifePlanner startet, hat mehrere
+    Bruecken. Geschrieben wird nur in den aktiven, gelesen aus allen: Sonst
+    liegt der Stand aus der anderen Startart da und kommt nie an.
+    """
+    from logic.bridge_registry import bekannte_ordner
+
+    return bekannte_ordner(default_bridge_dir())
 
 
 def default_fpm_to_budgetmanager_path() -> Path:
@@ -426,8 +442,23 @@ class BridgeDateiBefund:
 
 
 def bridge_zustand() -> tuple[Path, tuple[BridgeDateiBefund, ...]]:
-    """Der aktive Brückenordner und was darin liegt."""
+    """Der aktive Brückenordner und was darin liegt.
+
+    Warum das sichtbar sein muss: Der Ordner hängt davon ab, wie FPM gestartet
+    wurde. Im LifePlanner gibt der Host ihn über LIFEPLANNER_BRIDGE_DIR vor,
+    eigenständig liegt er im Benutzerverzeichnis. Wer beides gemischt nutzt,
+    hat zwei getrennte Brücken - ``bridge_zustand_alle`` zeigt auch die
+    andere, gelesen wird seit Loop 31 aus beiden.
+
+    Unterschieden wird zwischen "Datei fehlt" (das andere Programm hat noch
+    nichts geschrieben) und "leer": Fehlt sie, liegt es dort und nicht hier.
+    """
     ordner = default_bridge_dir()
+    return ordner, _befunde_in(ordner)
+
+
+def _befunde_in(ordner: Path) -> tuple[BridgeDateiBefund, ...]:
+    """Was in den drei Brueckendateien eines Ordners steht."""
     befunde = []
     for name, dateiname, schemas in (
         ("FPM → BudgetManager", FPM_TO_BUDGETMANAGER_FILE, {"budgetmanager.import.v1"}),
@@ -445,59 +476,88 @@ def bridge_zustand() -> tuple[Path, tuple[BridgeDateiBefund, ...]]:
         except ValueError:
             anzahl = 0
         befunde.append(BridgeDateiBefund(name, pfad, True, anzahl))
-    return ordner, tuple(befunde)
+    return tuple(befunde)
+
+
+def bridge_zustand_alle() -> tuple[tuple[Path, tuple[BridgeDateiBefund, ...]], ...]:
+    """Derselbe Befund fuer jede bekannte Bruecke, die aktive zuletzt.
+
+    ``bridge_zustand`` zeigt nur den Ordner, der gerade gilt. Das ist die
+    Antwort auf "wo schreibe ich hin". Die andere Frage - "wo liegt der Stand
+    aus der anderen Startart" - beantwortet erst diese Liste. Sie ist der
+    Grund, warum ein gemischter Betrieb nicht mehr wie Datenverlust aussieht.
+    """
+    aktiv = default_bridge_dir()
+    ergebnis = []
+    for ordner in alle_bridge_ordner():
+        if ordner == aktiv:
+            continue
+        ergebnis.append((ordner, _befunde_in(ordner)))
+    ergebnis.append((aktiv, _befunde_in(aktiv)))
+    return tuple(ergebnis)
+
+
+def _sparziel_aus_datensatz(rec: dict[str, Any]) -> BudgetManagerSavingsGoal | None:
+    """Ein Sparziel aus einer Brueckenzeile - oder None, wenn sie keines ist."""
+    external_id = str(rec.get("external_id") or "").strip()
+    if not external_id:
+        return None
+    item_type = _normalize_item_type(
+        rec.get("item_type"),
+        str(rec.get("goal_name") or rec.get("label") or ""),
+        str(rec.get("category") or ""),
+    )
+    target = float(rec.get("target_amount") or 0.0)
+    current = float(rec.get("current_amount") or 0.0)
+    remaining = float(rec.get("remaining_amount") if rec.get("remaining_amount") is not None else max(0.0, target - current))
+    progress = float(rec.get("progress_percent") if rec.get("progress_percent") is not None else (0.0 if target <= 0 else current / target * 100.0))
+    return BudgetManagerSavingsGoal(
+        external_id=external_id,
+        source=str(rec.get("source") or "BudgetManager"),
+        item_type=item_type,
+        label=str(rec.get("label") or rec.get("goal_name") or "Sparziel"),
+        goal_name=str(rec.get("goal_name") or rec.get("label") or "Sparziel"),
+        status=str(rec.get("status") or "sparend"),
+        target_amount=round(target, 2),
+        current_amount=round(current, 2),
+        remaining_amount=round(max(0.0, remaining), 2),
+        progress_percent=round(max(0.0, min(100.0, progress)), 1),
+        currency=str(rec.get("currency") or "CHF"),
+        deadline=str(rec.get("deadline") or ""),
+        category=str(rec.get("category") or ""),
+        notes=str(rec.get("notes") or ""),
+    )
 
 
 def load_budgetmanager_savings_goals(
     path: str | Path | None = None, *, visible_only: bool = True
 ) -> list[BudgetManagerSavingsGoal]:
-    """Lädt die read-only Sparziel-Spiegelung aus BudgetManager."""
-    src = Path(path) if path else default_budgetmanager_savings_goals_path()
-    goals: list[BudgetManagerSavingsGoal] = []
-    for rec in _iter_jsonl_records(src):
-        if rec.get("schema") not in SAVINGS_GOAL_SCHEMAS:
-            continue
-        if visible_only and rec.get("visible") is False:
-            continue
-        external_id = str(rec.get("external_id") or "").strip()
-        if not external_id:
-            continue
-        item_type = _normalize_item_type(
-            rec.get("item_type"),
-            str(rec.get("goal_name") or rec.get("label") or ""),
-            str(rec.get("category") or ""),
-        )
-        target = float(rec.get("target_amount") or 0.0)
-        current = float(rec.get("current_amount") or 0.0)
-        remaining = float(
-            rec.get("remaining_amount")
-            if rec.get("remaining_amount") is not None
-            else max(0.0, target - current)
-        )
-        progress = float(
-            rec.get("progress_percent")
-            if rec.get("progress_percent") is not None
-            else (0.0 if target <= 0 else current / target * 100.0)
-        )
-        goals.append(
-            BudgetManagerSavingsGoal(
-                external_id=external_id,
-                source=str(rec.get("source") or "BudgetManager"),
-                item_type=item_type,
-                label=str(rec.get("label") or rec.get("goal_name") or "Sparziel"),
-                goal_name=str(rec.get("goal_name") or rec.get("label") or "Sparziel"),
-                status=str(rec.get("status") or "sparend"),
-                target_amount=round(target, 2),
-                current_amount=round(current, 2),
-                remaining_amount=round(max(0.0, remaining), 2),
-                progress_percent=round(max(0.0, min(100.0, progress)), 1),
-                currency=str(rec.get("currency") or "CHF"),
-                deadline=str(rec.get("deadline") or ""),
-                category=str(rec.get("category") or ""),
-                notes=str(rec.get("notes") or ""),
-            )
-        )
-    goals.sort(
-        key=lambda g: (g.status != "sparend", g.deadline or "9999-12-31", g.label.lower())
-    )
+    """Lädt die read-only Sparziel-Spiegelung aus BudgetManager.
+
+    FPM speichert diese Daten nicht dauerhaft; sie dienen nur zur Anzeige auf
+    dem Dashboard bzw. bei verknüpften Wunsch-/Füller-Projekten.
+
+    Ohne ausdrücklichen Pfad wird aus jeder bekannten Brücke gelesen: Wer FPM
+    mal eigenständig und mal im LifePlanner startet, hätte sonst je nach
+    Startart andere Sparziele auf dem Dashboard.
+    """
+    if path:
+        quellen = [Path(path)]
+    else:
+        quellen = [o / BUDGETMANAGER_SAVINGS_GOALS_FILE for o in alle_bridge_ordner()]
+    # Nach Kennung statt als Liste: Steht dasselbe Ziel in zwei Brücken, soll
+    # es einmal erscheinen - und zwar so, wie es im aktiven Ordner steht. Der
+    # kommt zuletzt und überschreibt damit die älteren Stände.
+    nach_kennung: dict[str, BudgetManagerSavingsGoal] = {}
+    for src in quellen:
+        for rec in _iter_jsonl_records(src):
+            if rec.get("schema") not in SAVINGS_GOAL_SCHEMAS:
+                continue
+            if visible_only and rec.get("visible") is False:
+                continue
+            goal = _sparziel_aus_datensatz(rec)
+            if goal is not None:
+                nach_kennung[goal.external_id] = goal
+    goals = list(nach_kennung.values())
+    goals.sort(key=lambda g: (g.status != "sparend", g.deadline or "9999-12-31", g.label.lower()))
     return goals

@@ -46,3 +46,17 @@ def _close_database_after_suite():
         close_db()
     except Exception:
         pass
+
+
+# ── Loop 31: Das Bruecken-Register gehoert nie in die echte Nutzerkonfiguration ─
+# Ohne diese Weiche schreibt jeder Test, der einen Brueckenordner aufloest, in
+# ~/.config/fpm-suite/bridges.json - und traegt tmp-Pfade ein, die es danach
+# nicht mehr gibt.
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _bruecken_register_isolieren(tmp_path_factory, monkeypatch):
+    ziel = tmp_path_factory.mktemp("bridge-registry") / "bridges.json"
+    monkeypatch.setenv("FPM_SUITE_BRIDGE_REGISTRY", str(ziel))
+    yield

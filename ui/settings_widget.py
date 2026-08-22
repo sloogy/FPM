@@ -1181,21 +1181,36 @@ class SettingsWidget(QWidget):
 
     def _refresh_bridge_status(self) -> None:
         """Zeigt Ordner und Inhalt der drei Brueckendateien."""
-        from logic.budget_export_service import bridge_zustand
+        from logic.budget_export_service import bridge_zustand_alle
 
         try:
-            ordner, befunde = bridge_zustand()
+            alle = bridge_zustand_alle()
         except OSError as fehler:
             self._bridge_status.setText(str(fehler))
             return
-        zeilen = [t('settings.bridge_status_folder', pfad=ordner)]
+        # Der aktive Ordner kommt zuletzt und wird zuerst gezeigt: Er
+        # beantwortet die haeufigere Frage ("wo schreibe ich hin"), die
+        # anderen die seltenere ("wo liegt der Stand aus der anderen
+        # Startart") - und die gab es vor Loop 31 gar nicht zu sehen.
+        aktiv_ordner, aktiv_befunde = alle[-1]
+        zeilen = [t('settings.bridge_status_folder_active', pfad=aktiv_ordner)]
+        zeilen.extend(self._bridge_zeilen(aktiv_befunde))
+        for ordner, befunde in alle[:-1]:
+            zeilen.append("")
+            zeilen.append(t('settings.bridge_status_folder_other', pfad=ordner))
+            zeilen.extend(self._bridge_zeilen(befunde))
+        self._bridge_status.setText("\n".join(zeilen))
+
+    @staticmethod
+    def _bridge_zeilen(befunde) -> list[str]:
+        zeilen = []
         for befund in befunde:
             if befund.vorhanden:
                 zeilen.append(t('settings.bridge_status_entries',
                                 name=befund.name, anzahl=befund.eintraege))
             else:
                 zeilen.append(t('settings.bridge_status_missing', name=befund.name))
-        self._bridge_status.setText("\n".join(zeilen))
+        return zeilen
 
     def _import_budgetmanager_jsonl(self):
         default_path = default_budgetmanager_to_fpm_path()
