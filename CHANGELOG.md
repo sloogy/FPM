@@ -1,6 +1,6 @@
 # Changelog
 
-## Unveröffentlicht
+## 1.2.0 — 22. August 2026
 
 ### Sicherheit
 
