@@ -283,6 +283,7 @@ class SettingsWidget(QWidget):
         self._add_settings_page('Import / Export', '📤', self._build_import_export_page())
         self._add_settings_page('Reset / Gefahrenzone', '⚠', self._build_reset_page())
         self._add_settings_page(t('settings.updates'), '⬆', self._build_update_page())
+        self._about_page_index = self.settings_stack.count()
         self._add_settings_page('Über', 'ℹ', self._build_about_page())
         self.settings_nav.currentRowChanged.connect(self._set_settings_index)
         self.settings_nav_combo.currentIndexChanged.connect(self._set_settings_index)
@@ -312,6 +313,20 @@ class SettingsWidget(QWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._apply_narrow_settings_layout(event.size().width())
+
+    def show_about_page(self) -> None:
+        """Springt auf die Ueber-Seite.
+
+        Der Menueeintrag "Ueber FPM" fuehrt hierher statt in einen eigenen
+        Dialog: Version, Technik und Datenpfad stehen schon auf dieser Seite,
+        und ein zweiter Ort mit denselben Angaben ist ein zweiter Ort, der
+        veralten kann.
+        """
+        index = getattr(self, "_about_page_index", None)
+        if index is None or not 0 <= index < self.settings_stack.count():
+            return
+        self.settings_nav.setCurrentRow(index)
+        self.settings_stack.setCurrentIndex(index)
 
     def _add_settings_page(self, title: str, icon: str, page: QWidget):
         item = QListWidgetItem(f'{icon}  {translate_source_text(title)}')
@@ -1103,16 +1118,9 @@ class SettingsWidget(QWidget):
             QMessageBox.information(self, t('ui.settings_widget.backup_5b11f811'), t('ui.settings_widget.backup_saved_message', path=dest))
 
     def _open_data_folder(self):
-        folder = get_db_path().parent
-        try:
-            if sys.platform.startswith('linux'):
-                subprocess.Popen(['xdg-open', str(folder)])
-            elif sys.platform == 'darwin':
-                subprocess.Popen(['open', str(folder)])
-            else:
-                os.startfile(str(folder))
-        except Exception as e:
-            QMessageBox.warning(self, t('settings.folder_open_title'), t('settings.folder_open_err', error=e))
+        from ui.common import open_in_file_manager
+
+        open_in_file_manager(self, get_db_path().parent)
 
     def _vacuum(self):
         try:

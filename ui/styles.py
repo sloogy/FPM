@@ -323,10 +323,25 @@ QListWidget::item {{ min-height: {_px(30, scale)}px; font-size: {base}px; }}
 QListWidget::item:selected {{ background-color: {c("auswahl_hintergrund")}; color: {c("auswahl_text")}; }}
 
 /* ── Menue ──────────────────────────────────────────────── */
-QMenu {{ background-color: {c("hintergrund_panel")}; color: {c("text")}; border: 1px solid {c("rand")}; }}
+/* Loop 32: An die BudgetManager-Vorlage angeglichen. Vorher hatte die Leiste
+   feste Groessen und einen blassen Hover - sie wuchs als einziger Teil der
+   Oberflaeche nicht mit der Profilschrift (Loop 8) und trug keinen der
+   abgestuften Radien (Loop 9). Ausgewaehlt wird jetzt in Akzentfarbe, wie
+   drueben. */
+QMenu {{ background-color: {c("hintergrund_panel")}; color: {c("text")};
+    border: 1px solid {c("rand")}; border-radius: {radius}px;
+    padding: {_px(4, scale)}px; font-size: {base}px; }}
+QMenu::item {{ padding: {_px(6, scale)}px {_px(18, scale)}px;
+    border-radius: {radius_feld}px; }}
 QMenu::item:selected {{ background-color: {c("auswahl_hintergrund")}; color: {c("auswahl_text")}; }}
-QMenuBar {{ background-color: {c("hintergrund_panel")}; color: {c("text")}; }}
-QMenuBar::item:selected {{ background-color: {c("hover_hintergrund")}; color: {c("hover_text")}; }}
+QMenu::item:disabled {{ color: {c("text_gedimmt")}; }}
+QMenu::separator {{ height: 1px; background: {c("rand")};
+    margin: {_px(4, scale)}px {_px(8, scale)}px; }}
+QMenuBar {{ background-color: {c("hintergrund_panel")}; color: {c("text")};
+    font-size: {base}px; padding: {_px(2, scale)}px; }}
+QMenuBar::item {{ padding: {_px(4, scale)}px {_px(10, scale)}px;
+    border-radius: {radius}px; }}
+QMenuBar::item:selected {{ background-color: {c("auswahl_hintergrund")}; color: {c("auswahl_text")}; }}
 
 /* ── Einführung / Tour / Onboarding ─────────────────────── */
 QFrame#tourBubble {{

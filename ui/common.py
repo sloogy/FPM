@@ -313,3 +313,35 @@ class ImageZoomDialog(QDialog):
         bb.clicked.connect(self.accept)
         root.addWidget(bb)
         self.resize(min(pixmap.width() + 48, max_w + 48), min(pixmap.height() + 96, max_h + 96))
+
+
+def open_in_file_manager(parent, folder) -> bool:
+    """Öffnet einen Ordner im Dateimanager des Systems. True bei Erfolg.
+
+    Lag bis Loop 32 nur in ``ui/settings_widget.py``. Seit die Menüleiste
+    denselben Befehl anbietet, gibt es zwei Aufrufer - und damit den üblichen
+    Grund, warum eine Kopie irgendwann abweicht.
+    """
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    from PySide6.QtWidgets import QMessageBox
+
+    ordner = Path(folder)
+    try:
+        if sys.platform.startswith('linux'):
+            subprocess.Popen(['xdg-open', str(ordner)])
+        elif sys.platform == 'darwin':
+            subprocess.Popen(['open', str(ordner)])
+        else:
+            import os
+            os.startfile(str(ordner))  # type: ignore[attr-defined]
+        return True
+    except OSError as fehler:
+        QMessageBox.warning(
+            parent,
+            t('settings.folder_open_title'),
+            t('settings.folder_open_err', error=fehler),
+        )
+        return False

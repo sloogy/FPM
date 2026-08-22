@@ -134,8 +134,22 @@ class MainWindow(QMainWindow):
             self._stack.addWidget(ph)
             self._widgets[i] = None
 
+        self._setup_menu_bar()
         self._setup_toolbar()
         self._navigate(0)
+
+    def _setup_menu_bar(self) -> None:
+        """Menueleiste nach BudgetManager-Vorbild.
+
+        Sie ersetzt Seiten- und Werkzeugleiste nicht, sondern ergaenzt sie:
+        Wer FPM kennt, soll nach dem Update nicht umlernen muessen - wer aus
+        dem BudgetManager kommt, findet Datei/Ansicht/Extras/Hilfe dort, wo
+        er sie sucht.
+        """
+        from ui.menu_bar import build_menu_bar, sync_menu_state
+
+        build_menu_bar(self)
+        sync_menu_state(self)
 
     def show_onboarding_if_needed(self):
         """App-Tour anzeigen wenn DB leer und noch nicht abgeschlossen.
@@ -362,6 +376,9 @@ class MainWindow(QMainWindow):
             search.setText(text)
 
     def _navigation_mode_changed(self, mode: str) -> None:
+        from ui.menu_bar import sync_menu_state
+
+        sync_menu_state(self)
         current = self._stack.currentIndex()
         target = fallback_page(current, mode)
         if target != current:

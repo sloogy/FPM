@@ -142,6 +142,15 @@ class CalibreSidebar(QWidget):
         self.set_current_page(page)
         self.pageSelected.emit(page)
 
+    def mode(self) -> str:
+        """Der aktuelle Navigationsmodus.
+
+        Seit Loop 32 sitzt der Umschalter an zwei Stellen - hier und im
+        Ansicht-Menue. Das Menue muss den Zustand ablesen koennen, sonst zeigt
+        es einen Modus an, den die Seitenleiste laengst verlassen hat.
+        """
+        return self._mode
+
     def set_mode(self, mode: str) -> str:
         """Schaltet den Navigationsmodus kontrolliert und baut die Sidebar neu."""
         normalized = set_app_mode(mode)
