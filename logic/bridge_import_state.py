@@ -13,15 +13,14 @@ from typing import Any, Iterable
 
 from sqlalchemy import text
 
-TABLE = "bridge_import_state"
 SOURCE_BUDGETMANAGER = "budgetmanager"
 
 
 def ensure_table(session: Any) -> None:
     session.execute(
         text(
-            f"""
-            CREATE TABLE IF NOT EXISTS {TABLE} (
+            """
+            CREATE TABLE IF NOT EXISTS bridge_import_state (
                 source TEXT NOT NULL,
                 external_id TEXT NOT NULL,
                 payload_hash TEXT NOT NULL,
@@ -58,7 +57,7 @@ def imported_ids(session: Any, *, source: str = SOURCE_BUDGETMANAGER) -> set[str
     ensure_table(session)
     rows = session.execute(
         text(
-            f"SELECT external_id FROM {TABLE} "
+            "SELECT external_id FROM bridge_import_state "
             "WHERE source=:source AND status='imported'"
         ),
         {"source": source},
@@ -77,8 +76,8 @@ def remember_import(
     ensure_table(session)
     session.execute(
         text(
-            f"""
-            INSERT INTO {TABLE}
+            """
+            INSERT INTO bridge_import_state
                 (source, external_id, payload_hash, status, local_object_type,
                  local_object_id, imported_at)
             VALUES
