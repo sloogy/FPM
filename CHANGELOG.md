@@ -18,6 +18,16 @@
 
 ### Stabilität
 
+- **Bei jedem Push nach main laufen jetzt die Gates.** Vorher lief dort gar
+  nichts: Der volle Lauf hängt am Tag beziehungsweise an einem
+  `[release]`-Commit, gearbeitet wird in dieser Suite aber direkt auf main.
+  Ein Fehler wäre erst beim nächsten Release aufgefallen — bis zu zehn
+  Arbeitsrunden später. Der neue Lauf ist bewusst schlank: Linux, ein Python,
+  keine Builds, zwei bis drei Minuten. Er reagiert nur auf main, nie auf Tags,
+  damit das Doppellauf-Problem nicht zurückkommt, das den Push-Trigger im
+  Release-Workflow ausgeschlossen hatte.
+- **Das Killcritic-Audit prüft den neuen Lauf mit.** Ein Gate, das beim
+  täglichen Arbeiten nicht läuft, ist kein Gate.
 - **Der Ausnahmen-Ratchet prüft, statt zu zählen.** Er lief bisher als
   Textsuche über eine handgepflegte Liste von Paketen. Beides ist ersetzt: Er
   liest den Syntaxbaum — Beispiele in Docstrings zählen nicht mehr mit — und

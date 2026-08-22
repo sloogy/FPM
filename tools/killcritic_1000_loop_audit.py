@@ -26,6 +26,21 @@ from app_info import APP_BUILD, APP_VERSION  # noqa: E402
 
 
 @lru_cache(maxsize=None)
+def _ratchet_haelt() -> bool:
+    """Laesst den Ausnahmen-Ratchet laufen - genau einmal.
+
+    Das Audit wiederholt seine Invarianten tausendmal. Ohne den Cache waeren
+    das tausend Prozessstarts, was den Lauf von fuenf auf ueber zwanzig
+    Minuten brachte.
+    """
+    return subprocess.run(
+        [sys.executable, str(ROOT / "tools" / "exception_audit.py")],
+        cwd=ROOT,
+        capture_output=True,
+    ).returncode == 0
+
+
+@lru_cache(maxsize=None)
 def read(rel: str) -> str:
     return (ROOT / rel).read_text(encoding="utf-8")
 
@@ -218,12 +233,17 @@ CHECKS = [
         and all(k in read('tools/exception_audit.py') for k in (
             'BROAD_EXCEPTION_LIMIT', 'BARE_EXCEPT_LIMIT = 0',
             'BASE_EXCEPTION_LIMIT = 0', 'SILENT_EXCEPT_LIMIT'))),
-    ("exception_ratchet_holds", lambda: subprocess.run(
-        [sys.executable, str(ROOT / 'tools' / 'exception_audit.py')],
-        cwd=ROOT, capture_output=True).returncode == 0),
+    ("exception_ratchet_holds", lambda: _ratchet_haelt()),
     ("db_access_ratchet_tool", lambda: (ROOT / 'tools' / 'db_access_audit.py').exists()
         and 'TOTAL_UI_QUERY_LIMIT = 49' in read('tools/db_access_audit.py')
         and '"dashboard_widget.py"' in read('tools/db_access_audit.py')),
+    # Ein Gate, das beim taeglichen Arbeiten nicht laeuft, ist kein Gate:
+    # gearbeitet wird direkt auf main, geprueft wurde nur am Tag.
+    ("push_gates_workflow", lambda:
+        (ROOT / '.github' / 'workflows' / 'push-checks.yml').exists()
+        and 'branches: [main]' in read('.github/workflows/push-checks.yml')
+        and 'tools/exception_audit.py' in read('.github/workflows/push-checks.yml')
+        and 'pytest' in read('.github/workflows/push-checks.yml')),
     ("hardening_ratchets_in_ci", lambda:
         'python tools/exception_audit.py' in read('.github/workflows/release-check.yml')
         and 'python tools/db_access_audit.py' in read('.github/workflows/release-check.yml')

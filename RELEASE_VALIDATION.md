@@ -13,7 +13,7 @@
 | `python tools/db_access_audit.py` | 49 ≤ 49; vier Dateien dauerhaft query-frei |
 | i18n-Audits (5) | bestanden; 2.109 Schlüssel × 3 |
 | LifePlanner v0.3.05 Pipeline-Tests | 14 gezielte Tests bestanden; Build, Signatur, Tamper-Abwehr, Host-Install |
-| KILLCRITIC 1000-Loop | 140.000 Checks, 0 Findings |
+| KILLCRITIC 1000-Loop | 141.000 Checks, 0 Findings |
 | Workflow-YAML | alle Workflows syntaktisch geparst |
 | Plattform-Locks | Linux/Windows erzeugt, Hash-Check und Binary-only-Installationspläne bestanden |
 | Ruff/Bandit | bestanden |
