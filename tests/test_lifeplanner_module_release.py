@@ -9,7 +9,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_lifeplanner_manifest_and_integrated_release_assets_are_defined():
     manifest = json.loads((ROOT / "module.json").read_text(encoding="utf-8"))
+    assert manifest["schema"] == "lifeplanner.module.v2"
     assert manifest["version"] == APP_VERSION
+    assert manifest["requires_host"] == ">=0.5.15,<0.6"
     assert manifest["windows_executable"] == "FountainPenManager/FountainPenManager.exe"
     assert manifest["linux_executable"] == "FountainPenManager/FountainPenManager"
     assert module_asset_name("fpm", APP_VERSION, "windows-x86_64").endswith("Windows_x86_64.lpmodule")
