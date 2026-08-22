@@ -731,7 +731,8 @@ class OverrideReasonDialog(ResponsiveDialog):
         root.addWidget(self._reason_edit)
 
         bb = QDialogButtonBox()
-        confirm_btn = bb.addButton("Override bestätigen", QDialogButtonBox.ButtonRole.AcceptRole)
+        confirm_btn = bb.addButton(t("ui.rotation_widget.override_confirm"),
+                                   QDialogButtonBox.ButtonRole.AcceptRole)
         confirm_btn.setStyleSheet(
             "background:#e74c3c; color:white; border:none;"
             " padding:7px 16px; border-radius:5px; font-weight:bold;"
