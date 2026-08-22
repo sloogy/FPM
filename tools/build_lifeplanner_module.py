@@ -66,6 +66,13 @@ def _module_manifest() -> dict:
     return manifest
 
 
+def _effective_requires_host(manifest: dict, requested: str | None) -> str:
+    """v2 persists the host contract in module.json; package metadata must match it."""
+    if manifest.get("schema") == "lifeplanner.module.v2":
+        return str(manifest["requires_host"]).strip()
+    return str(requested or manifest.get("requires_host") or ">=0.5.0").strip()
+
+
 def _validate_runtime(runtime_dir: Path, runtime_name: str) -> Path:
     if (
         not runtime_name
@@ -175,6 +182,7 @@ def build_module(
         raise ValueError(f"unsupported platform: {platform}")
     runtime = _validate_runtime(runtime_dir, runtime_name)
     manifest = _module_manifest()
+    requires_host = _effective_requires_host(manifest, requires_host)
 
     artifact = verify_attestation(
         runtime_dir=runtime_dir,
@@ -231,6 +239,7 @@ def build_unsigned_release_module(
         )
     runtime = _validate_runtime(runtime_dir, runtime_name)
     manifest = _module_manifest()
+    requires_host = _effective_requires_host(manifest, requires_host)
     return _write_module(
         manifest=manifest,
         runtime=runtime,
@@ -267,16 +276,14 @@ def main() -> int:
     parser.add_argument(
         "--requires-host",
         default="",
-        help="optional; otherwise module.json.requires_host is used",
+        help="legacy override for module.v1; module.v2 always uses module.json",
     )
     parser.add_argument("--allow-unsigned", action="store_true")
     args = parser.parse_args()
 
     try:
         manifest = _module_manifest()
-        requires_host = str(
-            args.requires_host or manifest.get("requires_host") or ">=0.5.0"
-        ).strip()
+        requires_host = _effective_requires_host(manifest, args.requires_host)
         public_key_b64 = None
         key = None
         if args.allow_unsigned:
