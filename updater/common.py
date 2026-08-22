@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from logic.atomic_write import atomar_schreiben
 import logging
 logger = logging.getLogger(__name__)
 
@@ -553,8 +555,10 @@ def write_staged_marker(version_str: str, manifest: Manifest, asset: AssetInfo) 
         "asset_type": asset.asset_type,
         "staged_at": int(time.time()),
     }
-    marker.parent.mkdir(parents=True, exist_ok=True)
-    marker.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    # Atomar: Die Marke sagt dem naechsten Start, dass ein Update bereitliegt
+    # und welches. Eine halb geschriebene Marke waere unlesbar - das Update
+    # laege dann fertig da und wuerde nie angewandt.
+    atomar_schreiben(marker, json.dumps(payload, indent=2))
     return marker
 
 
@@ -622,9 +626,9 @@ def write_check_result(data: dict) -> None:
     payload = dict(data)
     payload.setdefault("checked_at", datetime.now().isoformat(timespec="seconds"))
     try:
-        check_result_path().write_text(
+        atomar_schreiben(
+            check_result_path(),
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
         )
     except Exception as e:
         logger.debug("Update-Check-Ergebnis konnte nicht geschrieben werden: %s", e)
@@ -657,9 +661,9 @@ def write_startup_check_result(data: dict) -> None:
     payload = dict(data)
     payload.setdefault("checked_at", datetime.now().isoformat(timespec="seconds"))
     try:
-        startup_check_result_path().write_text(
+        atomar_schreiben(
+            startup_check_result_path(),
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
         )
     except Exception as e:
         logger.debug("Startup-Update-Check-Ergebnis konnte nicht geschrieben werden: %s", e)
