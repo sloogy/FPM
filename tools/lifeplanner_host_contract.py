@@ -24,12 +24,10 @@ sys.path.insert(0, str(ROOT))
 from tools.release_signing import tree_sha256, verify_b64
 
 COMPONENT_SCHEMA = "lifeplanner.component.v1"
-MODULE_SCHEMA = "lifeplanner.module.v1"
+MODULE_SCHEMAS = {"lifeplanner.module.v1", "lifeplanner.module.v2"}
 
 
 def _validate_member(name: str, info: zipfile.ZipInfo) -> None:
-    # ZIP names are specified with '/', but a hostile archive may use Windows
-    # separators/drive prefixes. Reject them before converting to host paths.
     if "\\" in name or "\x00" in name:
         raise ValueError(f"unsafe archive path: {name!r}")
     p = PurePosixPath(name)
@@ -109,8 +107,18 @@ def verify_module(
             if not module_manifest_path.is_file():
                 raise ValueError("payload/module.json is missing")
             module_manifest = json.loads(module_manifest_path.read_text(encoding="utf-8"))
-            if module_manifest.get("schema") != MODULE_SCHEMA:
+            module_schema = module_manifest.get("schema")
+            if module_schema not in MODULE_SCHEMAS:
                 raise ValueError("payload module manifest schema mismatch")
+            if module_schema == "lifeplanner.module.v2":
+                manifest_requires_host = str(module_manifest.get("requires_host", "")).strip()
+                if not manifest_requires_host:
+                    raise ValueError("payload module.v2 manifest requires requires_host")
+                component_requires_host = str(component.get("requires_host", "")).strip()
+                if component_requires_host != manifest_requires_host:
+                    raise ValueError(
+                        "component requires_host does not match payload module manifest"
+                    )
             if module_manifest.get("id") != component.get("id"):
                 raise ValueError("payload module id does not match component metadata")
             if module_manifest.get("version") != component.get("version"):
@@ -170,7 +178,6 @@ def install_module(
                         os.chmod(dest, unix_mode & 0o777)
                     except OSError:
                         pass
-        # Verify the extracted tree one more time immediately before commit.
         if tree_sha256(staging) != component["payload_sha256"]:
             raise ValueError("staging payload hash mismatch")
         if target.exists():
