@@ -57,6 +57,12 @@ def _module_manifest() -> dict:
             f"module.json version mismatch: {manifest.get('version')} != {APP_VERSION}; "
             "run tools/sync_version.py"
         )
+    if manifest.get("schema") not in {"lifeplanner.module.v1", "lifeplanner.module.v2"}:
+        raise ValueError(f"unsupported module schema: {manifest.get('schema')!r}")
+    if manifest.get("schema") == "lifeplanner.module.v2" and not str(
+        manifest.get("requires_host", "")
+    ).strip():
+        raise ValueError("lifeplanner.module.v2 requires requires_host")
     return manifest
 
 
@@ -75,16 +81,7 @@ def _validate_runtime(runtime_dir: Path, runtime_name: str) -> Path:
 
 
 def _declared_runtime_arcname(manifest: dict, platform: str) -> str:
-    """Return the payload-relative archive path of the declared runtime.
-
-    CI fetches the gated runtime with actions/download-artifact, which does not
-    preserve Unix permissions, and the Linux module is packaged on a Windows
-    runner where chmod cannot set an execute bit at all. The bit is therefore
-    written straight into the archive instead of being taken from the file
-    system; otherwise the published .lpmodule records the binary as
-    non-executable and the installed module fails to start with
-    "[Errno 13] Keine Berechtigung".
-    """
+    """Return the payload-relative archive path of the declared runtime."""
     key = "windows_executable" if platform.startswith("windows") else "linux_executable"
     relative = str(manifest.get(key, "")).strip()
     if not relative:
@@ -154,7 +151,6 @@ def _write_module(
                 info.compress_type = zipfile.ZIP_DEFLATED
                 mode = stat.S_IMODE(info.external_attr >> 16) or 0o644
                 if arcname == runtime_arcname:
-                    # Mirror read bits into execute; never setuid/setgid/sticky.
                     mode |= (mode & 0o444) >> 2
                 info.external_attr = (mode & 0o7777) << 16
                 with path.open("rb") as source, archive.open(info, "w") as target:
@@ -268,12 +264,19 @@ def main() -> int:
     output_group = parser.add_mutually_exclusive_group(required=True)
     output_group.add_argument("--output", type=Path)
     output_group.add_argument("--output-dir", type=Path)
-    parser.add_argument("--requires-host", default=">=0.5.0")
+    parser.add_argument(
+        "--requires-host",
+        default="",
+        help="optional; otherwise module.json.requires_host is used",
+    )
     parser.add_argument("--allow-unsigned", action="store_true")
     args = parser.parse_args()
 
     try:
-        manifest = json.loads((ROOT / "module.json").read_text(encoding="utf-8"))
+        manifest = _module_manifest()
+        requires_host = str(
+            args.requires_host or manifest.get("requires_host") or ">=0.5.0"
+        ).strip()
         public_key_b64 = None
         key = None
         if args.allow_unsigned:
@@ -315,7 +318,7 @@ def main() -> int:
                 platform=args.platform,
                 release_tag=args.release_tag,
                 output=output,
-                requires_host=args.requires_host,
+                requires_host=requires_host,
             )
         else:
             built = build_module(
@@ -326,7 +329,7 @@ def main() -> int:
                 artifact_signature=args.artifact_signature,
                 public_key_b64=public_key_b64,
                 output=output,
-                requires_host=args.requires_host,
+                requires_host=requires_host,
                 private_key_b64=key,
             )
         print(built)
