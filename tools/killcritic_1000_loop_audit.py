@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -209,9 +210,17 @@ CHECKS = [
         and 'InkRepository' in read('ui/ink_widget.py')
         and 'InkRepository(session).all_sorted()' in read('ui/ink_widget.py')
         and 'InkRepository(session).usable_sorted()' in read('ui/pen_dialogs.py')),
+    # Keine abgeschriebene Zahl mehr: die pruefte nur, ob jemand die Konstante
+    # umbenannt hat, und musste bei jeder Senkung von Hand nachgezogen werden.
+    # Geprueft wird jetzt, dass das Werkzeug da ist, seine vier Regeln kennt
+    # und der Bestand tatsaechlich innerhalb der Grenzen liegt.
     ("exception_ratchet_tool", lambda: (ROOT / 'tools' / 'exception_audit.py').exists()
-        and 'BROAD_EXCEPTION_LIMIT = 146' in read('tools/exception_audit.py')
-        and 'BARE_EXCEPT_LIMIT = 0' in read('tools/exception_audit.py')),
+        and all(k in read('tools/exception_audit.py') for k in (
+            'BROAD_EXCEPTION_LIMIT', 'BARE_EXCEPT_LIMIT = 0',
+            'BASE_EXCEPTION_LIMIT = 0', 'SILENT_EXCEPT_LIMIT'))),
+    ("exception_ratchet_holds", lambda: subprocess.run(
+        [sys.executable, str(ROOT / 'tools' / 'exception_audit.py')],
+        cwd=ROOT, capture_output=True).returncode == 0),
     ("db_access_ratchet_tool", lambda: (ROOT / 'tools' / 'db_access_audit.py').exists()
         and 'TOTAL_UI_QUERY_LIMIT = 49' in read('tools/db_access_audit.py')
         and '"dashboard_widget.py"' in read('tools/db_access_audit.py')),

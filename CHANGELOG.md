@@ -1,5 +1,40 @@
 # Changelog
 
+## Unveröffentlicht
+
+### Sicherheit
+
+- **Eine unlesbare `config.json` wird gerettet, nicht überschrieben.** In ihr
+  steht der Datenbankpfad. War sie kaputt, galten stillschweigend die
+  Standardwerte — FPM öffnete die leere Datenbank im Standardordner, was wie
+  ein Totalverlust aussieht, und das nächste Speichern überschrieb die kaputte
+  Datei endgültig. Sie wird jetzt als `config.json.kaputt-<Zeitstempel>`
+  beiseitegelegt; oft ist nur ein Zeichen falsch und sie ließe sich von Hand
+  retten. Gültiges JSON, das kein Objekt ist, gilt genauso als kaputt.
+  BudgetManager und LifePlanner konnten das schon, FPM nicht.
+- **`config.json` wird atomar und nur für den Besitzer lesbar geschrieben.**
+  Vorher hinterließ ein Absturz mitten im Schreiben genau die halbe Datei, um
+  die es oben geht, und der Datenpfad stand weltlesbar da.
+
+### Stabilität
+
+- **Der Ausnahmen-Ratchet prüft, statt zu zählen.** Er lief bisher als
+  Textsuche über eine handgepflegte Liste von Paketen. Beides ist ersetzt: Er
+  liest den Syntaxbaum — Beispiele in Docstrings zählen nicht mehr mit — und
+  prüft alles, was nicht ausdrücklich ausgenommen ist. Eine Positivliste ließ
+  jede neu angelegte Datei ungeprüft durch; im BudgetManager und im
+  LifePlanner war genau das passiert.
+- **Zwei neue Regeln:** `except BaseException` ist verboten (die
+  ausgeschriebene Form des nackten `except:`, die vorher durchrutschte), und
+  stumme Schlucker — `except Exception: pass` — haben eine eigene Obergrenze.
+  Sie sind der gefährlichste Fall: kein Log, keine Meldung, keine Spur.
+- **Fünf stumme Stellen im Datenbankpfad** melden sich jetzt: Sessions, die
+  sich nicht schließen lassen, Bilder und leere Ordner, die liegen bleiben.
+  Der Bestand sinkt von 146 auf 141 breite und von 40 auf 35 stumme Handler.
+- **Das Killcritic-Audit prüft eine Invariante statt einer abgeschriebenen
+  Zahl.** Es verglich den Ratchet-Grenzwert mit einer Zahl im Quelltext, die
+  bei jeder Senkung von Hand nachzuziehen war. Jetzt ruft es das Werkzeug auf.
+
 ## 1.1.0 — 2026-08-22
 
 ### Sicherheit

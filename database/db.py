@@ -65,21 +65,97 @@ def _config_path() -> Path:
     return _data_dir() / "config.json"
 
 
+def _beiseitelegen(pfad: Path, grund: Exception) -> None:
+    """Rettet eine unlesbare Konfiguration, statt sie zu ueberschreiben.
+
+    In ``config.json`` steht der Datenbankpfad. War sie unlesbar, galten
+    stumm die Standardwerte - das Programm oeffnete die leere Datenbank im
+    Standardordner, was wie ein Totalverlust aussieht, und ``_save_config``
+    ueberschrieb die kaputte Datei beim naechsten Speichern endgueltig. Oft
+    ist nur ein Zeichen falsch und die Datei liesse sich von Hand retten;
+    dafuer muss sie aber noch da sein.
+    """
+    marke = datetime.now().strftime("%Y%m%d-%H%M%S")
+    ziel = pfad.with_name(f"{pfad.name}.kaputt-{marke}")
+    # Zwei Fehlschlaege in derselben Sekunde bekamen denselben Namen; der
+    # zweite ueberschrieb den ersten und die urspruengliche Fassung war weg.
+    zaehler = 1
+    while ziel.exists():
+        ziel = pfad.with_name(f"{pfad.name}.kaputt-{marke}-{zaehler}")
+        zaehler += 1
+    try:
+        pfad.replace(ziel)
+    except OSError as fehler:
+        logger.warning(
+            "Beschaedigte %s liess sich nicht sichern: %s", pfad.name, fehler
+        )
+        return
+    logger.warning(
+        "%s war unlesbar (%s) - beiseitegelegt als %s, es gelten die "
+        "Standardwerte", pfad.name, grund, ziel.name
+    )
+    _kaputte_ausduennen(pfad)
+
+
+def _kaputte_ausduennen(pfad: Path, behalten: int = 10) -> None:
+    """Haelt die beiseitegelegten Fassungen in Grenzen.
+
+    Ohne das entsteht bei jedem Start eine weitere Datei, solange die
+    Konfiguration kaputt bleibt - und niemand raeumt sie je auf.
+    """
+    try:
+        staende = sorted(
+            pfad.parent.glob(f"{pfad.name}.kaputt-*"),
+            key=lambda q: q.stat().st_mtime,
+            reverse=True,
+        )
+    except OSError as fehler:
+        logger.debug("Beiseitegelegte Fassungen nicht auflistbar: %s", fehler)
+        return
+    for veraltet in staende[behalten:]:
+        try:
+            veraltet.unlink()
+        except OSError as fehler:
+            logger.debug("%s bleibt liegen: %s", veraltet.name, fehler)
+
+
 def _load_config() -> dict:
     p = _config_path()
-    if p.exists():
-        try:
-            return json.loads(p.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    return {}
+    if not p.exists():
+        return {}
+    try:
+        geladen = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as fehler:
+        _beiseitelegen(p, fehler)
+        return {}
+    if not isinstance(geladen, dict):
+        _beiseitelegen(p, TypeError(f"kein Objekt, sondern {type(geladen).__name__}"))
+        return {}
+    return geladen
 
 
 def _save_config(cfg: dict) -> None:
-    _config_path().write_text(
+    """Schreibt die Konfiguration atomar und nur fuer den Besitzer lesbar.
+
+    Atomar, weil ein Absturz mitten im Schreiben sonst genau die halbe Datei
+    hinterlaesst, die ``_load_config`` dann beiseitelegen muss. Und 0600,
+    weil der Datenpfad verraet, wo die persoenlichen Daten liegen.
+    """
+    from logic.file_permissions import secure_file
+
+    ziel = _config_path()
+    tmp = ziel.with_name(f"{ziel.name}.tmp-{os.getpid()}")
+    tmp.write_text(
         json.dumps(cfg, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+    secure_file(tmp)
+    try:
+        tmp.replace(ziel)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
+    secure_file(ziel)
 
 
 # ── Pfad-API ─────────────────────────────────────────────────────────────────
@@ -116,8 +192,11 @@ def close_db() -> None:
     global engine, SessionLocal
     try:
         close_all_sessions()
-    except Exception:
-        pass
+    except SQLAlchemyError as fehler:
+        # Nicht weiterreichen: close_db() laeuft auch beim Programmende und
+        # beim Datenbankwechsel. Aber schweigen darf es nicht - eine Session,
+        # die sich nicht schliessen laesst, haelt ein SQLite-Handle offen.
+        logger.warning("Sessions liessen sich nicht schliessen: %s", fehler)
     if engine is not None:
         engine.dispose()
     engine = None
@@ -1159,16 +1238,16 @@ def factory_reset_userdata() -> None:
                 data_root = _data_dir().resolve()
                 if resolved.exists() and data_root in resolved.parents:
                     resolved.unlink()
-            except Exception:
-                pass
+            except OSError as fehler:
+                logger.warning("Bild %s blieb liegen: %s", path, fehler)
         images_root = _data_dir() / "images"
         for sub in ("pens", "inks", "papers"):
             folder = images_root / sub
             try:
                 if folder.exists() and not any(folder.iterdir()):
                     folder.rmdir()
-            except Exception:
-                pass
+            except OSError as fehler:
+                logger.debug("Leerer Ordner %s blieb liegen: %s", folder, fehler)
         # v0.2.88: leere Medienordner rekursiv aufräumen. Vorher scheiterte
         # rmdir am nicht-leeren Wurzelverzeichnis, weil die Unterordner
         # (media/<füller>/images/) nach dem Löschen der Dateien leer, aber
@@ -1186,7 +1265,7 @@ def factory_reset_userdata() -> None:
                         folder.rmdir()
                 if not any(media_root.iterdir()):
                     media_root.rmdir()
-        except Exception:
-            pass
+        except OSError as fehler:
+            logger.debug("Medienordner blieb liegen: %s", fehler)
     finally:
         session.close()

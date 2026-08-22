@@ -1,79 +1,215 @@
 #!/usr/bin/env python3
-"""Exception-Ratchet (Enterprise-Audit v0.3.00, P2).
+"""Ausnahmen-Ratchet.
 
-Zählt breite Handler im Produktionscode und erzwingt zwei Regeln:
-1. Nackte ``except:``-Klauseln sind verboten (0 erlaubt).
-2. ``except Exception`` darf die festgeschriebene Obergrenze nicht
-   überschreiten. Die Grenze wird bei jeder Präzisierungsrunde manuell
-   GESENKT, nie erhöht (Ratchet-Prinzip) – so wird der Bestand von
-   134+ Handlern schrittweise und messbar abgebaut, ohne einen riskanten
-   Big-Bang-Umbau zu erzwingen.
+Prueft den Produktionscode auf Fehlerbehandlung, die Fehler verschwinden
+laesst, und erzwingt vier Regeln:
 
-Exit 0 = innerhalb der Grenzen, Exit 1 = Verstoß.
+1. Nackte ``except:``-Klauseln sind verboten. Sie fangen auch
+   ``KeyboardInterrupt`` und ``SystemExit`` - das Programm laesst sich dann
+   nicht mehr sauber abbrechen.
+2. ``except BaseException`` ist aus demselben Grund verboten. Es ist die
+   ausgeschriebene Form derselben Klausel und rutschte frueher durch, weil
+   nur nach dem Doppelpunkt gesucht wurde.
+3. Stumme Schlucker - ``except Exception: pass`` oder ein Handler, dessen
+   ganzer Rumpf aus einem Docstring besteht - duerfen die festgeschriebene
+   Obergrenze nicht ueberschreiten. Sie sind der gefaehrlichste Fall: kein
+   Log, keine Meldung, keine Spur. Ein Fehler passiert und niemand erfaehrt
+   davon.
+4. ``except Exception`` insgesamt darf seine Obergrenze nicht
+   ueberschreiten.
+
+Beide Obergrenzen werden bei jeder Praezisierungsrunde von Hand GESENKT, nie
+erhoeht. So baut sich der Bestand messbar ab, ohne dass ein riskanter Umbau
+auf einen Schlag noetig waere.
+
+Warum ueberhaupt: Ein ``except Exception`` faengt auch den Tippfehler im
+Attributnamen. Der Fehler verschwindet dann in einem Rueckfallwert, und
+niemand sieht, dass etwas nicht stimmt - genau die Sorte Fehler, die erst
+Monate spaeter als "die Anzeige stimmt manchmal nicht" auftaucht.
+
+Geprueft wird der Baum ueber den Syntaxbaum, nicht ueber Textsuche. Eine
+Textsuche zaehlt Beispiele in Docstrings mit und verpasst mehrzeilige
+Formen. Und geprueft wird alles, was nicht ausdruecklich ausgenommen ist -
+eine Positivliste von Paketen liesse jede neu angelegte Datei ungeprueft
+durch, was hier schon vorgekommen ist.
+
+    python3 tools/exception_audit.py            # Gate: Exit 0 oder 1
+    python3 tools/exception_audit.py --list     # Fundstellen zum Abbauen
+
+Wortgleich in FPM, BudgetManager, FreizeitManager und LifePlanner; nur die
+beiden Obergrenzen unterscheiden sich.
 """
 from __future__ import annotations
 
-import re
+import argparse
+import ast
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGES = ("ui", "logic", "database", "updater", "i18n")
-EXTRA_FILES = ("main.py", "app_info.py")
 
-# Ratchet-Obergrenze. Historie:
-#   v0.3.00-Audit: 134 gemeldet (Produktionsdateien), Messung dieses Tools: s.u.
-#   v0.3.01: Baseline nach Dashboard-/Service-Umbau festgeschrieben.
-BROAD_EXCEPTION_LIMIT = 146
+# Negativliste: alles ausserhalb dieser Verzeichnisse ist Produktionscode und
+# wird geprueft. Umgekehrt herum - eine Positivliste der Pakete - war der
+# Ratchet blind fuer alles, was spaeter dazukam.
+EXCLUDED_DIRS = frozenset(
+    {
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".venv",
+        "__pycache__",
+        "build",
+        "dist",
+        "env",
+        "legacy",
+        "node_modules",
+        "test",
+        "tests",
+        "tools",
+        "venv",
+    }
+)
+
+# Einzeldateien, die kein ausgeliefertes Programm sind.
+EXCLUDED_FILES = frozenset({"conftest.py", "dev_check.py", "setup.py"})
+
+# Ratchet-Obergrenzen. Nur senken, nie erhoehen.
 BARE_EXCEPT_LIMIT = 0
+BASE_EXCEPTION_LIMIT = 0
+SILENT_EXCEPT_LIMIT = 35
+BROAD_EXCEPTION_LIMIT = 141
 
-_BROAD = re.compile(r"^\s*except\s+Exception\b")
-_BARE = re.compile(r"^\s*except\s*:")
 
-
-def scan() -> tuple[int, int, list[str]]:
-    broad = 0
-    bare = 0
-    bare_hits: list[str] = []
-    files: list[Path] = []
-    for pkg in PACKAGES:
-        files.extend(sorted((ROOT / pkg).rglob("*.py")))
-    files.extend(ROOT / f for f in EXTRA_FILES)
-    for f in files:
-        if "__pycache__" in f.parts or not f.exists():
+def _production_files() -> list[Path]:
+    out: list[Path] = []
+    for path in sorted(ROOT.rglob("*.py")):
+        rel = path.relative_to(ROOT)
+        if any(part in EXCLUDED_DIRS for part in rel.parts[:-1]):
             continue
-        for lineno, line in enumerate(
-            f.read_text(encoding="utf-8", errors="replace").splitlines(), 1
+        if rel.name in EXCLUDED_FILES:
+            continue
+        out.append(path)
+    return out
+
+
+def _caught_names(node: ast.expr | None) -> tuple[str, ...] | None:
+    """Die gefangenen Ausnahmenamen, oder None bei nacktem ``except:``."""
+    if node is None:
+        return None
+    if isinstance(node, ast.Tuple):
+        names: list[str] = []
+        for element in node.elts:
+            found = _caught_names(element)
+            if found:
+                names.extend(found)
+        return tuple(names)
+    if isinstance(node, ast.Name):
+        return (node.id,)
+    if isinstance(node, ast.Attribute):
+        return (node.attr,)
+    return ("<berechnet>",)
+
+
+def _is_silent(handler: ast.ExceptHandler) -> bool:
+    """Wahr, wenn der Handler den Fehler ohne jede Spur verschwinden laesst."""
+    body = handler.body
+    if len(body) != 1:
+        return False
+    only = body[0]
+    if isinstance(only, ast.Pass):
+        return True
+    # Ein Handler, dessen Rumpf nur aus einer Zeichenkette besteht ("das darf
+    # ruhig scheitern"), ist genauso stumm wie ``pass``.
+    return isinstance(only, ast.Expr) and isinstance(only.value, ast.Constant)
+
+
+class Findings:
+    def __init__(self) -> None:
+        self.bare: list[str] = []
+        self.base: list[str] = []
+        self.silent: list[str] = []
+        self.broad = 0
+        self.files = 0
+
+
+def scan() -> Findings:
+    result = Findings()
+    for path in _production_files():
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        except SyntaxError as exc:
+            print(f"exception audit: {path} laesst sich nicht lesen: {exc}")
+            continue
+        result.files += 1
+        rel = path.relative_to(ROOT)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ExceptHandler):
+                continue
+            names = _caught_names(node.type)
+            where = f"{rel}:{node.lineno}"
+            if names is None:
+                result.bare.append(where)
+            elif "BaseException" in names:
+                result.base.append(where)
+            elif "Exception" in names:
+                result.broad += 1
+                if _is_silent(node):
+                    result.silent.append(where)
+    return result
+
+
+def _report(titel: str, hits: list[str], limit: int) -> bool:
+    if len(hits) <= limit:
+        return True
+    print(f"exception audit: {len(hits)} {titel} (erlaubt: {limit})")
+    for hit in hits:
+        print(f"  - {hit}")
+    return False
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="alle Fundstellen ausgeben, auch die innerhalb der Grenzen",
+    )
+    args = parser.parse_args(argv)
+    result = scan()
+
+    if args.list:
+        for titel, hits in (
+            ("nackte except:", result.bare),
+            ("except BaseException", result.base),
+            ("stumme Schlucker", result.silent),
         ):
-            if _BARE.match(line):
-                bare += 1
-                bare_hits.append(f"{f.relative_to(ROOT)}:{lineno}")
-            elif _BROAD.match(line):
-                broad += 1
-    return broad, bare, bare_hits
+            print(f"--- {titel} ({len(hits)}) ---")
+            for hit in hits:
+                print(f"  {hit}")
 
-
-def main() -> int:
-    broad, bare, bare_hits = scan()
     ok = True
-    if bare > BARE_EXCEPT_LIMIT:
-        ok = False
-        print(f"exception audit: {bare} nackte 'except:'-Klauseln (erlaubt: {BARE_EXCEPT_LIMIT})")
-        for hit in bare_hits:
-            print(f"  - {hit}")
-    if broad > BROAD_EXCEPTION_LIMIT:
+    ok &= _report("nackte 'except:'-Klauseln", result.bare, BARE_EXCEPT_LIMIT)
+    ok &= _report("'except BaseException'", result.base, BASE_EXCEPTION_LIMIT)
+    ok &= _report(
+        "stumme Schlucker (Ratchet-Obergrenze)", result.silent, SILENT_EXCEPT_LIMIT
+    )
+    if result.broad > BROAD_EXCEPTION_LIMIT:
         ok = False
         print(
-            f"exception audit: {broad} breite 'except Exception' "
+            f"exception audit: {result.broad} breite 'except Exception' "
             f"(Ratchet-Obergrenze: {BROAD_EXCEPTION_LIMIT})"
         )
-    if ok:
-        print(
-            f"exception audit: OK ({broad} breite Handler <= Limit {BROAD_EXCEPTION_LIMIT}, "
-            f"{bare} nackte except)"
-        )
-        return 0
-    return 1
+    if not ok:
+        return 1
+    print(
+        f"exception audit: OK ({result.files} Dateien, "
+        f"{result.broad} breite Handler <= {BROAD_EXCEPTION_LIMIT}, "
+        f"{len(result.silent)} stumme <= {SILENT_EXCEPT_LIMIT}, "
+        f"{len(result.bare)} nackte except, "
+        f"{len(result.base)} BaseException)"
+    )
+    return 0
 
 
 if __name__ == "__main__":
