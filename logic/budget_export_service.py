@@ -211,30 +211,41 @@ def export_expenses_jsonl(
 ) -> BudgetExportResult:
     """Schreibt BudgetManager-Importzeilen und liefert eine kurze Summary."""
     out = Path(path)
-    out.parent.mkdir(parents=True, exist_ok=True)
     count = 0
     total = 0.0
     currencies: set[str] = set()
-    with out.open("w", encoding="utf-8", newline="\n") as fh:
-        header = {
-            "schema": "budgetmanager.import.manifest.v1",
-            "source": source,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "mode": "reviewable_bridge_import",
-        }
-        fh.write(json.dumps(header, ensure_ascii=False, sort_keys=True) + "\n")
-        for exp in expenses:
-            record = expense_to_budgetmanager_record(exp, source=source)
-            fh.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
-            count += 1
-            total += float(record["amount"] or 0.0)
-            currencies.add(str(record["currency"] or "CHF"))
-    # Die Datei trägt Beträge, Händler und Beschreibungen. Sie liegt im
-    # Standalone-Betrieb offen im Benutzerverzeichnis; mit dem üblichen umask
-    # wäre sie dort für jedes andere Konto lesbar.
-    from logic.file_permissions import secure_file
+    zeilen = [
+        json.dumps(
+            {
+                "schema": "budgetmanager.import.manifest.v1",
+                "source": source,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "mode": "reviewable_bridge_import",
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    ]
+    for exp in expenses:
+        record = expense_to_budgetmanager_record(exp, source=source)
+        zeilen.append(json.dumps(record, ensure_ascii=False, sort_keys=True))
+        count += 1
+        total += float(record["amount"] or 0.0)
+        currencies.add(str(record["currency"] or "CHF"))
 
-    secure_file(out)
+    # Erst vollstaendig aufbauen, dann in einem Zug schreiben. Vorher ging der
+    # Text zeilenweise direkt in die Zieldatei: Brach der Lauf ab, lag dort
+    # eine JSONL-Datei mit abgeschnittener letzter Zeile - fuer den
+    # BudgetManager nicht von einer vollstaendigen zu unterscheiden, bis er
+    # ueber die kaputte Zeile stolpert.
+    #
+    # Der Helfer setzt zugleich 0600. Die Datei traegt Betraege, Haendler und
+    # Beschreibungen und liegt im Standalone-Betrieb offen im
+    # Benutzerverzeichnis; mit dem ueblichen umask waere sie dort fuer jedes
+    # andere Konto lesbar.
+    from logic.atomic_write import atomar_schreiben
+
+    atomar_schreiben(out, "\n".join(zeilen) + "\n")
     return BudgetExportResult(
         path=out,
         count=count,
