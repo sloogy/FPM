@@ -140,22 +140,18 @@ def _save_config(cfg: dict) -> None:
     Atomar, weil ein Absturz mitten im Schreiben sonst genau die halbe Datei
     hinterlaesst, die ``_load_config`` dann beiseitelegen muss. Und 0600,
     weil der Datenpfad verraet, wo die persoenlichen Daten liegen.
-    """
-    from logic.file_permissions import secure_file
 
-    ziel = _config_path()
-    tmp = ziel.with_name(f"{ziel.name}.tmp-{os.getpid()}")
-    tmp.write_text(
+    Loop 21 loeste das hier von Hand und vergass dabei ``fsync``: Das
+    Umbenennen war atomar, benannte nach einem Stromausfall aber unter
+    Umstaenden eine leere Datei um. Seit Loop 27 macht das der gemeinsame
+    Helfer, in allen vier Programmen gleich.
+    """
+    from logic.atomic_write import atomar_schreiben
+
+    atomar_schreiben(
+        _config_path(),
         json.dumps(cfg, indent=2, ensure_ascii=False),
-        encoding="utf-8",
     )
-    secure_file(tmp)
-    try:
-        tmp.replace(ziel)
-    except OSError:
-        tmp.unlink(missing_ok=True)
-        raise
-    secure_file(ziel)
 
 
 # ── Pfad-API ─────────────────────────────────────────────────────────────────

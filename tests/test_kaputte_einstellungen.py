@@ -98,10 +98,12 @@ def test_abgebrochenes_speichern_laesst_den_alten_stand_stehen(
     ziel = datenordner / "config.json"
     db._save_config({"db_path": "/alt.db"})
 
-    def bricht_ab(self, target):  # type: ignore[no-untyped-def]
+    def bricht_ab(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise OSError("Kein Platz")
 
-    monkeypatch.setattr(Path, "replace", bricht_ab)
+    import logic.atomic_write as atomic_write
+
+    monkeypatch.setattr(atomic_write.os, "replace", bricht_ab)
     with pytest.raises(OSError):
         db._save_config({"db_path": "/neu.db"})
 
