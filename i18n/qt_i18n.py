@@ -16,34 +16,9 @@ import re
 from typing import Any, Iterable
 
 from i18n.translator import Translator
+from logic.defensive_log import uebersprungen as _uebersprungen
 
 logger = logging.getLogger(__name__)
-
-# Je Ursache einmal gemeldet. Der Uebersetzungslauf geht bei jedem
-# Sprachwechsel ueber hunderte Qt-Objekte; eine Meldung je Objekt wuerde das
-# Log fluten und die eine interessante Zeile darin begraben.
-_gemeldet: set[str] = set()
-
-
-def _uebersprungen(was: str, fehler: Exception) -> None:
-    """Ein widerspenstiges Objekt haelt den Uebersetzungslauf nicht auf.
-
-    Es darf ihn aber auch nicht spurlos verlassen: Bis Loop 25 verschwand
-    jeder Fehler hier stumm, und eine unuebersetzt gebliebene Stelle sah aus
-    wie eine fehlende Uebersetzung - obwohl der Text vorhanden war und nur
-    nicht ankam.
-
-    Gefangen wird bewusst weiterhin breit. Der Lauf geht ueber hunderte
-    fremde Widgets, auch benutzerdefinierte; ein Sprachwechsel, der die
-    Oberflaeche halb uebersetzt zuruecklaesst, waere schlimmer als ein
-    Fehler, der im Log steht. Praezisiert wird hier erst, wenn das Log
-    zeigt, was tatsaechlich auftritt.
-    """
-    schluessel = f"{was}:{type(fehler).__name__}"
-    if schluessel in _gemeldet:
-        return
-    _gemeldet.add(schluessel)
-    logger.debug("%s uebersprungen: %s", was, fehler)
 
 
 _TAG_RE = re.compile(r"(<[^>]+>)")
