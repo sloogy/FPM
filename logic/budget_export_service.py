@@ -36,6 +36,8 @@ BRIDGE_DIR_NAME = "fpm_budgetmanager_bridge"
 FPM_TO_BUDGETMANAGER_FILE = "fpm_to_budgetmanager.jsonl"
 BUDGETMANAGER_TO_FPM_FILE = "budgetmanager_to_fpm.jsonl"
 BUDGETMANAGER_SAVINGS_GOALS_FILE = "budgetmanager_savings_goals.jsonl"
+# Nur noch Legacy-/Downgrade-Kompatibilität. Die technische Identität neuer
+# Importe liegt in logic.bridge_import_state.bridge_import_state.
 FPM_IMPORT_MARKER = "#bridge_id="
 
 # BudgetManager schreibt Sparziele als "fpm.savings-goal.v1" mit Bindestrich.
@@ -233,16 +235,6 @@ def export_expenses_jsonl(
         total += float(record["amount"] or 0.0)
         currencies.add(str(record["currency"] or "CHF"))
 
-    # Erst vollstaendig aufbauen, dann in einem Zug schreiben. Vorher ging der
-    # Text zeilenweise direkt in die Zieldatei: Brach der Lauf ab, lag dort
-    # eine JSONL-Datei mit abgeschnittener letzter Zeile - fuer den
-    # BudgetManager nicht von einer vollstaendigen zu unterscheiden, bis er
-    # ueber die kaputte Zeile stolpert.
-    #
-    # Der Helfer setzt zugleich 0600. Die Datei traegt Betraege, Haendler und
-    # Beschreibungen und liegt im Standalone-Betrieb offen im
-    # Benutzerverzeichnis; mit dem ueblichen umask waere sie dort fuer jedes
-    # andere Konto lesbar.
     from logic.atomic_write import atomar_schreiben
 
     atomar_schreiben(out, "\n".join(zeilen) + "\n")
@@ -272,18 +264,7 @@ def sync_default_outbox_from_session(session: Any) -> BudgetExportResult:
 
 
 def sync_default_outbox_from_session_safely(session: Any) -> BudgetExportResult | None:
-    """Outbox-Sync nach einem Commit; ein Fehler bleibt folgenlos.
-
-    Die Oberfläche ruft das direkt hinter ``session.commit()`` auf. Würde hier
-    etwas hochschlagen, liefe es in den umgebenden ``except``-Zweig: der Nutzer
-    sähe eine Fehlermeldung und ein ``rollback()``, das nach dem Commit ohnehin
-    nichts mehr zurücknimmt. Die Ausgabe wäre gespeichert und die Meldung
-    trotzdem alarmierend. Ein unbeschreibbarer Bridge-Ordner - ein getrenntes
-    Netzlaufwerk, ein falsch gesetztes ``LIFEPLANNER_BRIDGE_DIR`` - reicht dafür.
-
-    Die Bridge ist eine Spiegelung; sie darf die Sammlung nie blockieren. Der
-    Fehler geht ins Log, damit er auffindbar bleibt statt zu verschwinden.
-    """
+    """Outbox-Sync nach einem Commit; ein Fehler bleibt folgenlos."""
     try:
         return sync_default_outbox_from_session(session)
     except Exception:
@@ -378,41 +359,57 @@ def load_budgetmanager_expense_proposals(
 
 
 def existing_fpm_bridge_ids(session: Any) -> set[str]:
-    """Findet bereits importierte BudgetManager-Bridge-IDs in Expense.notes."""
+    """Liest technische Import-IDs; Notes dienen nur noch als Legacy-Migration."""
     from database.models import Expense
+    from logic.bridge_import_state import imported_ids, migrate_legacy_ids
 
-    ids: set[str] = set()
-    rows = session.query(Expense.notes).filter(Expense.notes.like(f"%{FPM_IMPORT_MARKER}%")).all()
-    for row in rows:
-        note = str(row[0] or "")
-        for part in note.split():
-            if part.startswith(FPM_IMPORT_MARKER):
-                ids.add(part[len(FPM_IMPORT_MARKER) :].strip())
-    return ids
+    rows = (
+        session.query(Expense.id, Expense.notes)
+        .filter(Expense.notes.like(f"%{FPM_IMPORT_MARKER}%"))
+        .all()
+    )
+    legacy = migrate_legacy_ids(
+        session,
+        ((row[0], str(row[1] or "")) for row in rows),
+        marker=FPM_IMPORT_MARKER,
+    )
+    return imported_ids(session) | legacy
 
 
 def import_budgetmanager_proposals(session: Any, proposals: Iterable[FpmImportProposal]) -> int:
-    """Übernimmt nicht-duplizierte BudgetManager-Vorschläge als FPM-Ausgaben."""
+    """Übernimmt neue Vorschläge und protokolliert ihre Identität separat."""
     from database.models import Expense
+    from logic.bridge_import_state import proposal_hash, remember_import
 
     count = 0
     for p in proposals:
         if p.duplicate:
             continue
+        # Marker bleibt redundant erhalten, damit ein bewusster Downgrade auf
+        # eine ältere FPM-Version den Datensatz weiterhin als Import erkennt.
         marker = f"{FPM_IMPORT_MARKER}{p.external_id}"
         notes = "\n".join(x for x in [p.notes, f"Import aus {p.source}; {marker}"] if x)
-        session.add(
-            Expense(
-                item_type=p.item_type,
-                amount=float(p.amount),
-                shipping=0.0,
-                customs=0.0,
-                currency=p.currency or "CHF",
-                purchase_date=datetime.combine(p.purchase_date, datetime.min.time()),
-                description=p.description,
-                vendor=p.vendor or None,
-                notes=notes,
-            )
+        expense = Expense(
+            item_type=p.item_type,
+            amount=float(p.amount),
+            shipping=0.0,
+            customs=0.0,
+            currency=p.currency or "CHF",
+            purchase_date=datetime.combine(p.purchase_date, datetime.min.time()),
+            description=p.description,
+            vendor=p.vendor or None,
+            notes=notes,
+        )
+        session.add(expense)
+        # Die Statuszeile und der Expense-Datensatz bleiben in derselben
+        # Transaktion. Flush vergibt nur die lokale ID; commit bleibt beim
+        # aufrufenden Dialog/Service.
+        session.flush()
+        remember_import(
+            session,
+            p.external_id,
+            payload_hash=proposal_hash(p),
+            local_object_id=int(expense.id) if expense.id is not None else None,
         )
         count += 1
     return count
@@ -429,16 +426,7 @@ class BridgeDateiBefund:
 
 
 def bridge_zustand() -> tuple[Path, tuple[BridgeDateiBefund, ...]]:
-    """Der aktive Brückenordner und was darin liegt.
-
-    Warum das sichtbar sein muss: Der Ordner hängt davon ab, wie FPM gestartet
-    wurde. Im LifePlanner gibt der Host ihn über LIFEPLANNER_BRIDGE_DIR vor,
-    eigenständig liegt er im Benutzerverzeichnis. Wer beides gemischt nutzt,
-    hat zwei getrennte Brücken - und wundert sich, warum nichts ankommt.
-
-    Unterschieden wird zwischen "Datei fehlt" (das andere Programm hat noch
-    nichts geschrieben) und "leer": Fehlt sie, liegt es dort und nicht hier.
-    """
+    """Der aktive Brückenordner und was darin liegt."""
     ordner = default_bridge_dir()
     befunde = []
     for name, dateiname, schemas in (
@@ -455,8 +443,6 @@ def bridge_zustand() -> tuple[Path, tuple[BridgeDateiBefund, ...]]:
                 1 for rec in _iter_jsonl_records(pfad) if rec.get("schema") in schemas
             )
         except ValueError:
-            # Eine unlesbare Zeile soll die Anzeige nicht sprengen; dass etwas
-            # nicht stimmt, sieht man an der Null.
             anzahl = 0
         befunde.append(BridgeDateiBefund(name, pfad, True, anzahl))
     return ordner, tuple(befunde)
@@ -465,11 +451,7 @@ def bridge_zustand() -> tuple[Path, tuple[BridgeDateiBefund, ...]]:
 def load_budgetmanager_savings_goals(
     path: str | Path | None = None, *, visible_only: bool = True
 ) -> list[BudgetManagerSavingsGoal]:
-    """Lädt die read-only Sparziel-Spiegelung aus BudgetManager.
-
-    FPM speichert diese Daten nicht dauerhaft; sie dienen nur zur Anzeige auf
-    dem Dashboard bzw. bei verknüpften Wunsch-/Füller-Projekten.
-    """
+    """Lädt die read-only Sparziel-Spiegelung aus BudgetManager."""
     src = Path(path) if path else default_budgetmanager_savings_goals_path()
     goals: list[BudgetManagerSavingsGoal] = []
     for rec in _iter_jsonl_records(src):
@@ -487,8 +469,16 @@ def load_budgetmanager_savings_goals(
         )
         target = float(rec.get("target_amount") or 0.0)
         current = float(rec.get("current_amount") or 0.0)
-        remaining = float(rec.get("remaining_amount") if rec.get("remaining_amount") is not None else max(0.0, target - current))
-        progress = float(rec.get("progress_percent") if rec.get("progress_percent") is not None else (0.0 if target <= 0 else current / target * 100.0))
+        remaining = float(
+            rec.get("remaining_amount")
+            if rec.get("remaining_amount") is not None
+            else max(0.0, target - current)
+        )
+        progress = float(
+            rec.get("progress_percent")
+            if rec.get("progress_percent") is not None
+            else (0.0 if target <= 0 else current / target * 100.0)
+        )
         goals.append(
             BudgetManagerSavingsGoal(
                 external_id=external_id,
@@ -507,5 +497,7 @@ def load_budgetmanager_savings_goals(
                 notes=str(rec.get("notes") or ""),
             )
         )
-    goals.sort(key=lambda g: (g.status != "sparend", g.deadline or "9999-12-31", g.label.lower()))
+    goals.sort(
+        key=lambda g: (g.status != "sparend", g.deadline or "9999-12-31", g.label.lower())
+    )
     return goals
